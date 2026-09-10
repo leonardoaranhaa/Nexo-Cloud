@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
 import { requireWorkspaceAccess, type JsonObject, type JsonValue } from "../multitenancy/server.ts";
+import { compileWorkflowDefinition } from "./compiler.ts";
 
 export type WorkflowNode = { id: string; type: "agent" | "condition" | "wait" | "approval" | "tool"; name?: string; config?: JsonObject };
 export type WorkflowDefinition = { nodes: WorkflowNode[]; edges: { from: string; to: string; condition?: string }[] };
@@ -78,10 +79,11 @@ export async function getWorkflowDefinition(sql: Sql, userId: string, input: { w
 
 export async function publishWorkflow(sql: Sql, userId: string, input: { workspaceId: string; workflowId: string }): Promise<void> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "publish");
-  const rows = await sql.query<{ id: string; version_number: number }>(`select v.id, v.version_number from workflow_versions v join workflows w on w.id = v.workflow_id where v.workflow_id = $1 and w.workspace_id = $2 and v.status = 'draft' order by v.version_number desc limit 1`, [input.workflowId, input.workspaceId]);
+  const rows = await sql.query<{ id: string; version_number: number; definition: unknown }>(`select v.id, v.version_number, v.definition from workflow_versions v join workflows w on w.id = v.workflow_id where v.workflow_id = $1 and w.workspace_id = $2 and v.status = 'draft' order by v.version_number desc limit 1`, [input.workflowId, input.workspaceId]);
   if (!rows[0]) throw new Error("WORKFLOW_VERSION_NOT_FOUND");
+  const compiled = compileWorkflowDefinition(normalizeDefinition(rows[0].definition));
   await sql.query(`update workflow_versions set status = 'retired' where workflow_id = $1 and status = 'published'`, [input.workflowId]);
-  await sql.query(`update workflow_versions set status = 'published', published_by = $1, published_at = current_timestamp where id = $2`, [userId, rows[0].id]);
+  await sql.query(`update workflow_versions set status = 'published', definition = $1::jsonb, published_by = $2, published_at = current_timestamp where id = $3`, [JSON.stringify(compiled), userId, rows[0].id]);
   const nextId = randomUUID();
   await sql.query(`insert into workflow_versions (id, workflow_id, version_number, definition, created_by) select $1, workflow_id, version_number + 1, definition, $2 from workflow_versions where id = $3`, [nextId, userId, rows[0].id]);
   await sql.query(`update workflows set status = 'active', updated_by = $1, updated_at = current_timestamp where id = $2 and workspace_id = $3`, [userId, input.workflowId, input.workspaceId]);
