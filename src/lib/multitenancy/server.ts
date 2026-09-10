@@ -5,7 +5,7 @@ import type { SecretProvisioner } from "../connectors/secrets.ts";
 
 export type OrganizationRole = "owner" | "admin" | "member" | "billing";
 export type WorkspaceRole = "workspace_admin" | "builder" | "operator" | "analyst" | "viewer";
-export type WorkspacePermission = "read" | "write" | "publish" | "manage";
+export type WorkspacePermission = "read" | "write" | "publish" | "operate" | "manage";
 export type ConnectionProvider = "evolution" | "meta" | "zapi";
 export type JsonValue =
   | string
@@ -110,6 +110,7 @@ export function can(role: OrganizationRole | WorkspaceRole, permission: Workspac
   if (permission === "read") return true;
   if (permission === "write") return role === "builder";
   if (permission === "publish") return role === "builder" || role === "operator";
+  if (permission === "operate") return role === "builder" || role === "operator";
   return false;
 }
 
@@ -610,6 +611,173 @@ export async function archiveAgent(sql: Sql, userId: string, id: string): Promis
     `update agents set status = 'archived', deleted_at = current_timestamp, updated_by = $2, updated_at = current_timestamp where id = $1`,
     [id, userId],
   );
+}
+
+export type ConversationSummary = {
+  id: string;
+  workspaceId: string;
+  agentId: string;
+  agentName: string;
+  connectionId: string;
+  connectionName: string;
+  externalContactId: string;
+  channel: string;
+  status: "open" | "closed" | "pending";
+  assignedTo: string | null;
+  handoffReason: string | null;
+  handoffAt: string | null;
+  updatedAt: string;
+  lastMessageAt: string | null;
+  lastMessageDirection: "inbound" | "outbound" | null;
+  lastMessageText: string | null;
+  unreadCount: number;
+};
+
+export type ConversationMessage = {
+  id: string;
+  conversationId: string;
+  direction: "inbound" | "outbound";
+  senderType: "contact" | "agent" | "user" | "workflow" | "system";
+  content: JsonObject;
+  status: string;
+  createdAt: string;
+};
+
+export async function listConversations(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; status?: "open" | "pending" | "closed"; agentId?: string; search?: string },
+): Promise<ConversationSummary[]> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const params: unknown[] = [input.workspaceId];
+  const filters = ["c.workspace_id = $1"];
+  if (input.status) {
+    params.push(input.status);
+    filters.push(`c.status = $${params.length}`);
+  }
+  if (input.agentId) {
+    params.push(input.agentId);
+    filters.push(`c.agent_id = $${params.length}`);
+  }
+  if (input.search?.trim()) {
+    params.push(`%${input.search.trim().slice(0, 120)}%`);
+    filters.push(`c.external_contact_id ilike $${params.length}`);
+  }
+  return sql.query<ConversationSummary>(
+    `select
+       c.id,
+       c.workspace_id as "workspaceId",
+       c.agent_id as "agentId",
+       a.name as "agentName",
+       c.connection_id as "connectionId",
+       co.name as "connectionName",
+       c.external_contact_id as "externalContactId",
+       c.channel,
+       c.status,
+       c.assigned_to as "assignedTo",
+       c.handoff_reason as "handoffReason",
+       c.handoff_at as "handoffAt",
+       c.updated_at as "updatedAt",
+       lm.created_at as "lastMessageAt",
+       lm.direction as "lastMessageDirection",
+       coalesce(lm.content->>'text', lm.content->>'caption') as "lastMessageText",
+       coalesce(unread.unread_count, 0)::int as "unreadCount"
+     from conversations c
+     join agents a on a.id = c.agent_id and a.workspace_id = c.workspace_id
+     join connections co on co.id = c.connection_id and co.workspace_id = c.workspace_id
+     left join lateral (
+       select m.created_at, m.direction, m.content
+         from messages m where m.conversation_id = c.id
+        order by m.created_at desc limit 1
+     ) lm on true
+     left join lateral (
+       select count(*)::int as unread_count
+         from messages m
+        where m.conversation_id = c.id and m.direction = 'inbound' and m.status = 'received'
+     ) unread on true
+     where ${filters.join(" and ")}
+     order by coalesce(lm.created_at, c.updated_at) desc
+     limit 100`,
+    params,
+  );
+}
+
+export async function listConversationMessages(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; conversationId: string },
+): Promise<ConversationMessage[]> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const conversation = await sql.query<{ id: string }>(
+    `select id from conversations where id = $1 and workspace_id = $2 limit 1`,
+    [input.conversationId, input.workspaceId],
+  );
+  if (!conversation[0]) throw new Error("CONVERSATION_NOT_FOUND");
+  return sql.query<ConversationMessage>(
+    `select id, conversation_id as "conversationId", direction, sender_type as "senderType",
+            content, status, created_at as "createdAt"
+       from messages where conversation_id = $1 and workspace_id = $2
+      order by created_at asc limit 500`,
+    [input.conversationId, input.workspaceId],
+  );
+}
+
+export async function markConversationRead(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; conversationId: string },
+): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const result = await sql.query<{ id: string }>(
+    `select id from conversations where id = $1 and workspace_id = $2 limit 1`,
+    [input.conversationId, input.workspaceId],
+  );
+  if (!result[0]) throw new Error("CONVERSATION_NOT_FOUND");
+  await sql.query(
+    `update messages set status = 'read', updated_at = current_timestamp
+      where conversation_id = $1 and workspace_id = $2 and direction = 'inbound' and status = 'received'`,
+    [input.conversationId, input.workspaceId],
+  );
+}
+
+export async function updateConversationHandoff(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; conversationId: string; action: "assign" | "release" | "resume" | "close"; reason?: string },
+): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "operate");
+  const status = input.action === "assign" ? "pending" : input.action === "close" ? "closed" : "open";
+  const conversation = await sql.query<{ id: string }>(
+    `select id from conversations where id = $1 and workspace_id = $2 limit 1`,
+    [input.conversationId, input.workspaceId],
+  );
+  if (!conversation[0]) throw new Error("CONVERSATION_NOT_FOUND");
+  await sql.query(
+    `update conversations set
+       status = $3,
+       assigned_to = case when $4 = 'assign' then $2 when $4 in ('release', 'resume', 'close') then null else assigned_to end,
+       handoff_reason = case when $4 = 'assign' then nullif(left($5, 500), '') else handoff_reason end,
+       handoff_at = case when $4 = 'assign' then current_timestamp else handoff_at end,
+       closed_at = case when $4 = 'close' then current_timestamp when $4 = 'resume' then null else closed_at end,
+       updated_at = current_timestamp
+     where id = $1 and workspace_id = $6`,
+    [input.conversationId, userId, status, input.action, input.reason?.trim() ?? "", input.workspaceId],
+  );
+}
+
+export async function assertConversationAccess(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; conversationId: string },
+): Promise<{ agentId: string; connectionId: string; externalContactId: string }> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const rows = await sql.query<{ agentId: string; connectionId: string; externalContactId: string }>(
+    `select agent_id as "agentId", connection_id as "connectionId", external_contact_id as "externalContactId"
+       from conversations where id = $1 and workspace_id = $2 limit 1`,
+    [input.conversationId, input.workspaceId],
+  );
+  if (!rows[0]) throw new Error("CONVERSATION_NOT_FOUND");
+  return rows[0];
 }
 
 function connectionSelect() {

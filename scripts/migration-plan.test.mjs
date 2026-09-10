@@ -63,8 +63,9 @@ test("the auth schema stays nested while app migrations are discoverable", () =>
     { name: "0003_connector_registry.sql", path: "0003_connector_registry.sql" },
     { name: "0004_messaging_dispatch.sql", path: "0004_messaging_dispatch.sql" },
     { name: "0005_webhook_security.sql", path: "0005_webhook_security.sql" },
-    { name: "0006_webhook_delivery_states.sql", path: "0006_webhook_delivery_states.sql" },
-    { name: "0007_agent_runtime_jobs.sql", path: "0007_agent_runtime_jobs.sql" },
+      { name: "0006_webhook_delivery_states.sql", path: "0006_webhook_delivery_states.sql" },
+      { name: "0007_agent_runtime_jobs.sql", path: "0007_agent_runtime_jobs.sql" },
+      { name: "0008_conversation_handoff.sql", path: "0008_conversation_handoff.sql" },
   ]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });

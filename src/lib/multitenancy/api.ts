@@ -247,3 +247,67 @@ export const provisionEvolutionWebhookCredential = createServerFn({ method: "POS
     await provisionEvolutionWebhookCredential(await getSql(), context.userId, data, provisioner);
     return { ok: true as const };
   });
+
+export const listWorkspaceConversations = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; status?: "open" | "pending" | "closed"; agentId?: string; search?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listConversations } = await import("./server");
+    return listConversations(await getSql(), context.userId, data);
+  });
+
+export const listWorkspaceConversationMessages = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; conversationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listConversationMessages } = await import("./server");
+    return listConversationMessages(await getSql(), context.userId, data);
+  });
+
+export const markWorkspaceConversationRead = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; conversationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { markConversationRead } = await import("./server");
+    await markConversationRead(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const updateWorkspaceConversationHandoff = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; conversationId: string; action: "assign" | "release" | "resume" | "close"; reason?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { updateConversationHandoff } = await import("./server");
+    await updateConversationHandoff(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const sendWorkspaceConversationMessage = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; conversationId: string; text: string; idempotencyKey: string; traceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { awsSecretsManagerProvider, unavailableSecretProvider } = await import("@/lib/connectors/secrets");
+    const { assertConversationAccess } = await import("./server");
+    const { dispatchTextMessage } = await import("@/lib/messaging/router");
+    const sql = await getSql();
+    const target = await assertConversationAccess(sql, context.userId, data);
+    const provider = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
+      ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
+      : unavailableSecretProvider();
+    return dispatchTextMessage(sql, context.userId, {
+      workspaceId: data.workspaceId,
+      agentId: target.agentId,
+      connectionId: target.connectionId,
+      conversationId: data.conversationId,
+      recipient: target.externalContactId,
+      text: data.text,
+      idempotencyKey: data.idempotencyKey,
+      actor: "user",
+      traceId: data.traceId,
+    }, provider);
+  });
