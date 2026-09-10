@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
 import { requireWorkspaceAccess, type JsonObject, type JsonValue } from "../multitenancy/server.ts";
 import { compileWorkflowDefinition } from "./compiler.ts";
-import { claimWorkflowRun } from "./queue.ts";
+import { runNextWorkflowRun } from "./executor.ts";
+import { createWorkflowNodeHandlers } from "./handlers.ts";
 
 export type WorkflowNode = { id: string; type: "agent" | "condition" | "wait" | "approval" | "tool"; name?: string; config?: JsonObject };
 export type WorkflowDefinition = { nodes: WorkflowNode[]; edges: { from: string; to: string; condition?: string }[] };
@@ -105,31 +106,7 @@ export async function runWorkflowManually(sql: Sql, userId: string, input: { wor
   const runId = randomUUID();
   const inputValue = object(safeJson(input.input ?? {}));
   await sql.query(`insert into workflow_runs (id, workspace_id, workflow_id, workflow_version_id, status, input, correlation_id, idempotency_key) values ($1,$2,$3,$4,'queued',$5::jsonb,$6,$7)`, [runId, input.workspaceId, input.workflowId, version[0].id, JSON.stringify(inputValue), randomUUID(), idempotencyKey]);
-  const claimed = await claimWorkflowRun(sql, `manual:${userId}`);
-  if (!claimed || claimed.id !== runId) throw new Error("WORKFLOW_QUEUE_CLAIM_FAILED");
-  const definition = normalizeDefinition(version[0].definition);
-  let status: "succeeded" | "waiting" | "failed" = "succeeded";
-  let errorCode: string | null = null;
-  let errorMessage: string | null = null;
-  for (const node of definition.nodes) {
-    const nodeRunId = randomUUID();
-    await sql.query(`insert into workflow_node_runs (id, run_id, node_id, node_type, status, input, started_at) values ($1,$2,$3,$4,'running',$5::jsonb,current_timestamp)`, [nodeRunId, runId, node.id, node.type, JSON.stringify(inputValue)]);
-    if (node.type === "wait" || node.type === "approval") {
-      status = "waiting";
-      if (node.type === "approval") await sql.query(`insert into workflow_approvals (id, run_id, node_run_id, workspace_id, requested_by, reason, expires_at) values ($1,$2,$3,$4,$5,$6,current_timestamp + interval '30 minutes')`, [randomUUID(), runId, nodeRunId, input.workspaceId, userId, typeof node.config?.title === "string" ? node.config.title : "Aprovação necessária"]);
-      await sql.query(`update workflow_node_runs set status = 'waiting', output = $1::jsonb, finished_at = current_timestamp where run_id = $2 and node_id = $3 and status = 'running'`, [JSON.stringify({ waiting: node.type }), runId, node.id]);
-      break;
-    }
-    if (node.type === "agent" || node.type === "tool") {
-      status = "failed";
-      errorCode = node.type === "agent" ? "WORKFLOW_AGENT_NODE_DEFERRED" : "WORKFLOW_TOOL_NODE_DEFERRED";
-      errorMessage = "Este nó será conectado ao runtime de ferramentas na próxima fatia.";
-      await sql.query(`update workflow_node_runs set status = 'failed', error_code = $1, error_message = $2, finished_at = current_timestamp where run_id = $3 and node_id = $4 and status = 'running'`, [errorCode, errorMessage, runId, node.id]);
-      break;
-    }
-    await sql.query(`update workflow_node_runs set status = 'succeeded', output = $1::jsonb, finished_at = current_timestamp where run_id = $2 and node_id = $3 and status = 'running'`, [JSON.stringify({ evaluated: true }), runId, node.id]);
-  }
-  await sql.query(`update workflow_runs set status = $1, output = $2::jsonb, error_code = $3, error_message = $4, finished_at = case when $1 in ('succeeded','failed') then current_timestamp else null end where id = $5`, [status, JSON.stringify({ nodeCount: definition.nodes.length }), errorCode, errorMessage, runId]);
+  await runNextWorkflowRun(sql, `manual:${userId}`, createWorkflowNodeHandlers(sql));
   return getWorkflowRun(sql, userId, { workspaceId: input.workspaceId, runId });
 }
 

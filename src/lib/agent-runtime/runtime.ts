@@ -290,3 +290,24 @@ export async function runNextAgentRuntimeJob(
 }
 
 export type { RuntimeContext, RuntimeModel };
+
+export async function executeWorkflowAgentNode(
+  sql: Sql,
+  input: { workspaceId: string; agentId: string; prompt: string },
+  model: RuntimeModel = xaiModel(),
+): Promise<{ text: string; usedAi: boolean }> {
+  const rows = await sql.query<{ system_prompt: string; persona: string; version_config: unknown }>(
+    `select a.system_prompt, a.persona, av.config as version_config
+       from agents a
+       left join lateral (select config from agent_versions where agent_id = a.id and status = 'published' order by version_number desc limit 1) av on true
+      where a.id = $1 and a.workspace_id = $2 and a.status = 'active' and a.deleted_at is null limit 1`,
+    [input.agentId, input.workspaceId],
+  );
+  if (!rows[0]) throw new Error("WORKFLOW_AGENT_NOT_FOUND");
+  const version = object(rows[0].version_config);
+  const systemPrompt = [text(version.systemPrompt, rows[0].system_prompt), text(version.persona, rows[0].persona), "Responda somente ao contexto fornecido pelo workflow e não invente dados ausentes."]
+    .filter(Boolean).join("\n\n").slice(0, 12000);
+  const result = await model.generate({ systemPrompt, history: [{ role: "user", content: input.prompt.slice(0, 8000) }], maxTokens: number(version.maxTokens, 400, 80, 16000), temperature: number(version.temperature, 0.4, 0, 1) });
+  if (!result.text) throw new Error("WORKFLOW_AGENT_EMPTY_RESPONSE");
+  return { text: result.text.slice(0, 12000), usedAi: result.usedAi };
+}

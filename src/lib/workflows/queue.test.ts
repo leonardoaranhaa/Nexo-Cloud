@@ -6,6 +6,7 @@ import { PGlite } from "@electric-sql/pglite";
 import test from "node:test";
 import type { Sql } from "../db.ts";
 import { claimWorkflowRun, completeWorkflowRun, failOrRetryWorkflowRun, renewWorkflowLease } from "./queue.ts";
+import { runNextWorkflowRun } from "./executor.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../../");
 async function setup() {
@@ -34,5 +35,17 @@ test("claims, renews, retries and completes a workflow run", async () => {
     assert.equal(second?.attempts, 2);
     assert.equal(await completeWorkflowRun(sql, "run", "worker-b", { ok: true }), true);
     assert.equal((await pg.query<{ status: string }>("select status from workflow_runs where id = 'run'")).rows[0]?.status, "succeeded");
+  } finally { await pg.close(); }
+});
+
+test("executes compiled condition edges and persists a waiting node", async () => {
+  const { pg, sql } = await setup();
+  try {
+    await pg.query("update workflow_versions set definition = $1::jsonb where id = 'v1'", [JSON.stringify({ nodes: [{ id: "check", type: "condition", config: { field: "source", equals: "ads" } }, { id: "pause", type: "wait" }], edges: [{ from: "check", to: "pause" }] })]);
+    await pg.query("update workflow_runs set input = $1::jsonb where id = 'run'", [JSON.stringify({ source: "ads" })]);
+    const result = await runNextWorkflowRun(sql, "workflow-worker");
+    assert.equal(result.status, "waiting");
+    assert.equal((await pg.query<{ status: string }>("select status from workflow_runs where id = 'run'")).rows[0]?.status, "waiting");
+    assert.equal((await pg.query<{ status: string }>("select status from workflow_node_runs where run_id = 'run' and node_id = 'check'")).rows[0]?.status, "succeeded");
   } finally { await pg.close(); }
 });
