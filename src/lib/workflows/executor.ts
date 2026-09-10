@@ -43,6 +43,18 @@ export async function runNextWorkflowRun(sql: Sql, workerId: string, handlers: W
       const node = nodeById(compiled, currentId);
       if (!node) throw new Error("WORKFLOW_NODE_NOT_FOUND");
       await sql.query(`update workflow_runs set current_node_id = $1, context = $2::jsonb where id = $3 and claimed_by = $4`, [node.id, JSON.stringify(context), run.id, workerId]);
+      const previous = await sql.query<{ id: string; status: string; output: unknown }>(`select id, status, output from workflow_node_runs where run_id = $1 and node_id = $2 order by started_at desc limit 1`, [run.id, node.id]);
+      if (previous[0] && node.type === "wait") {
+        const resumed = await sql.query<{ resume_requested: boolean }>(`update workflow_runs set resume_requested = false, resume_reason = null where id = $1 and claimed_by = $2 and resume_requested = true returning resume_requested`, [run.id, workerId]);
+        if (resumed[0]) { context = { ...context, [node.id]: asObject(previous[0].output) }; currentId = nextNode(compiled, node, asObject(previous[0].output)); continue; }
+      }
+      if (previous[0] && node.type === "approval") {
+        const approval = await sql.query<{ status: string; reason: string }>(`select status, reason from workflow_approvals where node_run_id = $1 order by created_at desc limit 1`, [previous[0].id]);
+        if (approval[0]?.status === "approved") { await sql.query(`update workflow_runs set resume_requested = false, resume_reason = null where id = $1 and claimed_by = $2`, [run.id, workerId]); const output = { approved: true, reason: approval[0].reason }; context = { ...context, [node.id]: output }; currentId = nextNode(compiled, node, output); continue; }
+        if (approval[0]?.status === "rejected" || approval[0]?.status === "expired") throw new Error(`WORKFLOW_APPROVAL_${approval[0].status.toUpperCase()}`);
+        await sql.query(`update workflow_runs set status = 'waiting', claimed_by = null, lease_until = null where id = $1 and claimed_by = $2`, [run.id, workerId]);
+        return { status: "waiting", runId: run.id };
+      }
       const nodeRunId = randomUUID();
       await sql.query(`insert into workflow_node_runs (id, run_id, node_id, node_type, status, input, started_at) values ($1,$2,$3,$4,'running',$5::jsonb,current_timestamp)`, [nodeRunId, run.id, node.id, node.type, JSON.stringify({ ...input, ...context })]);
       let output: Json;
