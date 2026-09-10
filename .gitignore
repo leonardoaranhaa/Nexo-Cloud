@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
+# Terraform/IaC state and local files
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+!*.tfvars.example
+
+# Build and runtime output
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+
+# Local/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Preview/platform metadata
+.grok/
+.tanstack/
+.vercel/
+.project_id
+.node_modules.lock
+
+# Generated visual/test artifacts
+screenshots/
+attachments/
+artifacts/
+
+# Local uploads and temporary files
+uploads/
+tmp/
+.tmp/
+
+# Generated reports
+*.local.md

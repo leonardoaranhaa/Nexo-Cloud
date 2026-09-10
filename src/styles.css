@@ -1,0 +1,92 @@
+@import url("https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Syne:wght@500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0c0b;
+  --color-surface: #141615;
+  --color-elevated: #1c1e1c;
+  --color-fg: #eceee9;
+  --color-muted: #9aa196;
+  --color-subtle: #6e736d;
+  --color-border: #2a2c2a;
+  --color-border-strong: #3a3d3a;
+  --color-accent: #c5cdc4;
+  --color-accent-fg: #0b0c0b;
+  --color-live: #4eae86;
+  --color-live-fg: #042116;
+  --color-warn: #c4a15a;
+  --color-danger: #c45c4a;
+  --color-ring: #c5cdc4;
+  --color-bubble-in: #1a1c1a;
+  --color-bubble-out: #24352d;
+
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+
+  --shadow-soft: 0 18px 40px -28px rgb(0 0 0 / 0.7);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  summary {
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
