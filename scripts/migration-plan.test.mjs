@@ -71,6 +71,7 @@ test("the auth schema stays nested while app migrations are discoverable", () =>
       { name: "0011_workflow_triggers_events.sql", path: "0011_workflow_triggers_events.sql" },
       { name: "0012_workflow_queue_leases.sql", path: "0012_workflow_queue_leases.sql" },
       { name: "0013_tool_gateway.sql", path: "0013_tool_gateway.sql" },
+      { name: "0014_workflow_scheduler.sql", path: "0014_workflow_scheduler.sql" },
   ]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });
