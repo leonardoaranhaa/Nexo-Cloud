@@ -5,6 +5,15 @@ import { SEED_AGENTS, SEED_CONNECTIONS, SEED_EVENTS, SEED_INBOX } from "./templa
 import { createId } from "./utils";
 
 type Inbox = Record<string, ChatMessage[]>;
+export type WorkspaceContext = {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  name: string;
+  slug: string;
+  environment: "development" | "staging" | "production";
+  role: string;
+};
 
 type NexoState = {
   connections: Connection[];
@@ -14,9 +23,14 @@ type NexoState = {
   activeTrace: { agentId: string; steps: TraceStep[] } | null;
   hydrated: boolean;
   workspaceId: string | null;
+  organizationId: string | null;
+  organizationName: string | null;
+  environment: WorkspaceContext["environment"];
+  workspaces: WorkspaceContext[];
   backendReady: boolean;
   setHydrated: (v: boolean) => void;
   setWorkspaceSnapshot: (workspaceId: string, agents: Agent[]) => void;
+  setWorkspaceContext: (active: WorkspaceContext, workspaces: WorkspaceContext[]) => void;
   setConnectionSnapshot: (connections: Connection[]) => void;
   setTrace: (agentId: string, steps: TraceStep[]) => void;
   clearTrace: () => void;
@@ -54,10 +68,15 @@ export const useNexo = create<NexoState>()(
     (set, get) => ({
       ...seed(),
       workspaceId: null,
+      organizationId: null,
+      organizationName: null,
+      environment: "development",
+      workspaces: [],
       backendReady: false,
       hydrated: false,
       setHydrated: (v) => set({ hydrated: v }),
       setWorkspaceSnapshot: (workspaceId, agents) => set({ workspaceId, agents, backendReady: true }),
+      setWorkspaceContext: (active, workspaces) => set({ workspaceId: active.id, organizationId: active.organizationId, organizationName: active.organizationName, environment: active.environment, workspaces, backendReady: true }),
       setConnectionSnapshot: (connections) => set({ connections }),
       setTrace: (agentId, steps) => set({ activeTrace: { agentId, steps } }),
       clearTrace: () => set({ activeTrace: null }),
@@ -139,6 +158,11 @@ export const useNexo = create<NexoState>()(
         agents: s.agents,
         inbox: s.inbox,
         events: s.events,
+        workspaceId: s.workspaceId,
+        organizationId: s.organizationId,
+        organizationName: s.organizationName,
+        environment: s.environment,
+        workspaces: s.workspaces,
       }),
     },
   ),
