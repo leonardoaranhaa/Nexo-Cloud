@@ -248,6 +248,20 @@ export const provisionEvolutionWebhookCredential = createServerFn({ method: "POS
     return { ok: true as const };
   });
 
+export const provisionMetaConnectionCredential = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; connectionId: string; accessToken: string; appSecret: string; verifyToken: string; phoneNumberId: string; graphVersion: string; baseUrl?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { awsSecretsManagerProvisioner, unavailableSecretProvisioner } = await import("@/lib/connectors/secrets");
+    const { provisionMetaCredential } = await import("./meta-onboarding");
+    const provisioner = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
+      ? awsSecretsManagerProvisioner({ region: process.env.AWS_REGION })
+      : unavailableSecretProvisioner();
+    await provisionMetaCredential(await getSql(), context.userId, data, provisioner);
+    return { ok: true as const };
+  });
+
 export const listWorkspaceConversations = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string; status?: "open" | "pending" | "closed"; agentId?: string; search?: string }) => input)

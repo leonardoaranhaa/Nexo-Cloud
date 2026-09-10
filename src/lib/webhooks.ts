@@ -8,6 +8,9 @@ export function webhookUrl(connection: Connection) {
   if (connection.provider === "zapi") {
     return `https://api.z-api.io/instances/${connection.instance || "sandbox"}/token/webhook`;
   }
+  if (connection.provider === "meta") {
+    return `https://seu-dominio.com/api/webhooks/meta/${connection.id}`;
+  }
   return "https://seu-dominio.com/webhook";
 }
 

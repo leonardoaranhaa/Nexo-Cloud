@@ -24,6 +24,7 @@ import {
 } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 import { EvolutionCredentialDialog } from "@/components/evolution-credential-dialog";
+import { MetaCredentialDialog } from "@/components/meta-credential-dialog";
 
 type Search = { focus?: string };
 
@@ -266,6 +267,12 @@ function ConnectionsPage() {
             {backendReady && selected.provider === "evolution" && (
               <div className="mt-3">
                 <EvolutionCredentialDialog connection={selected} />
+              </div>
+            )}
+
+            {backendReady && selected.provider === "meta" && (
+              <div className="mt-3">
+                <MetaCredentialDialog connection={selected} />
               </div>
             )}
 
