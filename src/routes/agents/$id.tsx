@@ -15,7 +15,10 @@ import { useAgentChat } from "@/lib/use-agent-chat";
 import { useNexo } from "@/lib/store";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { useState } from "react";
-import type { FlowNodeId } from "@/lib/types";
+import type { Agent, FlowNodeId } from "@/lib/types";
+import { archiveWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
+import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
 type Tab = "create" | "test" | "publish";
 type Search = { tab?: Tab };
@@ -38,6 +41,9 @@ function AgentStudioPage() {
   const duplicateAgent = useNexo((s) => s.duplicateAgent);
   const removeAgent = useNexo((s) => s.removeAgent);
   const updateAgent = useNexo((s) => s.updateAgent);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
+  const { refresh } = useWorkspaceData();
   const { messages, busy, send, clear } = useAgentChat(id);
   const [focusNode, setFocusNode] = useState<FlowNodeId>("agent");
 
@@ -53,6 +59,11 @@ function AgentStudioPage() {
   }
 
   const connection = connections.find((c) => c.id === agent.connectionId);
+
+  async function persistAgent(next: Agent) {
+    if (!backendReady || !workspaceId) return;
+    await updateWorkspaceAgent({ data: { id: next.id, workspaceId, ...uiAgentToPersisted(next) } });
+  }
 
   function setTab(next: Tab) {
     void navigate({
@@ -87,9 +98,15 @@ function AgentStudioPage() {
             variant="ghost"
             className="text-danger hover:text-danger"
             onClick={() => {
-              removeAgent(agent.id);
-              toast("Agente removido");
-              void navigate({ to: "/agents" });
+              void (async () => {
+                if (backendReady) {
+                  await archiveWorkspaceAgent({ data: { id: agent.id } });
+                  await refresh(workspaceId ?? undefined);
+                }
+                removeAgent(agent.id);
+                toast("Agente removido");
+                void navigate({ to: "/agents" });
+              })().catch(() => toast("Não foi possível remover o agente."));
             }}
           >
             <Trash2 className="size-3.5" />
@@ -99,8 +116,9 @@ function AgentStudioPage() {
               size="sm"
               variant="live"
               onClick={() => {
+                const next = { ...agent, status: "live" as const, updatedAt: Date.now() };
                 updateAgent(agent.id, { status: "live" });
-                toast("Agente no ar");
+                void persistAgent(next).then(() => toast("Agente no ar")).catch(() => toast("Falha ao publicar."));
               }}
             >
               Publicar
@@ -110,8 +128,9 @@ function AgentStudioPage() {
               size="sm"
               variant="secondary"
               onClick={() => {
+                const next = { ...agent, status: "paused" as const, updatedAt: Date.now() };
                 updateAgent(agent.id, { status: "paused" });
-                toast("Agente pausado");
+                void persistAgent(next).then(() => toast("Agente pausado")).catch(() => toast("Falha ao pausar."));
               }}
             >
               Pausar

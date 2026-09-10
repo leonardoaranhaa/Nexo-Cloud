@@ -13,7 +13,10 @@ type NexoState = {
   events: StudioEvent[];
   activeTrace: { agentId: string; steps: TraceStep[] } | null;
   hydrated: boolean;
+  workspaceId: string | null;
+  backendReady: boolean;
   setHydrated: (v: boolean) => void;
+  setWorkspaceSnapshot: (workspaceId: string, agents: Agent[]) => void;
   setTrace: (agentId: string, steps: TraceStep[]) => void;
   clearTrace: () => void;
   addConnection: (c: Omit<Connection, "id" | "createdAt">) => string;
@@ -49,8 +52,11 @@ export const useNexo = create<NexoState>()(
   persist(
     (set, get) => ({
       ...seed(),
+      workspaceId: null,
+      backendReady: false,
       hydrated: false,
       setHydrated: (v) => set({ hydrated: v }),
+      setWorkspaceSnapshot: (workspaceId, agents) => set({ workspaceId, agents, backendReady: true }),
       setTrace: (agentId, steps) => set({ activeTrace: { agentId, steps } }),
       clearTrace: () => set({ activeTrace: null }),
       addConnection: (c) => {

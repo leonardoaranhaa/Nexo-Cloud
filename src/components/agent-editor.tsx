@@ -1,9 +1,11 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { Agent, FlowNodeId } from "@/lib/types";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { LANGUAGE_LABEL } from "@/lib/labels";
 import { useNexo } from "@/lib/store";
+import { updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { createId } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -22,6 +24,18 @@ export function AgentEditor({
 }) {
   const connections = useNexo((s) => s.connections);
   const updateAgent = useNexo((s) => s.updateAgent);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
+
+  useEffect(() => {
+    if (!backendReady || !workspaceId) return;
+    const timer = window.setTimeout(() => {
+      void updateWorkspaceAgent({
+        data: { id: agent.id, workspaceId, ...uiAgentToPersisted(agent) },
+      }).catch((error) => console.error("[agent] autosave failed", error));
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [agent, backendReady, workspaceId]);
 
   function patch(p: Partial<Agent>) {
     updateAgent(agent.id, p);

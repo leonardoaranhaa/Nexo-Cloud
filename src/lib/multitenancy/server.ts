@@ -26,6 +26,7 @@ export type WorkspaceRecord = {
 export type AgentRecord = {
   id: string;
   workspaceId: string;
+  connectionId: string | null;
   name: string;
   slug: string;
   agentType: string;
@@ -264,12 +265,16 @@ export async function listAgents(sql: Sql, userId: string, workspaceId: string):
       temperature::float8 as temperature,
       max_tokens as "maxTokens",
       memory_window as "memoryWindow",
+      ac.connection_id as "connectionId",
       knowledge,
       tools,
       metadata,
       created_at as "createdAt",
       updated_at as "updatedAt"
     from agents
+    left join agent_connections ac
+      on ac.agent_id = agents.id
+     and ac.is_primary = true
     where workspace_id = ${workspaceId}
       and deleted_at is null
     order by updated_at desc
@@ -314,4 +319,82 @@ export async function createAgent(
   );
 
   return { id };
+}
+
+export async function updateAgent(
+  sql: Sql,
+  userId: string,
+  input: {
+    id: string;
+    workspaceId: string;
+    name: string;
+    persona: string;
+    welcomeMessage: string;
+    systemPrompt: string;
+    language: "pt" | "en" | "es";
+    status: "draft" | "live" | "paused";
+    temperature: number;
+    maxTokens: number;
+    memoryWindow: number;
+    knowledge: JsonObject;
+    tools: JsonObject;
+    metadata?: JsonObject;
+  },
+): Promise<void> {
+  const target = await sql.query<{ workspace_id: string }>(
+    `select workspace_id from agents where id = $1 and deleted_at is null limit 1`,
+    [input.id],
+  );
+  if (!target[0]) throw new Error("AGENT_NOT_FOUND");
+  if (target[0].workspace_id !== input.workspaceId) throw new WorkspaceAccessError();
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const status = input.status === "live" ? "active" : input.status;
+  await sql.query(
+    `update agents set
+      name = $2,
+      persona = $3,
+      welcome_message = $4,
+      system_prompt = $5,
+      language = $6,
+      status = $7,
+      temperature = $8,
+      max_tokens = $9,
+      memory_window = $10,
+      knowledge = $11::jsonb,
+      tools = $12::jsonb,
+      metadata = $13::jsonb,
+      updated_by = $14,
+      updated_at = current_timestamp
+    where id = $1 and workspace_id = $15 and deleted_at is null`,
+    [
+      input.id,
+      requiredText(input.name, "name", 120),
+      input.persona.slice(0, 500),
+      input.welcomeMessage.slice(0, 1000),
+      input.systemPrompt.slice(0, 8000),
+      input.language,
+      status,
+      Math.min(Math.max(input.temperature, 0), 2),
+      Math.min(Math.max(Math.round(input.maxTokens), 80), 16000),
+      Math.min(Math.max(Math.round(input.memoryWindow), 0), 100),
+      JSON.stringify(input.knowledge),
+      JSON.stringify(input.tools),
+      JSON.stringify(input.metadata ?? {}),
+      userId,
+      input.workspaceId,
+    ],
+  );
+}
+
+export async function archiveAgent(sql: Sql, userId: string, id: string): Promise<void> {
+  const target = await sql.query<{ workspace_id: string }>(
+    `select workspace_id from agents where id = $1 and deleted_at is null limit 1`,
+    [id],
+  );
+  if (!target[0]) throw new Error("AGENT_NOT_FOUND");
+  await requireWorkspaceAccess(sql, userId, target[0].workspace_id, "write");
+  await sql.query(
+    `update agents set status = 'archived', deleted_at = current_timestamp, updated_by = $2, updated_at = current_timestamp where id = $1`,
+    [id, userId],
+  );
 }

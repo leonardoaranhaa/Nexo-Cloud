@@ -4,6 +4,7 @@ import { Bot, LayoutGrid, Plug2, Waypoints } from "lucide-react";
 import { NexoWordmark } from "./brand";
 import { cn } from "@/lib/utils";
 import { useNexo } from "@/lib/store";
+import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
 const NAV = [
   { to: "/", label: "Visão geral", icon: LayoutGrid },
@@ -23,6 +24,7 @@ export function AppShell({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const setHydrated = useNexo((s) => s.setHydrated);
+  useWorkspaceData();
 
   useEffect(() => {
     const unsub = useNexo.persist.onFinishHydration(() => setHydrated(true));

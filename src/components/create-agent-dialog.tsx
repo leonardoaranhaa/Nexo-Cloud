@@ -13,6 +13,8 @@ import { createId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PROVIDER_LABEL } from "@/lib/types";
+import { createWorkspaceAgent } from "@/lib/multitenancy/api";
+import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
 export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLabel?: string }) {
   const [open, setOpen] = useState(false);
@@ -23,19 +25,42 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
   const [connectionId, setConnectionId] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const addAgent = useNexo((s) => s.addAgent);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
   const connections = useNexo((s) => s.connections);
   const navigate = useNavigate();
+  const { refresh } = useWorkspaceData();
 
-  function fromTemplate() {
+  async function persistOrCreate(draft: typeof AGENT_TEMPLATES[number]["draft"], nextName: string) {
+    if (backendReady && workspaceId) {
+      const created = await createWorkspaceAgent({
+        data: {
+          workspaceId,
+          name: nextName,
+          persona: draft.persona,
+          welcomeMessage: draft.welcomeMessage,
+          systemPrompt: draft.systemPrompt,
+          agentType: template,
+        },
+      });
+      await refresh(workspaceId);
+      return created.id;
+    }
+    return addAgent({ ...draft, name: nextName, status: "draft", connectionId: connectionId || null });
+  }
+
+  async function fromTemplate() {
     const t = AGENT_TEMPLATES.find((x) => x.id === template)!;
-    const id = addAgent({
-      name: name.trim() || t.title,
-      status: "draft",
-      connectionId: connectionId || null,
-      ...t.draft,
-    });
-    setOpen(false);
-    void navigate({ to: "/agents/$id", params: { id }, search: { tab: "create" } });
+    setBusy(true);
+    try {
+      const id = await persistOrCreate(t.draft, name.trim() || t.title);
+      setOpen(false);
+      void navigate({ to: "/agents/$id", params: { id }, search: { tab: "create" } });
+    } catch {
+      toast("Não foi possível salvar o agente.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function fromBrief() {
@@ -51,9 +76,8 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
         return;
       }
       const t = AGENT_TEMPLATES.find((x) => x.id === "support")!;
-      const id = addAgent({
+      const draft = {
         ...t.draft,
-        name: name.trim() || res.name,
         persona: res.persona,
         welcomeMessage: res.welcomeMessage,
         systemPrompt: res.systemPrompt,
@@ -61,10 +85,9 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
           notes: res.notes,
           faqs: res.faqs.map((f) => ({ ...f, id: createId("faq") })),
         },
-        status: "draft",
-        connectionId: connectionId || null,
         template: "support",
-      });
+      };
+      const id = await persistOrCreate(draft, name.trim() || res.name);
       toast("Agente criado. Ajuste o prompt e teste no telefone.");
       setOpen(false);
       setBrief("");
@@ -153,7 +176,7 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
               </button>
             ))}
             <div className="mt-2 flex justify-end">
-              <Button onClick={fromTemplate}>Abrir no estúdio</Button>
+              <Button onClick={() => void fromTemplate()} disabled={busy}>Abrir no estúdio</Button>
             </div>
           </div>
         ) : (

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Copy, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { CreateAgentDialog } from "@/components/create-agent-dialog";
@@ -11,6 +11,8 @@ import { useNexo } from "@/lib/store";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { formatRelative } from "@/lib/utils";
 import { toast } from "sonner";
+import { archiveWorkspaceAgent, createWorkspaceAgent } from "@/lib/multitenancy/api";
+import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
 export const Route = createFileRoute("/agents/")({ component: AgentsPage });
 
@@ -19,6 +21,10 @@ function AgentsPage() {
   const connections = useNexo((s) => s.connections);
   const duplicateAgent = useNexo((s) => s.duplicateAgent);
   const removeAgent = useNexo((s) => s.removeAgent);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
+  const { refresh } = useWorkspaceData();
+  const navigate = useNavigate();
 
   return (
     <AppShell
@@ -90,8 +96,26 @@ function AgentsPage() {
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      const id = duplicateAgent(a.id);
-                      if (id) toast("Cópia criada");
+                      void (async () => {
+                        if (backendReady && workspaceId) {
+                          const created = await createWorkspaceAgent({
+                            data: {
+                              workspaceId,
+                              name: `${a.name} (cópia)`,
+                              persona: a.persona,
+                              welcomeMessage: a.welcomeMessage,
+                              systemPrompt: a.systemPrompt,
+                              agentType: a.template,
+                            },
+                          });
+                          await refresh(workspaceId);
+                          toast("Cópia criada");
+                          void navigate({ to: "/agents/$id", params: { id: created.id }, search: { tab: "create" } });
+                          return;
+                        }
+                        const id = duplicateAgent(a.id);
+                        if (id) toast("Cópia criada");
+                      })().catch(() => toast("Não foi possível duplicar o agente."));
                     }}
                   >
                     <Copy className="size-3.5" />
@@ -102,8 +126,14 @@ function AgentsPage() {
                     variant="ghost"
                     className="text-danger hover:text-danger"
                     onClick={() => {
-                      removeAgent(a.id);
-                      toast("Agente removido");
+                      void (async () => {
+                        if (backendReady) {
+                          await archiveWorkspaceAgent({ data: { id: a.id } });
+                          await refresh(workspaceId ?? undefined);
+                        }
+                        removeAgent(a.id);
+                        toast("Agente removido");
+                      })().catch(() => toast("Não foi possível remover o agente."));
                     }}
                   >
                     <Trash2 className="size-3.5" />

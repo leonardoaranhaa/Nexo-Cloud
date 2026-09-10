@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import type { JsonObject } from "./server";
 
 export const getWorkspaceContext = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -40,4 +41,39 @@ export const createWorkspaceAgent = createServerFn({ method: "POST" })
     const { getSql } = await import("@/lib/db");
     const { createAgent } = await import("./server");
     return createAgent(await getSql(), context.userId, data);
+  });
+
+export const updateWorkspaceAgent = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: {
+    id: string;
+    workspaceId: string;
+    name: string;
+    persona: string;
+    welcomeMessage: string;
+    systemPrompt: string;
+    language: "pt" | "en" | "es";
+    status: "draft" | "live" | "paused";
+    temperature: number;
+    maxTokens: number;
+    memoryWindow: number;
+    knowledge: JsonObject;
+    tools: JsonObject;
+    metadata?: JsonObject;
+  }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { updateAgent } = await import("./server");
+    await updateAgent(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const archiveWorkspaceAgent = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { archiveAgent } = await import("./server");
+    await archiveAgent(await getSql(), context.userId, data.id);
+    return { ok: true as const };
   });
