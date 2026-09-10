@@ -1,20 +1,35 @@
 # Nexo Cloud de Agentes
 
-Plataforma em evolução para criar, conectar, executar e supervisionar agentes de atendimento, vendas, marketing, Ads, tráfego e operações.
+Plataforma multi-tenant para criar, conectar, executar, supervisionar e medir agentes de atendimento, vendas, marketing, Ads, tráfego e operações.
 
-## Estado atual
+## Fonte de verdade e início de sessão
 
-Este repositório contém o protótipo inicial do Nexo Studio e os documentos de arquitetura para a evolução em direção ao Nexo Cloud multi-tenant.
+A fonte de verdade operacional do produto é:
 
-A direção oficial está documentada em:
+- `PLANO-CONJUNTO-NEXO-CLOUD-DE-AGENTES.md`
 
-- `PLANO-CONJUNTO-NEXO-CLOUD-DE-AGENTES.md`;
-- `MODELO-DADOS-MULTI-TENANT.md`;
-- `ARQUITETURA-EXECUCAO-FERRAMENTAS-MCP-CONECTORES.md`;
-- `PLANO-WORKFLOWS-AUTOMACAO-NEXO.md`;
-- `PLANO-IAC-TERRAFORM-AWS-NEXO-CLOUD.md`.
+Antes de qualquer alteração, toda IA ou pessoa deve ler integralmente esse plano, depois ler `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md` e os documentos especializados da etapa atual. A sessão deve sempre começar pelo **Próximo ponto de partida obrigatório** do plano mestre, subdividindo-o em uma menor fatia vertical antes de editar o código.
 
-O comando interno para qualquer pessoa ou IA que assuma o desenvolvimento está em `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md`.
+O comando interno define o método obrigatório de diagnóstico, avaliação de alinhamento, detecção de alucinação, implementação, testes e atualização documental.
+
+## Documentos técnicos principais
+
+- `PLANO-CONJUNTO-NEXO-CLOUD-DE-AGENTES.md` — visão, estado real, roadmap, prioridades e protocolo por sessão.
+- `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md` — contrato operacional para qualquer IA ou equipe.
+- `MODELO-DADOS-MULTI-TENANT.md` — organizações, workspaces, agentes e isolamento.
+- `ARQUITETURA-EXECUCAO-FERRAMENTAS-MCP-CONECTORES.md` — Tool Registry, políticas, secrets, conectores e MCP.
+- `PLANO-WORKFLOWS-AUTOMACAO-NEXO.md` — workflows, eventos, filas, retries e aprovações.
+- `PLANO-EXECUCAO-FUNCIONAL.md` — sequência funcional do produto.
+- `PLANO-IAC-TERRAFORM-AWS-NEXO-CLOUD.md` — infraestrutura futura na AWS.
+- `docs/CONNECTOR-RUNTIME-SECRET-RESOLVER.md` — execução server-side de conectores e secrets.
+
+## Estado atual resumido
+
+O núcleo local/preview do Nexo já possui organizações, workspaces, agentes, conexões, webhooks Evolution e Meta, Agent Runtime durável, Inbox, handoff, publicação e rollback, workflows, RAG persistente, CRM de qualificação, métricas, Marketplace interno, Tool Registry, aprovações, MCP Runtime, Learning RAG fundacional, Home e Configurações.
+
+O fechamento comercial ainda requer agenda, adapters conversacionais adicionais, tool calling multi-round, atualização completa de instalações do Marketplace, RAG semântico/híbrido, executor universal de nós de workflow, observabilidade de produção, AWS permanente e billing. Ads, tráfego e Marketplace aberto são fases posteriores.
+
+O último ciclo validado possui typecheck, build, preview e suíte com 119 testes aprovados. O plano mestre contém o status detalhado e a ordem obrigatória de continuidade.
 
 ## Requisitos
 
@@ -31,7 +46,7 @@ npm run typecheck
 npm run dev
 ```
 
-A aplicação de desenvolvimento utiliza a porta `8080` por padrão.
+A aplicação de desenvolvimento utiliza a porta `8080` por padrão. Para o preview de produção local, use o script definido em `package.json`.
 
 ## Validação
 
@@ -42,7 +57,7 @@ npm run lint
 npm run build
 ```
 
-O build pode ser executado sem banco externo; as migrations são ignoradas quando `DATABASE_URL` não está configurada. Os testes atuais contêm contratos dependentes do ambiente de preview e devem ser estabilizados antes de configurar CI obrigatório.
+O build pode ser executado sem banco externo; as migrations são ignoradas quando `DATABASE_URL` não está configurada. O fallback PGlite é utilizado no ambiente local/preview.
 
 ## Segurança
 
@@ -50,8 +65,5 @@ O build pode ser executado sem banco externo; as migrations são ignoradas quand
 - Conectores, MCP e chamadas externas devem executar no servidor.
 - Recursos de negócio devem ser isolados por organização e workspace.
 - O agente de produção deve executar versões publicadas, não a configuração editável.
-- Consulte o comando interno antes de iniciar uma alteração estrutural.
-
-## Próximo passo
-
-Implementar a primeira fatia vertical da Fase 1: organizações, workspaces, memberships, agentes persistentes e autorização server-side, com migration, testes de isolamento e migração progressiva do estado local.
+- Ferramentas devem passar pelo Tool Gateway e respeitar schema, risco, idempotência, timeout e aprovação.
+- Consulte o plano mestre e o comando interno antes de iniciar qualquer alteração estrutural.

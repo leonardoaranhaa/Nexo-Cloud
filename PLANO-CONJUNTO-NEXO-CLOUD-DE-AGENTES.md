@@ -1,622 +1,287 @@
 # Plano conjunto de execução — Nexo Cloud de Agentes
 
-**Objetivo:** transformar o Nexo Studio em uma plataforma de nuvem direcionada a agentes de atendimento, vendas, marketing, gestão de anúncios, tráfego e operações.
+**Status do documento:** fonte de verdade operacional do repositório.
+
+**Última consolidação:** 2026-09-10.
+
+**Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar.
 
 ## 1. Visão do produto
 
-A aplicação deve evoluir de um estúdio para criar agentes individuais para uma **plataforma de agentes como serviço**. A referência conceitual é a AWS, mas o produto não deve tentar copiar a quantidade de serviços da AWS. A semelhança deve estar na organização:
+O Nexo Cloud é uma plataforma multi-tenant para criar, conectar, executar, supervisionar e medir agentes de negócio. A referência da AWS é arquitetural: organização por serviços, recursos provisionáveis, permissões, credenciais, execução, logs, métricas e automações. O Nexo não deve copiar indiscriminadamente a quantidade de serviços da AWS.
 
-- uma conta e um espaço de trabalho;
-- recursos provisionáveis;
-- serviços independentes, mas integrados;
-- permissões e credenciais centralizadas;
-- execução escalável;
-- logs, métricas e auditoria;
-- cobrança por uso;
-- catálogo de agentes e ferramentas;
-- APIs e automações para operar tudo programaticamente.
+A plataforma deve começar por agentes de **Atendimento + Vendas**, com canais, conhecimento, CRM, handoff, workflows, ferramentas e métricas. Outras famílias, como suporte, marketing, anúncios, tráfego e operações, entram depois que os contratos multi-tenant, runtime, conectores, permissões, auditoria e medição estiverem estáveis.
 
-A proposta do Nexo é oferecer uma camada especializada para pessoas e empresas que querem criar agentes sem montar toda a infraestrutura de modelos, canais, integrações, memória, automações e monitoramento.
+> O MVP EARLY não é uma aplicação separada nem uma demo descartável. Ele é o primeiro núcleo funcional permanente do próprio Nexo Cloud e deve continuar sendo ampliado sobre os mesmos contratos.
 
-> **Posicionamento:** o Nexo não será apenas um chatbot builder. Será uma plataforma para criar, conectar, executar, supervisionar e medir agentes especializados em tarefas de negócio.
+## 2. Camadas do produto
 
-## 2. Tradução da analogia com a AWS
+| Camada | Responsabilidade | Estado atual |
+|---|---|---|
+| Control Plane | organizações, workspaces, membros, agentes, versões, conexões, permissões e catálogo | Implementado para o núcleo local/preview |
+| Agent Runtime | filas, contexto, decisão, RAG, ferramentas, dispatch, handoff e observabilidade | Implementado para o núcleo local/preview |
+| Integration Layer | Meta, Evolution, CRM interno, MCP e adapters server-side | Evolution e Meta fundacionais implementados; adapters de negócio ainda incompletos |
+| Experience Layer | console, Home, Settings, Inbox, Marketplace, Runs, Metrics e Workflows | Implementado em nível funcional; experiências avançadas ainda evoluem |
+| Learning Layer | eventos sanitizados, avaliação, casos, chunks e candidatos de melhoria | Fundação e laboratório implementados; gate de promoção ainda pendente |
+| Infrastructure Layer | PostgreSQL gerenciado, storage, secrets, filas, workers, observabilidade e deploy | Preparada localmente; AWS permanentemente postergada |
+
+## 3. Modelo AWS-like do Nexo
 
 | Conceito de nuvem | Equivalente no Nexo |
 |---|---|
-| Conta | Organização ou cliente |
-| Região/ambiente | Workspace, ambiente de teste e produção |
-| IAM | Usuários, equipes, papéis e permissões |
-| Compute | Runtime que executa agentes e workflows |
-| Lambda | Ação ou ferramenta executada sob demanda |
-| ECS/EKS | Workers e agentes persistentes, quando necessário |
-| API Gateway | Gateway de webhooks e APIs dos agentes |
-| SQS/EventBridge | Fila, eventos, retries e gatilhos |
+| Conta | Organização |
+| Região ou ambiente | Workspace e ambiente |
+| IAM | Memberships, papéis e permissões |
+| Compute | Agent Runtime e workers |
+| Lambda | Ferramenta ou ação sob demanda |
+| API Gateway | Webhooks e APIs dos agentes |
+| SQS/EventBridge | Filas, eventos, retries e gatilhos |
 | RDS | Banco operacional de agentes, conversas e eventos |
-| S3 | Arquivos, documentos, criativos e bases de conhecimento |
+| S3 | Arquivos, documentos e mídia |
 | CloudWatch | Logs, métricas, alertas e tracing |
-| Secrets Manager | Tokens, chaves e credenciais dos conectores |
-| Marketplace | Catálogo de agentes, templates, ferramentas e integrações |
-| CloudFormation/Terraform | Configuração declarativa e versionamento dos agentes |
-| Billing | Medição de mensagens, tokens, execuções, ferramentas e campanhas |
+| Secrets Manager | Secret Resolver e secrets por conexão |
+| Marketplace | Catálogo de produtos, agentes e ferramentas |
+| Billing | Medição de mensagens, tokens, execuções e ferramentas |
 
-Essa analogia deve orientar a arquitetura, mas não deve aparecer de forma excessivamente técnica para o usuário final. A interface precisa falar em **agentes, canais, ferramentas, campanhas, tarefas, receitas e resultados**.
+A interface deve falar em agentes, canais, ferramentas, tarefas, automações, conhecimento, métricas e resultados. A analogia com a AWS não deve dominar a linguagem do usuário final.
 
-## 3. Estrutura da plataforma
+## 4. Produto mínimo correto
 
-A plataforma deve ser dividida em quatro camadas.
+O MVP funcional deve provar dois fluxos de alto valor:
 
-### 3.1 Control Plane
+1. **Agente de Atendimento:** responde em um canal conectado, usa conhecimento publicado, respeita horário, registra a conversa e transfere para uma pessoa quando necessário.
+2. **Agente de Vendas:** identifica intenção, coleta critérios, cria ou atualiza o lead, qualifica, atribui responsável, agenda follow-up e exibe métricas.
 
-É a camada administrativa. Ela permite criar e governar recursos, sem executar diretamente cada mensagem.
+O núcleo deve permitir criar um workspace, criar agentes a partir de templates, configurar canais, publicar versões, receber mensagens, registrar eventos, operar o Inbox, usar ferramentas autorizadas, acompanhar runs e reverter uma publicação.
 
-Inclui:
+## 5. Estado real consolidado
 
-- organizações e workspaces;
-- usuários e equipes;
-- agentes;
-- versões e ambientes;
-- conexões e credenciais;
-- ferramentas e permissões;
-- workflows;
-- canais;
-- políticas de uso;
-- métricas e faturamento.
+### 5.1 Fundamento multi-tenant e Control Plane
 
-### 3.2 Agent Runtime
+**Estado: concluído para o MVP local/preview.**
 
-É a camada que executa os agentes. Ela recebe eventos, carrega o contexto, escolhe ferramentas, chama modelos e produz ações.
+Já existem organizações, workspaces, memberships, papéis, autorização server-side, agentes, conexões, conversas, mensagens, eventos, versões, publicação, rollback, contexto global de organização/workspace/ambiente e isolamento por workspace.
 
-Inclui:
+Ainda faltam para produção: ambientes reais Development/Staging/Production, banco gerenciado, storage, observabilidade externa, deploy permanente e configuração definitiva de secrets.
 
-- roteamento de eventos;
-- memória de conversa;
-- regras determinísticas;
-- execução de prompts;
-- chamadas à xAI e outros modelos;
-- tool calling;
-- MCP;
-- filas e retries;
-- handoff para humanos;
-- controle de versão do agente.
+### 5.2 Atendimento, canais e Agent Runtime
 
-### 3.3 Integration Layer
+**Estado: núcleo funcional concluído.**
 
-É a camada de conexão com o mundo externo.
+O runtime possui fila durável, leases, retries, carregamento de contexto, memória de conversa, decisão estruturada, fallback, horário, handoff, RAG, dispatch outbound, logs e integração com CRM.
 
-Inclui:
+Evolution possui onboarding, Secret Resolver, adapter, inbound, delivery status, deduplicação e dispatch. Meta possui onboarding administrativo, verificação de webhook, HMAC-SHA256 e handler persistente. A validação ponta a ponta inbound → runtime → outbound existe em teste local.
 
-- WhatsApp Meta Cloud API;
-- Evolution API;
-- Z-API;
-- Instagram e Messenger, posteriormente;
-- CRM;
-- agenda;
-- e-mail;
-- plataformas de anúncios;
-- Google Ads;
-- Meta Ads;
-- TikTok Ads;
-- Google Analytics;
-- planilhas, bancos e ERPs;
-- servidores MCP;
-- n8n e webhooks genéricos.
+Ainda faltam validações com credenciais reais em produção, operação permanente de webhooks, rotação real de secrets e monitoramento externo.
 
-### 3.4 Experience Layer
+### 5.3 Vendas e CRM
 
-É a experiência de uso da plataforma.
+**Estado: núcleo comercial implementado; conversão completa parcial.**
 
-Inclui:
+Estão implementados `lead.create_or_update`, `lead.update_qualification`, política de qualificação por produto, `lead.assign_owner`, distribuição round-robin, `lead.create_follow_up`, cancelamento, proteção de campos, estados comerciais e painel de métricas.
 
-- console web;
-- construtor visual de agentes;
-- copiloto de configuração;
-- inbox omnichannel;
-- painel de campanhas;
-- construtor de workflows;
-- observabilidade;
-- marketplace;
-- API pública;
-- CLI e configurações declarativas, em fase posterior.
+Ainda faltam agenda, busca e reserva de horários, CRM externo, catálogo/disponibilidade conectado e ferramentas conversacionais completas para todas as operações comerciais.
 
-## 4. Famílias de agentes
+### 5.4 RAG operacional
 
-A plataforma não deve começar tentando entregar agentes completamente genéricos. O produto deve possuir famílias com contratos, ferramentas e indicadores próprios.
+**Estado: fundação persistente implementada.**
 
-| Família | Primeira função | Dados e ferramentas necessários | Indicadores |
-|---|---|---|---|
-| Atendimento | Responder dúvidas e resolver solicitações | FAQ, base de conhecimento, WhatsApp, handoff, tickets | tempo de resposta, resolução, satisfação |
-| Vendas | Qualificar leads e conduzir oportunidades | CRM, catálogo, agenda, WhatsApp | leads qualificados, reuniões, conversão |
-| Suporte | Diagnosticar e encaminhar problemas | base técnica, tickets, histórico do cliente | resolução, reabertura, SLA |
-| Gestão de anúncios | Criar, revisar e acompanhar campanhas | Meta Ads, Google Ads, dados de conversão | custo por lead, ROAS, CPA |
-| Tráfego e análise | Interpretar dados e recomendar ações | Analytics, Search Console, planilhas, BI | sessões, conversão, CAC, receita |
-| Operações | Executar rotinas repetitivas | ERP, planilhas, e-mail, webhooks | tarefas concluídas, erros, tempo economizado |
-| Marketing | Criar conteúdo e distribuir campanhas | calendário editorial, CMS, redes sociais | alcance, engajamento, leads |
+Existem documentos, chunks, fontes, publicação, snapshots, recuperação lexical, filtros multi-tenant e bloqueio de resposta sem evidência suficiente.
 
-A primeira família deve ser **Atendimento + Vendas**, porque reutiliza o que já existe no protótipo: WhatsApp, memória, FAQ, handoff, agente e conexão de canal. Gestão de anúncios e tráfego devem entrar depois, quando houver identidade de workspace, conectores, permissões, auditoria e medição de uso.
+Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, extração de documentos, embeddings reais, índice vetorial, recuperação híbrida semântica, reranking e avaliação de cobertura.
 
-## 5. Produto mínimo correto
+### 5.5 Tool Registry, conectores e MCP
 
-O MVP da plataforma não deve tentar entregar todos os agentes. Ele deve provar a infraestrutura comum com dois agentes de alto valor:
+**Estado: governança implementada; adapters e execução multi-round incompletos.**
 
-1. **Agente de Atendimento:** responde no WhatsApp, usa base de conhecimento, reconhece horário e transfere para humano.
-2. **Agente de Vendas:** qualifica o lead, coleta informações, registra o contato no CRM e agenda uma reunião.
+Existem catálogo, schemas, risco, permissões por versão publicada, congelamento, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência, auditoria e integração de tool calling no runtime.
 
-O MVP precisa permitir:
+A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. Evolution e MCP possuem fundações server-side. Ainda falta completar adapters conversacionais para CRM, agenda, envio de mensagens e serviços externos, validar `output_schema` de todos os adapters e fechar o ciclo multi-round em que o resultado sanitizado retorna ao modelo para gerar a resposta final.
 
-- criar um workspace;
-- convidar membros;
-- criar agentes a partir de templates;
-- conectar Meta Cloud API;
-- carregar FAQs e documentos;
-- configurar ferramentas permitidas;
-- publicar uma versão;
-- receber mensagens reais;
-- registrar conversa e eventos;
-- encaminhar para humano;
-- medir conversão e custo;
-- desligar ou reverter um agente.
+### 5.6 Workflows e automação
 
-## 6. Arquitetura alvo
+**Estado: motor durável implementado; experiência completa parcial.**
+
+Existem versões, compilação de grafos, condições, eventos internos, webhooks, execução manual, scheduler, filas, leases, retries, espera, retomada, aprovações, histórico e follow-ups agendados.
+
+Ainda faltam executor universal de nós `agent` e `tool`, editor visual completo, mapeamento de dados, transformações, integração oficial com n8n, observabilidade por nó e reprocessamento operacional avançado.
+
+### 5.7 Marketplace interno
+
+**Estado: primeira fatia vertical implementada.**
+
+Existem produtos, versões, ofertas, entitlements, instalações, manifestos, catálogo, detalhe, instalação, agente draft, customização, publicação e vínculo por workspace. O produto inicial é **Nexo Atendimento + Qualificação**.
+
+Ainda faltam lista geral de instalações, atualização com comparação de manifesto, staging de atualização, rollback de instalação, pausa, saúde, uso por instalação, checkout, assinatura, compra, locação, billing e marketplace de terceiros. Essas funções comerciais não devem ser simuladas antes de existir entitlement persistido e contrato de billing.
+
+### 5.8 Nexo Learning RAG e Improvement Lab
+
+**Estado: fundação, avaliação, casos e laboratório implementados; promoção pendente.**
+
+Existem eventos sanitizados, consentimento, mascaramento, avaliações, casos, chunks de engenharia, recuperação interna, candidatos versionados e revisão. Dados privados de clientes não entram no aprendizado global por padrão.
+
+Ainda faltam avaliação offline contra regressões, gate formal de promoção, publicação gradual, comparação entre versões, A/B testing, painel operacional e eventual separação física do Learning Store.
+
+### 5.9 Experiência principal
+
+**Estado: funcional.**
+
+A Home, a busca global, o contexto de workspace, a navegação de serviços, o Marketplace, Inbox, Metrics e `/settings` estão implementados e validados no preview local e público. A linguagem antiga do estúdio foi reduzida.
+
+Ainda faltam configurações server-side completas, governança por papel, configuração por ambiente, onboarding guiado e refinamento operacional de estados vazios e saúde da plataforma.
+
+### 5.10 AWS, billing e produção
+
+**Estado: postergado.**
+
+A documentação IaC e AWS existe, mas a implantação permanente não está ativa. O preview local utiliza PGlite e assets empacotados. Não existe ainda infraestrutura permanente com banco gerenciado, workers, filas, storage, secrets, alertas, quotas, custo por uso e billing.
+
+A postergação é temporária e não remove AWS do roadmap. Ela não deve bloquear o fechamento do núcleo funcional local.
+
+## 6. Migrations, rotas e validação atual
+
+O repositório possui migrations até `0030_tool_execution_domain.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab e domínio de execuções de ferramentas.
+
+As rotas principais são:
 
 ```text
-                    ┌─────────────────────────────┐
-                    │ Console Nexo                 │
-                    │ Agentes · Workspaces · Ops   │
-                    └──────────────┬──────────────┘
-                                   │ API / Auth
-                    ┌──────────────▼──────────────┐
-                    │ Control Plane                │
-                    │ Configuração · IAM · Billing │
-                    │ Versões · Secrets · Catalog  │
-                    └──────┬─────────┬────────────┘
-                           │         │
-                ┌──────────▼───┐ ┌───▼─────────────┐
-                │ Event Gateway │ │ Agent Runtime    │
-                │ Webhooks/API  │ │ Memória · LLM    │
-                │ Idempotência  │ │ Tools · MCP      │
-                └──────┬────────┘ │ Policies · Queue │
-                       │          └──────┬──────────┘
-                       │                 │
-          ┌────────────▼──────┐   ┌──────▼──────────┐
-          │ Channel Adapters   │   │ Integration Hub │
-          │ Meta · Evolution   │   │ CRM · Ads · ERP │
-          │ Z-API · E-mail     │   │ Agenda · Docs   │
-          └────────────────────┘   └─────────────────┘
-                       │                 │
-                 ┌─────▼─────┐    ┌──────▼─────────┐
-                 │ PostgreSQL │    │ Object Storage │
-                 │ Dados       │    │ Docs · Mídia   │
-                 └────────────┘    └────────────────┘
+/
+/agents
+/create
+/connections
+/inbox
+/runs
+/workflows
+/metrics
+/settings
+/marketplace
+/marketplace/agents/:productId
+/marketplace/installed/:installationId
 ```
 
-## 7. Modelo de domínio
+A validação técnica consolidada inclui typecheck, build, preview público e suíte automatizada com **119 testes aprovados e 0 falhas** no último ciclo validado.
 
-A base atual precisa evoluir de `Agent` e `Connection` locais para recursos multi-tenant.
-
-| Entidade | Finalidade |
-|---|---|
-| `organizations` | Empresa ou conta principal |
-| `workspaces` | Ambientes de trabalho, como teste e produção |
-| `memberships` | Relação entre usuários, equipes e papéis |
-| `agents` | Configuração lógica do agente |
-| `agent_versions` | Snapshots imutáveis publicados |
-| `channels` | WhatsApp, Instagram, e-mail e outros canais |
-| `connections` | Credenciais e configuração do canal |
-| `conversations` | Sessões com contatos externos |
-| `messages` | Mensagens recebidas e enviadas |
-| `knowledge_sources` | FAQs, documentos, URLs e bases vetoriais |
-| `tools` | Ferramentas nativas ou MCP |
-| `agent_tool_permissions` | Ferramentas permitidas para cada agente |
-| `workflows` | Sequências de ações e gatilhos |
-| `campaigns` | Campanhas de marketing e anúncios |
-| `ad_accounts` | Contas Meta Ads, Google Ads e TikTok Ads |
-| `tasks` | Ações agendadas ou pendentes de aprovação |
-| `runs` | Execuções de agentes e workflows |
-| `audit_events` | Histórico de alterações e ações sensíveis |
-| `usage_records` | Tokens, mensagens, execuções, ferramentas e custos |
-| `deployments` | Estado de publicação de cada versão |
-
-Toda entidade de negócio deve possuir `workspace_id`. Os dados não podem ser identificados apenas por IDs enviados pelo frontend. O backend deve resolver o workspace pelo usuário autenticado e verificar a permissão antes de cada operação.
-
-## 8. Integrações, conectores e MCP na plataforma
-
-### 8.1 Conectores de infraestrutura
-
-São necessários para o funcionamento básico:
-
-- provedor de modelo, inicialmente xAI;
-- banco PostgreSQL/Neon;
-- armazenamento de arquivos;
-- provedor de autenticação;
-- sistema de e-mail e notificações;
-- secret manager;
-- observabilidade;
-- fila ou mecanismo de eventos.
-
-### 8.2 Conectores de canais
-
-São responsáveis por entrada e saída de comunicação:
-
-- Meta Cloud API;
-- Evolution API;
-- Z-API;
-- e-mail;
-- Instagram/Messenger em etapa posterior;
-- telefone e voz somente após estabilizar texto.
-
-### 8.3 Conectores de negócio
-
-São responsáveis por ações que geram valor:
-
-- CRM;
-- Google Calendar;
-- catálogo e estoque;
-- ERP;
-- help desk;
-- Google Sheets;
-- plataformas de pagamento;
-- plataformas de anúncios;
-- Analytics e BI.
-
-### 8.4 MCP
-
-MCP deve ser tratado como um **formato de extensão de ferramentas**, não como a espinha dorsal da plataforma.
-
-O Nexo deve possuir um catálogo de ferramentas com:
-
-- nome e descrição;
-- esquema de entrada;
-- origem da ferramenta;
-- permissões necessárias;
-- risco da operação;
-- timeout;
-- limite de uso;
-- política de aprovação;
-- logs de execução;
-- versão.
-
-Uma ferramenta MCP de consulta de agenda pode ser liberada automaticamente. Uma ferramenta MCP que altera uma campanha ou realiza uma ação financeira deve exigir aprovação ou uma política explícita de automação.
-
-O fluxo seguro deve ser:
+Commit de referência desta consolidação de código:
 
 ```text
-Mensagem do usuário
-    ↓
-Runtime identifica intenção
-    ↓
-Modelo solicita ferramenta permitida
-    ↓
-Nexo valida política, escopo e risco
-    ↓
-Conector/MCP executa no servidor
-    ↓
-Resultado sanitizado retorna ao agente
-    ↓
-Ação e resultado são auditados
+3d6cc57 feat: implement agent cloud marketplace runtime and tool governance
 ```
 
-Tokens e credenciais nunca devem passar pelo frontend, pelo prompt ou pelo estado do navegador.
-
-## 9. Roadmap conjunto de execução
+## 7. Roadmap oficial atualizado
 
 ### Fase 1 — Fundamento multi-tenant
 
-**Objetivo:** converter o protótipo local em um produto com conta, workspace e persistência.
+**Status: concluída para MVP local/preview.**
 
-**Entregas:**
-
-- autenticação real;
-- organizações, workspaces e membros;
-- papéis `owner`, `admin`, `operator` e `viewer`;
-- banco de agentes, conexões, conversas e eventos;
-- migração do Zustand para backend;
-- ambiente de teste e produção;
-- auditoria básica;
-- build e deploy reproduzíveis.
-
-**Resultado:** o usuário consegue criar recursos que pertencem à sua empresa e não apenas ao navegador.
+Manter compatibilidade e fechar produção apenas depois do núcleo funcional.
 
 ### Fase 2 — Agent Runtime e Atendimento
 
-**Objetivo:** colocar o primeiro agente real em operação.
+**Status: concluída para MVP local/preview.**
 
-**Entregas:**
-
-- webhook público;
-- Meta Cloud API;
-- normalização de mensagens;
-- idempotência;
-- memória persistente;
-- FAQ e base de conhecimento;
-- horário de atendimento;
-- handoff;
-- fallback;
-- logs por execução;
-- inbox básico;
-- publicação e rollback.
-
-**Resultado:** um agente de atendimento responde a mensagens reais com controle operacional.
+Próximas ações: validação real de canal, healthchecks, operação de webhook e melhoria de Inbox/handoff.
 
 ### Fase 3 — Agente de Vendas
 
-**Objetivo:** transformar atendimento em aquisição e conversão.
+**Status: núcleo concluído; fechamento pendente.**
 
-**Entregas:**
-
-- formulário de qualificação configurável;
-- estágios de lead;
-- conector CRM;
-- criação e atualização de contato;
-- agenda;
-- follow-up automático com limites;
-- identificação de intenção de compra;
-- painel de conversão;
-- aprovação humana para ações críticas.
-
-**Resultado:** o agente coleta, qualifica, registra e encaminha oportunidades.
+Próximas ações: agenda, ferramenta de disponibilidade, reserva com aprovação quando necessário, CRM externo opcional e tool calls conversacionais comerciais.
 
 ### Fase 4 — Hub de ferramentas e MCP
 
-**Objetivo:** permitir que os agentes executem tarefas externas com segurança.
+**Status: fundação concluída; execução completa pendente.**
 
-**Entregas:**
-
-- catálogo de ferramentas;
-- permissões por agente;
-- conectores nativos;
-- suporte a MCP;
-- schemas de entrada e saída;
-- classificação de risco;
-- aprovação humana;
-- tracing de tool calls;
-- limites e circuit breaker.
-
-**Resultado:** cada agente passa a ser capaz de executar processos, não apenas conversar.
+Próximas ações: completar Tool Gateway para todos os adapters necessários, validar output schemas, implementar multi-round, circuit breaker, quota/rate limit e tracing completo.
 
 ### Fase 5 — Workflows e automação
 
-**Objetivo:** conectar agentes a eventos e rotinas.
+**Status: núcleo durável concluído; experiência completa pendente.**
 
-**Entregas:**
-
-- gatilhos por webhook, horário, evento e mudança de status;
-- editor visual de workflows;
-- filas e retries;
-- nós de condição, agente, ferramenta, espera e aprovação;
-- integração com n8n;
-- execução manual e agendada;
-- histórico de runs.
-
-**Resultado:** o Nexo se torna uma plataforma de automação orientada por agentes.
+Próximas ações: executor de nós `agent` e `tool`, editor visual, mapeamento de dados, transformações, n8n e painel de runs.
 
 ### Fase 6 — Agentes de Ads e tráfego
 
-**Objetivo:** criar agentes especializados em aquisição e performance.
+**Status: não iniciada.**
 
-**Entregas:**
-
-- conexão com Meta Ads;
-- conexão com Google Ads;
-- conexão com TikTok Ads;
-- leitura de campanhas, grupos e anúncios;
-- análise de métricas;
-- recomendações de orçamento e criativos;
-- geração de relatórios;
-- aprovação antes de alterar ou publicar campanhas;
-- integração com Analytics e conversões.
-
-**Importante:** a primeira versão deve ser somente de **leitura e recomendação**. Alterações automáticas de orçamento, segmentação ou publicação devem entrar depois de auditoria e aprovação.
+Começar somente depois de estabilizar Fases 3–5. A primeira versão deve ser somente leitura e recomendação. Alterações de orçamento ou publicação exigem aprovação.
 
 ### Fase 7 — Marketplace e plataforma aberta
 
-**Objetivo:** permitir que terceiros criem e distribuam agentes e ferramentas.
+**Status: Marketplace interno parcial; plataforma aberta não iniciada.**
 
-**Entregas:**
+Completar instalações, atualizações e operação do catálogo interno antes de abrir para terceiros.
 
-- templates públicos e privados;
-- catálogo de agentes;
-- pacotes de ferramentas;
-- marketplace de conectores;
-- API pública;
-- SDK;
-- webhooks de saída;
-- configuração declarativa;
-- CLI;
-- versionamento e compatibilidade.
+### Learning RAG
 
-**Resultado:** o Nexo deixa de ser apenas um produto fechado e passa a operar como ecossistema.
+**Status: fundação e laboratório implementados; gate de promoção pendente.**
 
-## 10. Backlog priorizado
+Retomar depois do fechamento do núcleo de vendas, ferramentas e Marketplace interno.
 
-### P0 — Sem isso não existe plataforma funcional
+### AWS e infraestrutura permanente
 
-| Item | Resultado esperado |
+**Status: postergada.**
+
+Retomar após o núcleo demonstrável estar fechado e validado com canal real.
+
+### Billing
+
+**Status: não iniciado.**
+
+Não simular compra, assinatura ou locação. Implementar após definir entitlement, limites, uso e contrato comercial.
+
+## 8. Próximo ponto de partida obrigatório
+
+A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketplace aberto ou AWS permanente antes de concluir o ciclo abaixo:
+
+1. completar o ciclo multi-round de tool calling;
+2. expor CRM, handoff e follow-up como ferramentas nativas autorizáveis;
+3. implementar agenda e disponibilidade como conector ou ferramenta controlada;
+4. fechar atualização e rollback de instalações do Marketplace;
+5. criar `marketplace/installed` e a operação de Minhas Instalações;
+6. criar e validar templates prontos de Atendimento e Vendas;
+7. executar validação com conexão Meta ou Evolution real;
+8. revisar observabilidade, quotas e readiness de produção;
+9. retomar AWS somente após o núcleo demonstrável passar pelos critérios de aceite.
+
+Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
+
+## 9. Protocolo obrigatório de cada sessão
+
+Ao iniciar qualquer sessão, a IA deve:
+
+1. localizar a raiz do repositório;
+2. ler este arquivo integralmente;
+3. ler `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md`;
+4. ler os documentos especializados relacionados ao próximo item;
+5. verificar `git status`, último commit, migrations, rotas, scripts e testes;
+6. confrontar o estado real do código com este documento;
+7. identificar a primeira etapa incompleta do próximo ponto de partida;
+8. subdividir essa etapa em uma menor fatia vertical reversível;
+9. registrar objetivo, arquivos afetados, riscos, dependências, critério de aceite e classificação de alinhamento;
+10. implementar, testar, revisar o diff e atualizar este documento quando o estado do roadmap mudar.
+
+Nenhuma IA deve iniciar uma nova frente apenas porque ela aparece em uma documentação antiga. A prioridade é sempre o **Próximo ponto de partida obrigatório** deste arquivo, salvo decisão explícita do usuário.
+
+## 10. Critérios permanentes de segurança e arquitetura
+
+Toda entidade de negócio deve possuir `workspace_id` ou vínculo equivalente validado no backend. Nenhuma regra crítica deve depender do frontend. O modelo não recebe secrets e não executa funções diretamente. Ferramentas passam pelo Tool Gateway, Connector Runtime ou MCP Runtime autorizado. Agentes de produção executam versões publicadas. Alterações sensíveis possuem aprovação, idempotência, timeout, sanitização e auditoria. O runtime não deve bloquear atendimento por falha best-effort do Learning.
+
+A plataforma não deve inventar endpoints externos, payloads, credenciais, tabelas ou capacidades não confirmadas. Toda integração deve ter contrato verificável, tratamento de erro, teste ou fixture e documentação da suposição restante.
+
+## 11. Documentos relacionados no repositório
+
+- `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md`
+- `ARQUITETURA-EXECUCAO-FERRAMENTAS-MCP-CONECTORES.md`
+- `PLANO-WORKFLOWS-AUTOMACAO-NEXO.md`
+- `MODELO-DADOS-MULTI-TENANT.md`
+- `PLANO-EXECUCAO-FUNCIONAL.md`
+- `docs/CONNECTOR-RUNTIME-SECRET-RESOLVER.md`
+- `README.md`
+
+Os documentos especializados complementam este plano. Em caso de conflito, este plano define a prioridade de produto e o comando interno define o método obrigatório de execução.
+
+## 12. Histórico de consolidação
+
+| Data | Consolidação |
 |---|---|
-| Auth e workspace | Usuário e empresa isolados |
-| Banco de domínio | Dados persistentes |
-| API server-side | Nenhuma regra crítica no frontend |
-| Secret manager | Tokens protegidos |
-| Meta Cloud API | Primeiro canal real |
-| Webhook | Entrada de eventos |
-| Runtime | Agente responde e executa regras |
-| Idempotência | Sem mensagens duplicadas |
-| Logs e auditoria | Diagnóstico e rastreabilidade |
-| Publicação real | Versão ativa verificável |
-
-### P1 — Cria valor comercial rapidamente
-
-| Item | Resultado esperado |
-|---|---|
-| CRM | Agente de vendas útil |
-| Agenda | Conversão em reunião |
-| Inbox humano | Operação híbrida |
-| Base de conhecimento | Respostas com conteúdo próprio |
-| Templates por vertical | Menor tempo de configuração |
-| Métricas de conversão | Prova de valor |
-| Evolution e Z-API | Mais opções de canal |
-| Workflows | Automação além do chat |
-
-### P2 — Expande a plataforma
-
-| Item | Resultado esperado |
-|---|---|
-| MCP | Extensibilidade de ferramentas |
-| Ads read-only | Agente de performance seguro |
-| Aprovação de ações | Automação controlada |
-| Marketplace | Ecossistema |
-| API e CLI | Integração empresarial |
-| Billing por uso | Modelo SaaS escalável |
-| Multi-modelo | Redundância e escolha de custo |
-
-## 11. Modelo de execução em conjunto
-
-O trabalho deve ser organizado por **fatias verticais**, e não por telas isoladas. Cada fatia deve atravessar interface, backend, banco, integração, segurança e teste.
-
-### Trilha A — Plataforma
-
-Responsável por auth, workspaces, permissões, banco, secrets, billing, auditoria e deploy.
-
-### Trilha B — Runtime
-
-Responsável por eventos, filas, memória, prompts, ferramentas, MCP, retries e versões do agente.
-
-### Trilha C — Canais
-
-Responsável por Meta, Evolution, Z-API, webhooks, status de conexão e envio de mensagens.
-
-### Trilha D — Verticais de negócio
-
-Responsável por templates e ferramentas para atendimento, vendas, CRM, agenda, ads e tráfego.
-
-### Trilha E — Experiência
-
-Responsável pelo console, criação de agentes, inbox, workflows, métricas e diagnóstico.
-
-Cada entrega deve passar por um contrato comum:
-
-1. modelo de dados definido;
-2. API server-side definida;
-3. permissão definida;
-4. segredo definido;
-5. integração testada;
-6. logs e erros definidos;
-7. tela de operação criada;
-8. teste automatizado e teste de fumaça;
-9. documentação atualizada.
-
-## 12. Primeira entrega conjunta recomendada
-
-A primeira entrega não deve ser “AWS para agentes” completa. Deve ser uma demonstração operacional chamada **Nexo Atendimento + Vendas**.
-
-### Jornada demonstrável
-
-1. Usuário cria uma empresa e um workspace.
-2. Conecta uma conta Meta Cloud API.
-3. Cria um agente de atendimento a partir de um template.
-4. Adiciona FAQ e horário de funcionamento.
-5. Publica a versão do agente.
-6. Um cliente envia mensagem pelo WhatsApp.
-7. O agente responde usando a base configurada.
-8. Um lead demonstra intenção de compra.
-9. O agente coleta nome, necessidade e telefone.
-10. O agente cria o lead no CRM.
-11. O agente oferece horário disponível.
-12. O operador acompanha conversa, execução e conversão no console.
-13. O operador pode pausar, editar ou reverter o agente.
-
-Essa jornada comprova a infraestrutura de atendimento, vendas, integração, runtime, ferramentas e observabilidade. Depois, os mesmos blocos podem ser reutilizados para marketing, ads e tráfego.
-
-## 13. Critérios de sucesso
-
-### Produto
-
-- Um novo cliente cria o primeiro agente em menos de 15 minutos.
-- O agente responde a mensagens reais sem intervenção técnica diária.
-- O operador entende por que o agente respondeu, recusou ou transferiu.
-- Uma alteração pode ser testada antes de entrar em produção.
-- O cliente consegue reutilizar um agente em mais de um canal.
-
-### Plataforma
-
-- Todos os recursos possuem workspace e autorização.
-- Todas as execuções possuem logs e correlação.
-- Conectores podem ser revogados sem alterar o agente.
-- Ferramentas possuem permissões e risco configuráveis.
-- Falhas de provedor não derrubam o restante da plataforma.
-- O sistema mede tokens, mensagens, execuções e custos.
-
-### Negócio
-
-- Atendimento reduz volume repetitivo.
-- Vendas aumenta leads qualificados ou reuniões.
-- O cliente percebe valor antes de contratar integrações avançadas.
-- Templates por vertical reduzem o tempo de implantação.
-- A plataforma pode cobrar por workspace, execução e consumo.
-
-## 14. Decisões que devem ser tomadas agora
-
-| Decisão | Recomendação inicial |
-|---|---|
-| Público inicial | Pequenas e médias empresas com atendimento e vendas via WhatsApp |
-| Primeiro canal | Meta Cloud API |
-| Primeiro modelo | xAI, mantendo abstração para múltiplos modelos |
-| Primeiro vertical | Atendimento + vendas |
-| Runtime inicial | Gerenciado pelo Nexo |
-| MCP | Fase 4, depois do runtime básico |
-| Ads/tráfego | Fase 6, inicialmente somente leitura e recomendação |
-| Deploy | Aplicação web com banco, storage e workers separados quando necessário |
-| Multi-tenancy | Workspace obrigatório em todas as entidades |
-| Controle de ações | Aprovação humana para ações de alto risco |
-| Billing | Medir desde o primeiro runtime, cobrar depois da validação do produto |
-
-## 15. Próximos 10 passos
-
-1. Confirmar o nome, público inicial e modelo comercial da plataforma.
-2. Renomear o conceito de “Nexo Studio” para “Nexo Cloud” ou manter Studio como módulo de criação.
-3. Definir o contrato de workspace, usuário, agente, versão, canal, ferramenta e execução.
-4. Implementar autenticação, workspaces e persistência.
-5. Criar o runtime mínimo com Meta Cloud API.
-6. Migrar o playground para usar o mesmo pipeline do runtime real.
-7. Implementar o agente de atendimento com FAQ, horário e handoff.
-8. Implementar CRM e agenda para o agente de vendas.
-9. Criar observabilidade, publicação e rollback.
-10. Abrir a camada de ferramentas e MCP somente depois de a fatia Atendimento + Vendas estar funcionando ponta a ponta.
-
-## 16. Síntese final
-
-A transformação correta não é adicionar dezenas de integrações à aplicação atual. É criar uma **plataforma central de execução de agentes** e, sobre ela, adicionar famílias de agentes e conectores especializados.
-
-A ordem deve ser:
-
-```text
-Workspace e identidade
-    → persistência e permissões
-    → runtime e webhooks
-    → atendimento real
-    → vendas e CRM
-    → ferramentas e MCP
-    → workflows
-    → ads e tráfego
-    → marketplace e API aberta
-```
-
-O protótipo já fornece uma boa camada de experiência e uma linguagem de produto coerente. O próximo passo é transformar essa experiência em um control plane persistente e ligar o fluxo a um runtime real. Se essa base for construída corretamente, agentes de atendimento, vendas, marketing, anúncios e tráfego poderão compartilhar a mesma infraestrutura, em vez de serem produtos separados.
-
-## Referências do workspace
-
-[1]: `src/lib/types.ts` "Tipos atuais de agentes, conexões e mensagens"
-
-[2]: `src/lib/store.ts` "Estado local atual do protótipo"
-
-[3]: `src/lib/ai.ts` "Integração server-side atual com xAI"
-
-[4]: `src/lib/pipeline.ts` "Regras atuais de execução local"
-
-[5]: `src/lib/codegen.ts` "Exportação atual para Python e n8n"
-
-[6]: `src/components/publish-panel.tsx` "Fluxo atual de publicação"
-
-[7]: `src/routes/connections.tsx` "Fluxo atual de conexões"
-
-[8]: `.grok/references/data-and-auth.md` "Diretrizes de autenticação, dados e conectores"
+| 2026-09-10 | Estado confrontado com código, migrations, rotas, testes e documentos compartilhados. Registrados os módulos implementados, as lacunas e a ordem obrigatória de continuidade. |
