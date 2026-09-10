@@ -816,10 +816,10 @@ export async function markConversationRead(
 
 export async function updateConversationHandoff(
   sql: Sql,
-  userId: string,
+  userId: string | null,
   input: { workspaceId: string; conversationId: string; action: "assign" | "release" | "resume" | "close"; reason?: string },
-): Promise<void> {
-  await requireWorkspaceAccess(sql, userId, input.workspaceId, "operate");
+): Promise<{ status: "pending" | "open" | "closed" }> {
+  if (userId) await requireWorkspaceAccess(sql, userId, input.workspaceId, "operate");
   const status = input.action === "assign" ? "pending" : input.action === "close" ? "closed" : "open";
   const conversation = await sql.query<{ id: string }>(
     `select id from conversations where id = $1 and workspace_id = $2 limit 1`,
@@ -837,6 +837,7 @@ export async function updateConversationHandoff(
      where id = $1 and workspace_id = $6`,
     [input.conversationId, userId, status, input.action, input.reason?.trim() ?? "", input.workspaceId],
   );
+  return { status };
 }
 
 export async function assertConversationAccess(

@@ -123,7 +123,7 @@ Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, 
 
 Existem catálogo, schemas, risco, permissões por versão publicada, congelamento, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência, auditoria e integração de tool calling no runtime.
 
-A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. Evolution e MCP possuem fundações server-side. Ainda falta completar adapters conversacionais para CRM, agenda, envio de mensagens e serviços externos, validar `output_schema` de todos os adapters e fechar o ciclo multi-round em que o resultado sanitizado retorna ao modelo para gerar a resposta final.
+A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo: resultados sanitizados retornam ao modelo para gerar a resposta final. CRM, handoff e follow-up possuem registros nativos no Tool Registry e adapters conversacionais autorizáveis, com isolamento por workspace, idempotência e auditoria. Ainda faltam agenda, disponibilidade, adapters externos, validação de `output_schema` de todos os adapters, circuit breaker, quota/rate limit e tracing completo.
 
 ### 5.6 Workflows e automação
 
@@ -218,15 +218,15 @@ Próximas ações: validação real de canal, healthchecks, operação de webhoo
 
 ### Fase 3 — Agente de Vendas
 
-**Status: núcleo concluído; fechamento pendente.**
+**Status: núcleo CRM e ferramentas conversacionais concluído; fechamento pendente.**
 
-Próximas ações: agenda, ferramenta de disponibilidade, reserva com aprovação quando necessário, CRM externo opcional e tool calls conversacionais comerciais.
+Próximas ações: agenda, ferramenta de disponibilidade, reserva com aprovação quando necessário e CRM externo opcional.
 
 ### Fase 4 — Hub de ferramentas e MCP
 
-**Status: fundação concluída; execução completa pendente.**
+**Status: fundação e ciclo multi-round concluídos para o núcleo nativo; execução completa pendente.**
 
-Próximas ações: completar Tool Gateway para todos os adapters necessários, validar output schemas, implementar multi-round, circuit breaker, quota/rate limit e tracing completo.
+Próximas ações: completar Tool Gateway para adapters externos necessários, validar output schemas, circuit breaker, quota/rate limit e tracing completo.
 
 ### Fase 5 — Workflows e automação
 
@@ -270,8 +270,8 @@ Não simular compra, assinatura ou locação. Implementar após definir entitlem
 
 A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketplace aberto ou AWS permanente antes de concluir o ciclo abaixo:
 
-1. completar o ciclo multi-round de tool calling;
-2. expor CRM, handoff e follow-up como ferramentas nativas autorizáveis;
+1. completar o ciclo multi-round de tool calling; **concluído para o núcleo nativo**;
+2. expor CRM, handoff e follow-up como ferramentas nativas autorizáveis; **concluído para o núcleo nativo**;
 3. implementar agenda e disponibilidade como conector ou ferramenta controlada;
 4. fechar atualização e rollback de instalações do Marketplace;
 5. criar `marketplace/installed` e a operação de Minhas Instalações;

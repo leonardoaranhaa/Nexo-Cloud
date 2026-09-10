@@ -10,7 +10,7 @@ type Attributes = Record<string, unknown>;
 function text(value: unknown): string { return typeof value === "string" ? value : ""; }
 function numeric(value: unknown): number { return typeof value === "number" && Number.isFinite(value) ? value : Number(value ?? 0) || 0; }
 function lexical(value: string): string { return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim(); }
-function short(value: string, max: number): string { return value.replace(/\u0000/g, "").trim().slice(0, max); }
+function short(value: string, max: number): string { return value.replaceAll("\u0000", "").trim().slice(0, max); }
 
 export function classifyLearningCase(attributes: Attributes, evaluationStatus: EvaluationStatus): LearningCaseType {
   if (attributes.regression === true) return "regression_case";

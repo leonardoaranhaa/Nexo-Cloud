@@ -22,7 +22,7 @@ export type KnowledgeDocument = {
 };
 
 function clean(value: string, max: number): string {
-  return value.replace(/\u0000/g, "").trim().slice(0, max);
+  return value.replaceAll("\u0000", "").trim().slice(0, max);
 }
 
 function lexical(value: string): string {

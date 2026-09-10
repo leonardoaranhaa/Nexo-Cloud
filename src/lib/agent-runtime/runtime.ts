@@ -12,6 +12,7 @@ import { executeLeadCreateOrUpdate, executeLeadUpdateQualification, extractQuali
 import { evaluateQualification } from "../crm/qualification.ts";
 import { executeLeadAssignOwner } from "../crm/assignment.ts";
 import { executeLeadCreateFollowUp } from "../crm/follow-ups.ts";
+import { updateConversationHandoff } from "../multitenancy/server.ts";
 import { recordLearningEvent } from "../learning/server.ts";
 import { persistLearningEvaluation } from "../learning/evaluation.ts";
 import { indexLearningEvent } from "../learning/cases.ts";
@@ -254,9 +255,10 @@ async function executeAuthorizedRuntimeTools(
   sql: Sql,
   context: RuntimeContext,
   calls: { id: string; name: string; arguments: JsonRecord }[],
-): Promise<{ executed: number; approvalRequired: number }> {
+): Promise<{ executed: number; approvalRequired: number; results: { id: string; name: string; output: JsonRecord }[] }> {
   let executed = 0;
   let approvalRequired = 0;
+  const results: { id: string; name: string; output: JsonRecord }[] = [];
   for (const call of calls.slice(0, 3)) {
     const tool = context.authorizedTools.find((item) => item.key === call.name);
     if (!tool) throw new Error("RUNTIME_TOOL_NOT_AUTHORIZED");
@@ -277,7 +279,7 @@ async function executeAuthorizedRuntimeTools(
       continue;
     }
     if (tool.key === "lead.create_or_update") {
-      await executeLeadCreateOrUpdate(sql, null, {
+      const output = await executeLeadCreateOrUpdate(sql, null, {
         workspaceId: context.job.workspace_id,
         externalContactId: context.recipient,
         conversationId: context.job.conversation_id,
@@ -290,14 +292,108 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
+      results.push({ id: call.id, name: call.name, output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify({ status: "succeeded", tool: tool.key }), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
     }
+    if (tool.key === "lead.update_qualification") {
+      const output = await executeLeadUpdateQualification(sql, null, {
+        workspaceId: context.job.workspace_id,
+        externalContactId: context.recipient,
+        conversationId: context.job.conversation_id,
+        qualificationData: object(call.arguments.qualificationData) as import("../multitenancy/server.ts").JsonObject,
+        confirmedFields: Array.isArray(call.arguments.confirmedFields) ? call.arguments.confirmedFields.filter((value): value is string => typeof value === "string") : [],
+        stage: text(call.arguments.stage, context.commercialState) as CommercialState,
+        score: number(call.arguments.score, 0, 0, 100),
+        idempotencyKey,
+        traceId: context.job.trace_id,
+        requestedBy: "model",
+      });
+      results.push({ id: call.id, name: call.name, output: object(output) });
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
+      executed += 1;
+      continue;
+    }
+    if (tool.key === "lead.assign_owner") {
+      const output = await executeLeadAssignOwner(sql, null, {
+        workspaceId: context.job.workspace_id,
+        externalContactId: context.recipient,
+        conversationId: context.job.conversation_id,
+        ownerId: text(call.arguments.ownerId) || undefined,
+        productId: text(call.arguments.productId) || undefined,
+        idempotencyKey,
+        traceId: context.job.trace_id,
+        requestedBy: "model",
+      });
+      results.push({ id: call.id, name: call.name, output: object(output) });
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
+      executed += 1;
+      continue;
+    }
+    if (tool.key === "lead.create_follow_up") {
+      const output = await executeLeadCreateFollowUp(sql, null, {
+        workspaceId: context.job.workspace_id,
+        externalContactId: context.recipient,
+        conversationId: context.job.conversation_id,
+        agentId: context.agent.id,
+        connectionId: context.connectionId,
+        cadenceId: text(call.arguments.cadenceId) || undefined,
+        message: text(call.arguments.message),
+        scheduledAt: text(call.arguments.scheduledAt),
+        stepNumber: number(call.arguments.stepNumber, 1, 1, 20),
+        idempotencyKey,
+        traceId: context.job.trace_id,
+        requestedBy: "model",
+      });
+      results.push({ id: call.id, name: call.name, output: object(output) });
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
+      executed += 1;
+      continue;
+    }
+    if (tool.key === "conversation.handoff") {
+      const action = text(call.arguments.action) as "assign" | "release" | "resume" | "close";
+      if (!["assign", "release", "resume", "close"].includes(action)) throw new Error("RUNTIME_HANDOFF_ACTION_INVALID");
+      const output = await updateConversationHandoff(sql, null, {
+        workspaceId: context.job.workspace_id,
+        conversationId: context.job.conversation_id,
+        action,
+        reason: text(call.arguments.reason),
+      });
+      results.push({ id: call.id, name: call.name, output: object(output) });
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
+      executed += 1;
+      continue;
+    }
+    results.push({ id: call.id, name: call.name, output: { status: "unsupported" } });
     await sql.query(`update tool_executions set status = 'failed', error_code = 'RUNTIME_TOOL_ADAPTER_UNAVAILABLE', error_message = $1, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [tool.key, executionId, context.job.workspace_id]);
     throw new Error("RUNTIME_TOOL_ADAPTER_UNAVAILABLE");
   }
-  return { executed, approvalRequired };
+  return { executed, approvalRequired, results };
+}
+
+async function recomposeToolCallResponse(
+  model: RuntimeModel,
+  context: RuntimeContext,
+  agent: Agent,
+  prompt: string,
+  inboundText: string,
+  toolResultText: string,
+  modelReply: string | undefined,
+): Promise<string | undefined> {
+  if (!toolResultText.trim()) return modelReply;
+  const history = context.history.slice(-(agent.memoryWindow * 2 + 1)).concat(
+    { role: "user", content: inboundText },
+    { role: "assistant", content: modelReply && modelReply.trim() ? modelReply : "Vou usar a ferramenta para confirmar isso." },
+  );
+  const followUp = await model.generate({
+    systemPrompt: `${prompt}\n\nResultado das ferramentas executadas:\n${toolResultText}`,
+    history,
+    maxTokens: agent.maxTokens,
+    temperature: agent.temperature,
+    tools: [],
+  });
+  return followUp.text || modelReply;
 }
 
 export async function runNextAgentRuntimeJob(
@@ -318,7 +414,8 @@ export async function runNextAgentRuntimeJob(
   try {
     const context = await loadContext(sql, job);
     const steps: ExecutionStep[] = [{ name: "load_context", status: "ok" }];
-    const result = await executeAgentRuntime(context, model);
+    const runtimeModel = model ?? xaiModel();
+    let result = await executeAgentRuntime(context, runtimeModel);
     await persistAgentDecision(sql, {
       workspaceId: job.workspace_id,
       jobId: job.id,
@@ -330,6 +427,20 @@ export async function runNextAgentRuntimeJob(
     if (result.toolCalls?.length) {
       const toolResult = await executeAuthorizedRuntimeTools(sql, context, result.toolCalls);
       steps.push({ name: "authorized_tool_calls", status: "ok", durationMs: toolResult.executed + toolResult.approvalRequired });
+      const toolResultSummary = toolResult.results.map((item) => `[${item.name}] ${JSON.stringify(item.output)}`).join("\n");
+      if (toolResultSummary) {
+        const followUpText = await recomposeToolCallResponse(runtimeModel, context, context.agent, [
+          context.agent.systemPrompt,
+          context.agent.persona ? `Persona: ${context.agent.persona}` : "",
+          context.agent.knowledge.notes ? `Notas de conhecimento: ${context.agent.knowledge.notes}` : "",
+          context.ragEvidence.length ? `Evidências publicadas:\n${context.ragEvidence.map((item) => `[${item.sourceId}] ${item.title}: ${item.excerpt}`).join("\n")}` : "",
+          `Decisão do runtime: intenção=${result.decision.intent}; confiança=${result.decision.confidence}; risco=${result.decision.risk}; próxima ação=${result.decision.nextAction}.`,
+          "Responda em texto curto, adequado para WhatsApp. Não invente políticas, preços ou dados ausentes.",
+        ].filter(Boolean).join("\n\n").slice(0, 12000), context.inboundText, toolResultSummary, result.reply);
+        if (followUpText) {
+          result = { ...result, reply: followUpText, usedAi: true, reason: "tool_call" };
+        }
+      }
     }
     if ((result.decision.intent === "pricing_question" || result.decision.intent === "availability_question") && result.decision.nextAction !== "ask" && result.decision.nextAction !== "handoff") {
       await executeLeadCreateOrUpdate(sql, null, {

@@ -46,6 +46,7 @@ async function fixture(baseUrl: string) {
     "0029_agent_improvement_lab.sql",
     "0030_tool_execution_domain.sql",
     "0031_agent_development_blueprints.sql",
+    "0032_native_conversation_tools.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";
@@ -147,6 +148,79 @@ test("Agent Runtime executes only tools authorized by the published version", as
     assert.equal(executions.rows.some((row) => row.status === "succeeded" && row.idempotency_key === `runtime:${queued.id}:tool:call-1`), true);
     const leads = await pg.query<{ score: number }>("select score from crm_leads where workspace_id = 'ws' order by updated_at desc");
     assert.equal(leads.rows.some((row) => Number(row.score) === 84), true);
+  } finally {
+    await pg.close();
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("Agent Runtime follows a second model pass after executing a tool call", async () => {
+  const server = createServer(async (_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ key: { id: "provider-tool-2" } }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("test server did not bind");
+  const { pg, sql } = await fixture(`http://127.0.0.1:${address.port}`);
+  try {
+    await pg.query("insert into agent_versions (id,agent_id,version_number,status,config,created_by) values ('published-tool-version-2','agent',1,'published',$1::jsonb,'user')", [JSON.stringify({ name: "Agent", systemPrompt: "Seja objetivo." })]);
+    await pg.query("insert into agent_tool_permissions (id,workspace_id,agent_version_id,tool_id,enabled,require_approval,allowed_scopes) values ('permission-runtime-2','ws','published-tool-version-2','tool_crm_lead_create_or_update',true,false,'{}')");
+    const queued = await enqueueAgentRuntimeJob(sql, { workspaceId: "ws", agentId: "agent", conversationId: "conversation", inboundMessageId: "inbound", traceId: "trace-tool-roundtrip" });
+    let turns = 0;
+    const result = await runNextAgentRuntimeJob(sql, "worker-tool-roundtrip", {
+      async generate(input) {
+        turns += 1;
+        if (turns === 1) {
+          return {
+            text: "Vou registrar seu interesse.",
+            usedAi: true,
+            toolCalls: [{ id: "call-2", name: "lead.create_or_update", arguments: { stage: "qualifying", score: 88, intent: "availability_question" } }],
+          };
+        }
+        assert.ok(input.history.some((entry) => entry.content.includes("Qual o horário?") || entry.content.includes("availability_question")));
+        return { text: "Confirmado: a sua solicitação foi registrada e já foi encaminhada para continuidade.", usedAi: true };
+      },
+    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));
+    assert.equal(result.status, "succeeded");
+    const outbound = await pg.query<{ direction: string; content: { text?: string } }>("select direction, content from messages where workspace_id = 'ws' and direction = 'outbound' order by created_at desc limit 1");
+    assert.equal(outbound.rows[0]?.content.text, "Confirmado: a sua solicitação foi registrada e já foi encaminhada para continuidade.");
+    assert.equal(turns, 2);
+    const executions = await pg.query<{ status: string; idempotency_key: string }>("select status, idempotency_key from tool_executions where workspace_id = 'ws' order by created_at");
+    assert.equal(executions.rows.some((row) => row.status === "succeeded" && row.idempotency_key === `runtime:${queued.id}:tool:call-2`), true);
+  } finally {
+    await pg.close();
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("Agent Runtime exposes authorized conversation handoff as a native tool", async () => {
+  const server = createServer(async (_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ key: { id: "provider-handoff-1" } }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("test server did not bind");
+  const { pg, sql } = await fixture(`http://127.0.0.1:${address.port}`);
+  try {
+    await pg.query("insert into agent_versions (id,agent_id,version_number,status,config,created_by) values ('published-handoff-version','agent',1,'published',$1::jsonb,'user')", [JSON.stringify({ name: "Agent", systemPrompt: "Seja objetivo." })]);
+    await pg.query("insert into agent_tool_permissions (id,workspace_id,agent_version_id,tool_id,enabled,require_approval,allowed_scopes) values ('permission-handoff','ws','published-handoff-version','tool_conversation_handoff',true,false,'{}')");
+    const queued = await enqueueAgentRuntimeJob(sql, { workspaceId: "ws", agentId: "agent", conversationId: "conversation", inboundMessageId: "inbound", traceId: "trace-handoff-tool" });
+    let turns = 0;
+    const result = await runNextAgentRuntimeJob(sql, "worker-handoff-test", {
+      async generate() {
+        turns += 1;
+        if (turns === 1) return { text: "Vou encaminhar você para uma pessoa.", usedAi: true, toolCalls: [{ id: "handoff-1", name: "conversation.handoff", arguments: { action: "assign", reason: "Cliente solicitou atendimento humano" } }] };
+        return { text: "Certo, um atendente continuará o atendimento.", usedAi: true };
+      },
+    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));
+    assert.equal(result.status, "succeeded");
+    assert.equal(turns, 2);
+    const conversation = await pg.query<{ status: string; handoff_reason: string }>("select status, handoff_reason from conversations where id = 'conversation'");
+    assert.deepEqual(conversation.rows[0], { status: "pending", handoff_reason: "Cliente solicitou atendimento humano" });
+    const executions = await pg.query<{ status: string; idempotency_key: string }>("select status, idempotency_key from tool_executions where workspace_id = 'ws' order by created_at");
+    assert.equal(executions.rows.some((row) => row.status === "succeeded" && row.idempotency_key === `runtime:${queued.id}:tool:handoff-1`), true);
   } finally {
     await pg.close();
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));

@@ -8,7 +8,7 @@ export type ImprovementCandidate = { id: string; workspaceId: string; agentId: s
 type CaseRow = { id: string; workspace_id: string; agent_id: string | null; product_id: string | null; case_type: string; title: string; summary: string; attributes: Record<string, unknown>; chunk_id: string | null; content: string };
 
 function text(value: unknown): string { return typeof value === "string" ? value : ""; }
-function short(value: string, max: number): string { return value.replace(/\u0000/g, "").trim().slice(0, max); }
+function short(value: string, max: number): string { return value.replaceAll("\u0000", "").trim().slice(0, max); }
 function typeFor(caseType: string): CandidateType { if (caseType === "tool_failure") return "manifest"; if (caseType === "handoff_case" || caseType === "conversion_success") return "policy"; if (caseType === "regression_case" || caseType === "failure_case") return "prompt"; return "prompt"; }
 function proposal(type: CandidateType, caseRow: CaseRow): JsonObject {
   const intent = text(caseRow.attributes.intent) || "the active intent";
