@@ -1,112 +1,63 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Activity, Bot, GitBranch, Inbox, LayoutGrid, Plug2, Waypoints } from "lucide-react";
+import { Activity, Bot, ChevronDown, CircleHelp, GitBranch, Inbox, LayoutGrid, Menu, Plug2, Search, Settings2, ShieldCheck, Waypoints, X, Zap } from "lucide-react";
 import { NexoWordmark } from "./brand";
 import { cn } from "@/lib/utils";
 import { useNexo } from "@/lib/store";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
-const NAV = [
-  { to: "/", label: "Visão geral", icon: LayoutGrid },
-  { to: "/connections", label: "Conexões", icon: Plug2 },
-  { to: "/agents", label: "Agentes", icon: Bot },
-  { to: "/inbox", label: "Inbox", icon: Inbox },
-  { to: "/runs", label: "Execuções", icon: Activity },
-  { to: "/workflows", label: "Workflows", icon: GitBranch },
-  { to: "/guide", label: "Caminhos", icon: Waypoints },
-] as const;
+type NavItem = { to?: "/" | "/connections" | "/agents" | "/inbox" | "/runs" | "/workflows" | "/guide"; label: string; icon: typeof Bot; state?: "available" | "planned" };
+type NavGroup = { label: string; items: NavItem[] };
 
-export function AppShell({
-  children,
-  title,
-  action,
-}: {
-  children: ReactNode;
-  title?: string;
-  action?: ReactNode;
-}) {
+const GROUPS: NavGroup[] = [
+  { label: "Início", items: [{ to: "/", label: "Visão geral", icon: LayoutGrid }] },
+  { label: "Build", items: [
+    { to: "/agents", label: "Agentes", icon: Bot },
+    { label: "Templates", icon: Zap, state: "planned" },
+    { label: "Knowledge", icon: CircleHelp, state: "planned" },
+    { label: "Tools & MCP", icon: Waypoints, state: "planned" },
+    { to: "/connections", label: "Conectores", icon: Plug2 },
+  ] },
+  { label: "Run", items: [
+    { to: "/workflows", label: "Workflows", icon: GitBranch },
+    { label: "Agent Runtime", icon: Activity, state: "planned" },
+    { label: "Queues & Jobs", icon: Activity, state: "planned" },
+    { label: "Events", icon: Zap, state: "planned" },
+  ] },
+  { label: "Operate", items: [
+    { to: "/inbox", label: "Inbox", icon: Inbox },
+    { to: "/runs", label: "Execuções", icon: Activity },
+    { label: "Logs & Metrics", icon: Activity, state: "planned" },
+  ] },
+  { label: "Govern", items: [
+    { label: "Workspace & membros", icon: ShieldCheck, state: "planned" },
+    { label: "Secrets & políticas", icon: ShieldCheck, state: "planned" },
+    { label: "Auditoria e uso", icon: Settings2, state: "planned" },
+  ] },
+  { label: "Aprender", items: [{ to: "/guide", label: "Caminhos", icon: CircleHelp }] },
+];
+
+function NavLink({ item, pathname, onNavigate }: { item: NavItem; pathname: string; onNavigate?: () => void }) {
+  const Icon = item.icon;
+  if (!item.to || item.state === "planned") return <div className="flex h-9 items-center gap-2.5 rounded-md px-3 text-sm text-subtle" title="Serviço planejado"><Icon className="size-4" /><span>{item.label}</span><span className="ml-auto text-[0.6rem] uppercase tracking-wider text-subtle">breve</span></div>;
+  const active = item.to === "/" ? pathname === "/" : pathname === item.to || pathname.startsWith(`${item.to}/`);
+  return <Link to={item.to} onClick={onNavigate} className={cn("flex h-9 items-center gap-2.5 rounded-md px-3 text-sm transition-colors", active ? "bg-elevated font-medium text-fg" : "text-muted hover:bg-elevated/70 hover:text-fg")}><Icon className="size-4" /><span>{item.label}</span></Link>;
+}
+
+function ServiceNav({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const setHydrated = useNexo((s) => s.setHydrated);
+  return <nav className={cn("flex flex-col gap-4", mobile && "p-4")}>{GROUPS.map((group) => <section key={group.label}><div className="mb-1 px-3 text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-subtle">{group.label}</div><div className="flex flex-col gap-0.5">{group.items.map((item) => <NavLink key={item.label} item={item} pathname={pathname} onNavigate={onNavigate} />)}</div></section>)}</nav>;
+}
+
+export function AppShell({ children, title, action }: { children: ReactNode; title?: string; action?: ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const setHydrated = useNexo((s) => s.setHydrated); const workspaceId = useNexo((s) => s.workspaceId); const backendReady = useNexo((s) => s.backendReady); const [mobileOpen, setMobileOpen] = useState(false);
   useWorkspaceData();
-
-  useEffect(() => {
-    const unsub = useNexo.persist.onFinishHydration(() => setHydrated(true));
-    void useNexo.persist.rehydrate();
-    if (useNexo.persist.hasHydrated()) setHydrated(true);
-    return unsub;
-  }, [setHydrated]);
-
-  return (
-    <div className="min-h-dvh bg-bg text-fg">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border bg-surface md:flex">
-        <div className="px-4 py-5">
-          <Link to="/" className="block">
-            <NexoWordmark />
-          </Link>
-        </div>
-        <nav className="flex flex-1 flex-col gap-1 px-2">
-          {NAV.map((item) => {
-            const active =
-              item.to === "/"
-                ? pathname === "/"
-                : pathname === item.to || pathname.startsWith(`${item.to}/`);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "flex h-10 items-center gap-2.5 rounded-md px-3 text-sm transition-colors",
-                  active ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/60 hover:text-fg",
-                )}
-              >
-                <Icon className="size-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="border-t border-border px-4 py-4 text-xs text-subtle">
-          Workspace local
-          <div className="mt-1 text-muted">WhatsApp · Grok · n8n / Python</div>
-        </div>
-      </aside>
-
-      <div className="md:pl-56">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border bg-bg/90 px-4 backdrop-blur-sm md:px-8">
-          <div className="md:hidden">
-            <NexoWordmark compact />
-          </div>
-          <h1 className="hidden font-display text-sm font-semibold tracking-tight md:block">
-            {title}
-          </h1>
-          <div className="ml-auto flex items-center gap-2">{action}</div>
-        </header>
-        <main className="px-4 pt-6 pb-24 md:px-8 md:pb-10">{children}</main>
-      </div>
-
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-surface/95 backdrop-blur-sm md:hidden">
-        {NAV.map((item) => {
-          const active =
-            item.to === "/"
-              ? pathname === "/"
-              : pathname === item.to || pathname.startsWith(`${item.to}/`);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-1 text-[0.7rem]",
-                active ? "text-fg" : "text-subtle",
-              )}
-            >
-              <Icon className="size-5" />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
-    </div>
-  );
+  useEffect(() => { const unsub = useNexo.persist.onFinishHydration(() => setHydrated(true)); void useNexo.persist.rehydrate(); if (useNexo.persist.hasHydrated()) setHydrated(true); return unsub; }, [setHydrated]);
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+  return <div className="min-h-dvh bg-bg text-fg">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface md:flex"><div className="border-b border-border px-5 py-5"><Link to="/" className="block"><NexoWordmark /></Link><div className="mt-3 flex items-center gap-2 text-xs text-muted"><span className={cn("size-2 rounded-full", backendReady ? "bg-emerald-400" : "bg-amber-400")} />{backendReady ? "Control plane conectado" : "Conectando ao control plane"}</div></div><div className="flex-1 overflow-y-auto px-2 py-5"><ServiceNav /></div><div className="border-t border-border px-4 py-4"><div className="text-xs text-subtle">Workspace atual</div><div className="mt-1 truncate text-sm text-muted">{workspaceId ? "Workspace persistente" : "Workspace local"}</div><div className="mt-1 text-[0.7rem] text-subtle">Ambiente · Development</div></div></aside>
+    <div className="md:pl-64"><header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 backdrop-blur-sm md:px-8"><div className="flex h-14 items-center gap-3"><button type="button" className="rounded-md p-2 text-muted hover:bg-elevated md:hidden" aria-label="Abrir menu" onClick={() => setMobileOpen(true)}><Menu className="size-5" /></button><div className="md:hidden"><NexoWordmark compact /></div><div className="hidden items-center gap-2 text-xs text-muted md:flex"><span>Console</span><span className="text-subtle">/</span><span className="font-medium text-fg">{title}</span></div><div className="ml-auto flex items-center gap-2"><button type="button" className="hidden h-8 items-center gap-2 rounded-md border border-border px-3 text-xs text-muted hover:bg-elevated sm:flex"><Search className="size-3.5" />Buscar serviços</button><button type="button" className="hidden h-8 items-center gap-2 rounded-md border border-border px-3 text-xs text-muted hover:bg-elevated sm:flex"><span className="size-2 rounded-full bg-emerald-400" />Development<ChevronDown className="size-3" /></button>{action}</div></div></header><main className="px-4 pt-6 pb-24 md:px-8 md:pb-10">{children}</main></div>
+    {mobileOpen && <div className="fixed inset-0 z-50 md:hidden"><button type="button" aria-label="Fechar menu" className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} /><aside className="relative h-full w-[min(88vw,22rem)] overflow-y-auto border-r border-border bg-surface shadow-xl"><div className="flex h-14 items-center justify-between border-b border-border px-5"><NexoWordmark compact /><button type="button" className="rounded-md p-2 text-muted hover:bg-elevated" aria-label="Fechar menu" onClick={() => setMobileOpen(false)}><X className="size-5" /></button></div><ServiceNav mobile onNavigate={() => setMobileOpen(false)} /></aside></div>}
+  </div>;
 }
