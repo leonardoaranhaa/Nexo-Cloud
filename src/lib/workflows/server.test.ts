@@ -12,8 +12,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "../../../");
 async function setup() {
   const pg = new PGlite();
   await pg.waitReady;
-  for (let number = 2; number <= 12; number += 1) {
-    const file = `${String(number).padStart(4, "0")}_${({ 2: "multi_tenant_core", 3: "connector_registry", 4: "messaging_dispatch", 5: "webhook_security", 6: "webhook_delivery_states", 7: "agent_runtime_jobs", 8: "conversation_handoff", 9: "agent_runtime_execution_logs", 10: "workflow_core", 11: "workflow_triggers_events", 12: "workflow_queue_leases" } as Record<number, string>)[number]}.sql`;
+  for (let number = 2; number <= 13; number += 1) {
+    const file = `${String(number).padStart(4, "0")}_${({ 2: "multi_tenant_core", 3: "connector_registry", 4: "messaging_dispatch", 5: "webhook_security", 6: "webhook_delivery_states", 7: "agent_runtime_jobs", 8: "conversation_handoff", 9: "agent_runtime_execution_logs", 10: "workflow_core", 11: "workflow_triggers_events", 12: "workflow_queue_leases", 13: "tool_gateway" } as Record<number, string>)[number]}.sql`;
     await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   }
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {

@@ -11,7 +11,7 @@ import { runNextWorkflowRun } from "./executor.ts";
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../../");
 async function setup() {
   const pg = new PGlite(); await pg.waitReady;
-  const names = ["multi_tenant_core", "connector_registry", "messaging_dispatch", "webhook_security", "webhook_delivery_states", "agent_runtime_jobs", "conversation_handoff", "agent_runtime_execution_logs", "workflow_core", "workflow_triggers_events", "workflow_queue_leases"];
+  const names = ["multi_tenant_core", "connector_registry", "messaging_dispatch", "webhook_security", "webhook_delivery_states", "agent_runtime_jobs", "conversation_handoff", "agent_runtime_execution_logs", "workflow_core", "workflow_triggers_events", "workflow_queue_leases", "tool_gateway"];
   for (let i = 0; i < names.length; i += 1) await pg.exec(await readFile(join(root, "migrations", `${String(i + 2).padStart(4, "0")}_${names[i]}.sql`), "utf8"));
   await pg.query("insert into organizations (id,name,slug,created_by) values ('org','Org','org','u')");
   await pg.query("insert into workspaces (id,organization_id,name,slug,created_by) values ('ws','org','Ws','ws','u')");
