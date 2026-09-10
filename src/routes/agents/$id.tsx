@@ -20,21 +20,24 @@ import { archiveWorkspaceAgent, publishWorkspaceAgent, updateWorkspaceAgent } fr
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
-type Tab = "create" | "test" | "publish";
+type Tab = "configuration" | "knowledge" | "tools" | "tests" | "versions" | "publication" | "create" | "test" | "publish";
 type Search = { tab?: Tab };
 
 export const Route = createFileRoute("/agents/$id")({
   validateSearch: (s: Record<string, unknown>): Search => {
     const tab = s.tab;
-    if (tab === "create" || tab === "test" || tab === "publish") return { tab };
-    return { tab: "create" };
+    if (tab === "create") return { tab: "configuration" };
+    if (tab === "test") return { tab: "tests" };
+    if (tab === "publish") return { tab: "publication" };
+    if (tab === "configuration" || tab === "knowledge" || tab === "tools" || tab === "tests" || tab === "versions" || tab === "publication") return { tab };
+    return { tab: "configuration" };
   },
   component: AgentStudioPage,
 });
 
 function AgentStudioPage() {
   const { id } = Route.useParams();
-  const { tab = "create" } = Route.useSearch();
+  const { tab = "configuration" } = Route.useSearch();
   const navigate = useNavigate();
   const agent = useNexo((s) => s.agents.find((a) => a.id === id));
   const connections = useNexo((s) => s.connections);
@@ -86,7 +89,7 @@ function AgentStudioPage() {
               const nid = duplicateAgent(agent.id);
               if (nid) {
                 toast("Cópia criada");
-                void navigate({ to: "/agents/$id", params: { id: nid }, search: { tab: "create" } });
+                void navigate({ to: "/agents/$id", params: { id: nid }, search: { tab: "configuration" } });
               }
             }}
           >
@@ -154,25 +157,29 @@ function AgentStudioPage() {
         <span className="text-xs text-muted">{agent.knowledge.faqs.length} FAQs</span>
       </div>
 
-      <div className="mb-6 max-w-lg">
+      <div className="mb-6 overflow-x-auto pb-1">
         <Segmented
           value={tab}
           onChange={setTab}
           options={[
-            { id: "create", label: "Criar" },
-            { id: "test", label: "Testar" },
-            { id: "publish", label: "Publicar" },
+            { id: "configuration", label: "Configuração" },
+            { id: "knowledge", label: "Conhecimento" },
+            { id: "tools", label: "Ferramentas" },
+            { id: "tests", label: "Testes" },
+            { id: "versions", label: "Versões" },
+            { id: "publication", label: "Publicação" },
           ]}
         />
       </div>
 
-      {tab === "create" && (
+      {tab === "configuration" && (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
           <AgentEditor
             agent={agent}
+            section="configuration"
             focusNode={focusNode}
             onRunScenario={(scenario) => {
-              setTab("test");
+              setTab("tests");
               void send(scenario);
               toast("Cenário enviado para o Agent Runtime");
             }}
@@ -186,24 +193,18 @@ function AgentStudioPage() {
               Clique num nó para lembrar o papel dele. As mudanças no formulário já entram no
               próximo teste — não existe botão salvar.
             </p>
-            <Button className="mt-4 w-full" onClick={() => setTab("test")}>
-              Testar no telefone
+            <Button className="mt-4 w-full" onClick={() => setTab("tests")}>
+              Abrir testes
             </Button>
           </div>
         </div>
       )}
 
-      {tab === "test" && (
-        <AgentTestPanel
-          agent={agent}
-          messages={messages}
-          busy={busy}
-          onSend={(t, k) => void send(t, k)}
-          onClear={clear}
-        />
-      )}
-
-      {tab === "publish" && <PublishPanel agent={agent} />}
+      {tab === "knowledge" && <AgentEditor agent={agent} section="knowledge" focusNode={focusNode} />}
+      {tab === "tools" && <AgentEditor agent={agent} section="tools" focusNode={focusNode} />}
+      {tab === "tests" && <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"><AgentEditor agent={agent} section="tests" onRunScenario={(scenario) => { void send(scenario); toast("Cenário enviado para o Agent Runtime"); }} /><AgentTestPanel agent={agent} messages={messages} busy={busy} onSend={(t, k) => void send(t, k)} onClear={clear} /></div>}
+      {tab === "versions" && <PublishPanel agent={agent} mode="versions" />}
+      {tab === "publication" && <PublishPanel agent={agent} mode="publication" />}
     </AppShell>
   );
 }

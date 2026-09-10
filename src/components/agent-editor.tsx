@@ -20,10 +20,12 @@ export function AgentEditor({
   agent,
   focusNode,
   onRunScenario,
+  section = "all",
 }: {
   agent: Agent;
   focusNode?: FlowNodeId;
   onRunScenario?: (scenario: string) => void;
+  section?: "all" | "configuration" | "knowledge" | "tools" | "tests";
 }) {
   const connections = useNexo((s) => s.connections);
   const updateAgent = useNexo((s) => s.updateAgent);
@@ -68,9 +70,11 @@ export function AgentEditor({
     patch({ developmentBlueprint: { ...blueprint, [field]: values } });
   }
 
+  const show = (target: typeof section) => section === "all" || section === target;
+
   return (
     <div className="flex flex-col gap-5">
-      <Card className="flex flex-col gap-4 p-4">
+      {show("configuration") && <Card className="flex flex-col gap-4 p-4">
         <div className="font-display text-sm font-semibold">Identidade</div>
         <Field label="Nome" htmlFor="ed-name">
           <Input
@@ -134,9 +138,9 @@ export function AgentEditor({
             </select>
           </Field>
         </div>
-      </Card>
+      </Card>}
 
-      <Card className="flex flex-col gap-5 p-4" data-node="blueprint">
+      {show("configuration") && <Card className="flex flex-col gap-5 p-4" data-node="blueprint">
         <div>
           <div className="font-display text-sm font-semibold">Blueprint operacional</div>
           <p className="mt-1 text-xs leading-relaxed text-muted">
@@ -165,17 +169,9 @@ export function AgentEditor({
           placeholder="Ex.: não inventar preço ou disponibilidade"
           onChange={(values) => patchBlueprint("guardrails", values)}
         />
-        <BlueprintListEditor
-          title="Cenários de teste"
-          hint="Conversas concretas para validar o comportamento antes da publicação."
-          values={blueprint.testScenarios}
-          placeholder="Ex.: cliente pergunta preço e informa o orçamento"
-          onChange={(values) => patchBlueprint("testScenarios", values)}
-          onRun={onRunScenario}
-        />
-      </Card>
+      </Card>}
 
-      <Card className="flex flex-col gap-4 p-4" data-node="agent">
+      {show("configuration") && <Card className="flex flex-col gap-4 p-4" data-node="agent">
         <div className="font-display text-sm font-semibold">
           Prompt de sistema{focusNode === "agent" ? " · nó ativo" : ""}
         </div>
@@ -214,9 +210,9 @@ export function AgentEditor({
             onChange={(v) => patch({ memoryWindow: Math.round(v) })}
           />
         </div>
-      </Card>
+      </Card>}
 
-      <Card className="flex flex-col gap-4 p-4" data-node="knowledge">
+      {show("knowledge") && <Card className="flex flex-col gap-4 p-4" data-node="knowledge">
         <div className="flex items-center justify-between">
           <div className="font-display text-sm font-semibold">Base de conhecimento</div>
           <Button
@@ -294,9 +290,9 @@ export function AgentEditor({
             </div>
           ))}
         </div>
-      </Card>
+      </Card>}
 
-      <Card className="flex flex-col gap-4 p-4" data-node="hours">
+      {show("tools") && <Card className="flex flex-col gap-4 p-4" data-node="hours">
         <div className="font-display text-sm font-semibold">Ferramentas</div>
         <ToggleRow
           label="Horário de atendimento"
@@ -351,7 +347,22 @@ export function AgentEditor({
           checked={agent.tools.audio}
           onCheckedChange={(v) => patch({ tools: { ...agent.tools, audio: v } })}
         />
-      </Card>
+      </Card>}
+
+      {show("tests") && <Card className="flex flex-col gap-5 p-4" data-node="tests">
+        <div>
+          <div className="font-display text-sm font-semibold">Cenários de teste</div>
+          <p className="mt-1 text-xs leading-relaxed text-muted">Defina conversas concretas para validar o comportamento antes da publicação.</p>
+        </div>
+        <BlueprintListEditor
+          title="Cenários"
+          hint="Exemplos que devem ser executados no Agent Runtime."
+          values={blueprint.testScenarios}
+          placeholder="Ex.: cliente pergunta preço e informa o orçamento"
+          onChange={(values) => patchBlueprint("testScenarios", values)}
+          onRun={onRunScenario}
+        />
+      </Card>}
     </div>
   );
 }
