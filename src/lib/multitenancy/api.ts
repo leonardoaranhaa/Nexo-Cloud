@@ -320,3 +320,59 @@ export const listWorkspaceAgentRuntimeExecutions = createServerFn({ method: "GET
     const { listAgentRuntimeExecutions } = await import("./server");
     return listAgentRuntimeExecutions(await getSql(), context.userId, data);
   });
+
+export const listWorkspaceWorkflows = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listWorkflows } = await import("../workflows/server");
+    return listWorkflows(await getSql(), context.userId, data);
+  });
+
+export const createWorkspaceWorkflow = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; name: string; description?: string; triggerType?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { createWorkflow } = await import("../workflows/server");
+    return createWorkflow(await getSql(), context.userId, data);
+  });
+
+export const saveWorkspaceWorkflowDefinition = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; workflowId: string; definition: unknown }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { saveWorkflowDefinition } = await import("../workflows/server");
+    await saveWorkflowDefinition(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const publishWorkspaceWorkflow = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; workflowId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { publishWorkflow } = await import("../workflows/server");
+    await publishWorkflow(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const runWorkspaceWorkflow = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; workflowId: string; input?: JsonObject; idempotencyKey?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { runWorkflowManually } = await import("../workflows/server");
+    return runWorkflowManually(await getSql(), context.userId, data);
+  });
+
+export const listWorkspaceWorkflowRuns = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; workflowId?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listWorkflowRuns } = await import("../workflows/server");
+    return listWorkflowRuns(await getSql(), context.userId, data);
+  });
