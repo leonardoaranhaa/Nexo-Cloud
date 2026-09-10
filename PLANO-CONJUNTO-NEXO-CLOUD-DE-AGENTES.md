@@ -266,24 +266,19 @@ Retomar após o núcleo demonstrável estar fechado e validado com canal real.
 
 Não simular compra, assinatura ou locação. Implementar após definir entitlement, limites, uso e contrato comercial.
 
-## 8. Ordem imediata obrigatória
+## 8. Próximo ponto de partida obrigatório
 
-A próxima execução deve seguir a sequência abaixo. Os itens estão ordenados para preservar a visão da Nexo Cloud como infraestrutura completa de agentes e priorizar os agentes próprios de alto valor, instaláveis, customizáveis, alugáveis ou comercializáveis:
+A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketplace aberto ou AWS permanente antes de concluir o ciclo abaixo:
 
 1. completar o ciclo multi-round de tool calling;
-2. consolidar as ferramentas comerciais nativas;
+2. expor CRM, handoff e follow-up como ferramentas nativas autorizáveis;
 3. implementar agenda e disponibilidade como conector ou ferramenta controlada;
-4. finalizar Minhas Instalações, atualização e rollback;
-5. criar e validar os produtos próprios Atendimento e Vendas;
-6. completar a experiência de canais, Inbox e handoff;
-7. fechar publicação, versionamento e governança de agentes;
-8. implementar os nós `agent` e `tool` dos Workflows;
-9. revisar observabilidade, quotas e readiness de produção;
-10. executar a validação com canal real, incluindo a Meta já integrada na `main`;
-11. retomar o Learning RAG com gate formal de promoção;
-12. somente depois iniciar Ads, tráfego e Marketplace aberto.
-
-AWS permanente, billing e API pública `Agent as a Service` permanecem fora da execução imediata e só devem avançar quando os critérios do núcleo demonstrável estiverem aprovados.
+4. fechar atualização e rollback de instalações do Marketplace;
+5. criar `marketplace/installed` e a operação de Minhas Instalações;
+6. criar e validar templates prontos de Atendimento e Vendas;
+7. executar validação com conexão Meta ou Evolution real;
+8. revisar observabilidade, quotas e readiness de produção;
+9. retomar AWS somente após o núcleo demonstrável passar pelos critérios de aceite.
 
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
 
