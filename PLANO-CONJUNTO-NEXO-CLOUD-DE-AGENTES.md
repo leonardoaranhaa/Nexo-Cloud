@@ -99,6 +99,8 @@ Na área **Ferramentas**, cada capacidade deve ser apresentada como recurso cont
 
 A área **Conhecimento** segue o mesmo contrato para suas fontes: notas internas e FAQ publicada possuem estado próprio, dependências explícitas, escopo de consumo pelo runtime, risco e ação de configuração. FAQs incompletas ficam em `Configuração pendente` e não devem ser tratadas como fonte pronta para uso.
 
+A área **Publicação** deve funcionar como uma superfície de readiness operacional. Canal, cenários de teste, handoff e versão candidata são cards independentes, com estados, dependências, escopo, risco e ações próprias. A publicação deve ser bloqueada quando os requisitos mínimos — canal conectado e cenário de teste configurado — não estiverem atendidos.
+
 ## 5. Estado real consolidado
 
 ### 5.1 Fundamento multi-tenant e Control Plane
