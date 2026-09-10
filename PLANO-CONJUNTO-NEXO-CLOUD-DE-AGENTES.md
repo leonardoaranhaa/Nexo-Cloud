@@ -8,11 +8,38 @@
 
 ## 1. Visão do produto
 
-O Nexo Cloud é uma plataforma multi-tenant para criar, conectar, executar, supervisionar e medir agentes de negócio. A referência da AWS é arquitetural: organização por serviços, recursos provisionáveis, permissões, credenciais, execução, logs, métricas e automações. O Nexo não deve copiar indiscriminadamente a quantidade de serviços da AWS.
+O Nexo Cloud é a **AWS dos agentes**: uma plataforma multi-tenant que fornece a infraestrutura, o ambiente de desenvolvimento, o runtime, as ferramentas, o conhecimento, as integrações, a governança e o catálogo necessários para criar, testar, indexar, publicar, operar, alugar, vender e evoluir agentes de inteligência artificial.
 
-A plataforma deve começar por agentes de **Atendimento + Vendas**, com canais, conhecimento, CRM, handoff, workflows, ferramentas e métricas. Outras famílias, como suporte, marketing, anúncios, tráfego e operações, entram depois que os contratos multi-tenant, runtime, conectores, permissões, auditoria e medição estiverem estáveis.
+Assim como a AWS fornece infraestrutura para empresas construírem e executarem sistemas, o Nexo Cloud fornece infraestrutura especializada para pessoas e organizações construírem e executarem agentes. O produto não é apenas um chatbot builder ou um catálogo de automações. Ele é o ambiente de referência para o ciclo de vida completo de agentes comandados por inteligência artificial.
+
+O Nexo terá duas frentes complementares:
+
+1. **Infraestrutura de agentes:** control plane, workspaces, ambientes, desenvolvimento, runtime, memória, RAG, ferramentas, MCP, conectores, workflows, observabilidade, segurança e métricas.
+2. **Ecossistema de agentes:** agentes próprios de alto nível criados pelo Nexo, agentes de usuários, templates, produtos prontos, agentes para uso interno, locação, venda, instalação, customização, teste e publicação.
+
+A referência da AWS é arquitetural: organização por serviços, recursos provisionáveis, permissões, credenciais, execução, logs, métricas e automações. O Nexo não deve copiar indiscriminadamente a quantidade de serviços da AWS; deve traduzir a utilidade da nuvem para o domínio dos agentes.
+
+A plataforma deve começar por agentes de **Atendimento + Vendas**, com canais, conhecimento, CRM, handoff, workflows, ferramentas e métricas. Outras famílias, como suporte, marketing, anúncios, tráfego e operações, entram depois que os contratos multi-tenant, runtime, conectores, permissões, auditoria e medição estiverem estáveis. A prioridade inicial não limita a visão final: o Nexo deve suportar agentes de qualquer tipo de negócio que possa ser modelado, conectado e governado.
 
 > O MVP EARLY não é uma aplicação separada nem uma demo descartável. Ele é o primeiro núcleo funcional permanente do próprio Nexo Cloud e deve continuar sendo ampliado sobre os mesmos contratos.
+
+### 1.1 Definição estratégica permanente
+
+O Nexo Cloud deve permitir que um usuário:
+
+- crie um agente com assistência de inteligência artificial;
+- configure persona, políticas, objetivos, ferramentas e limites;
+- carregue e indexe sistemas, documentos, bases e conhecimento próprio;
+- teste o agente em ambiente seguro antes da publicação;
+- conecte canais e sistemas externos;
+- publique, monitore, reverta e atualize versões;
+- instale agentes próprios do catálogo do Nexo;
+- alugue, compre ou utilize agentes prontos conforme a oferta;
+- crie agentes privados para sua organização;
+- disponibilize agentes para outras pessoas quando o modelo comercial e a governança permitirem;
+- acompanhar qualidade, conversão, custo, uso, segurança e evolução.
+
+Os agentes próprios do Nexo devem ser tratados como produtos de alto valor, não como exemplos descartáveis. Cada produto deve possuir contrato de capacidade, manifesto, versão, oferta, entitlement, instalação, customização, métricas, política de atualização e mecanismo de rollback.
 
 ## 2. Camadas do produto
 
@@ -40,7 +67,7 @@ A plataforma deve começar por agentes de **Atendimento + Vendas**, com canais, 
 | S3 | Arquivos, documentos e mídia |
 | CloudWatch | Logs, métricas, alertas e tracing |
 | Secrets Manager | Secret Resolver e secrets por conexão |
-| Marketplace | Catálogo de produtos, agentes e ferramentas |
+| Marketplace | Catálogo de agentes próprios, agentes de usuários, produtos, ferramentas e integrações |
 | Billing | Medição de mensagens, tokens, execuções e ferramentas |
 
 A interface deve falar em agentes, canais, ferramentas, tarefas, automações, conhecimento, métricas e resultados. A analogia com a AWS não deve dominar a linguagem do usuário final.

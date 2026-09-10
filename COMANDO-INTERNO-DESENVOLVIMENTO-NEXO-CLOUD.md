@@ -20,11 +20,20 @@ A cada sessão, a IA deve partir do **Próximo ponto de partida obrigatório** d
 
 ## 1. Identidade do produto
 
-O Nexo Cloud é uma plataforma multi-tenant de agentes de negócio. Ela deve evoluir de um estúdio de prototipação para uma nuvem especializada em agentes de atendimento, vendas, suporte, operações, marketing, gestão de anúncios, tráfego e analytics.
+O Nexo Cloud é a **AWS dos agentes**: uma plataforma multi-tenant que fornece infraestrutura, ambiente de desenvolvimento, runtime, conhecimento, ferramentas, conectores, governança e catálogo para agentes de inteligência artificial.
+
+O produto possui duas frentes que devem permanecer conectadas:
+
+1. infraestrutura para usuários criarem, testarem, indexarem, publicarem e operarem seus próprios agentes;
+2. agentes próprios de alto nível do Nexo, oferecidos para uso, customização, locação, venda ou instalação conforme o modelo comercial definido.
+
+O Nexo deve evoluir de um estúdio de prototipação para uma nuvem especializada em agentes de atendimento, vendas, suporte, operações, marketing, gestão de anúncios, tráfego e analytics, sem limitar a plataforma a essas famílias.
 
 A inspiração na AWS é arquitetural, não uma instrução para copiar serviços indiscriminadamente. O Nexo deve oferecer organizações, workspaces, ambientes, agentes versionados, runtime, ferramentas, MCP, conectores, workflows, eventos, filas, logs, métricas, auditoria, permissões, marketplace, APIs e automações.
 
 O MVP EARLY é o primeiro núcleo funcional permanente do próprio Nexo Cloud. Não é uma aplicação separada, uma demo descartável ou uma linha paralela de desenvolvimento.
+
+Toda implementação deve preservar o ciclo de vida completo do agente: criação assistida por IA, configuração, indexação de sistemas e conhecimento, teste, publicação, operação, observabilidade, atualização, rollback, instalação e eventual distribuição comercial. Um agente próprio do Nexo deve ser tratado como produto versionado com manifesto, capacidades, oferta, entitlement, instalação, customização e métricas.
 
 ## 2. Ciclo obrigatório de execução
 

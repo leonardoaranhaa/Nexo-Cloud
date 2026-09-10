@@ -1,6 +1,8 @@
 # Nexo Cloud de Agentes
 
-Plataforma multi-tenant para criar, conectar, executar, supervisionar e medir agentes de atendimento, vendas, marketing, Ads, tráfego e operações.
+**Nexo Cloud é a AWS dos agentes.** É uma plataforma multi-tenant para criar, testar, indexar, conectar, executar, supervisionar, publicar e medir agentes de inteligência artificial.
+
+A plataforma fornece a infraestrutura especializada para usuários criarem seus próprios agentes e também oferece agentes próprios de alto nível do Nexo para uso, customização, instalação, locação ou venda, conforme a oferta definida. O objetivo é centralizar o ciclo de vida dos agentes: desenvolvimento assistido por IA, conhecimento, RAG, ferramentas, MCP, conectores, workflows, canais, observabilidade, governança e evolução versionada.
 
 ## Fonte de verdade e início de sessão
 
