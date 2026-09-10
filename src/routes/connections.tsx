@@ -20,6 +20,7 @@ import {
   archiveWorkspaceConnection,
   updateWorkspaceConnection,
   getWorkspaceConnectionReadiness,
+  runWorkspaceConnectionHealthcheck,
 } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
@@ -45,6 +46,8 @@ function ConnectionsPage() {
   const selected = connections.find((c) => c.id === focus) ?? connections[0];
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [readiness, setReadiness] = useState<string | null>(null);
+  const [healthcheckBusy, setHealthcheckBusy] = useState(false);
+  const [healthcheckMessage, setHealthcheckMessage] = useState<string | null>(null);
   const selectedId = selected?.id;
 
   function patchConnection(id: string, patch: Parameters<typeof updateConnection>[1]) {
@@ -86,6 +89,22 @@ function ConnectionsPage() {
       cancelled = true;
     };
   }, [backendReady, workspaceId, selectedId]);
+
+  async function runHealthcheck() {
+    if (!backendReady || !workspaceId || !selectedId) return;
+    setHealthcheckBusy(true);
+    try {
+      const result = await runWorkspaceConnectionHealthcheck({
+        data: { workspaceId, connectionId: selectedId },
+      });
+      setHealthcheckMessage(`${result.status}: ${result.message}`);
+      await refresh(workspaceId);
+    } catch {
+      setHealthcheckMessage("Não foi possível executar o healthcheck.");
+    } finally {
+      setHealthcheckBusy(false);
+    }
+  }
 
   const bound = useMemo(
     () => agents.filter((a) => a.connectionId === selected?.id),
@@ -232,6 +251,15 @@ function ConnectionsPage() {
               <p className="mt-4 rounded-md border border-border bg-bg px-3 py-2 text-xs text-muted">
                 {readiness}
               </p>
+            )}
+
+            {backendReady && (
+              <div className="mt-3">
+                <Button variant="ghost" className="w-full" onClick={() => void runHealthcheck()} disabled={healthcheckBusy}>
+                  {healthcheckBusy ? "Verificando…" : "Executar healthcheck"}
+                </Button>
+                {healthcheckMessage && <p className="mt-2 text-xs text-muted">{healthcheckMessage}</p>}
+              </div>
             )}
 
             {selected.provider === "meta" && selected.status !== "connected" && (

@@ -470,9 +470,9 @@ export async function createConnection(
     baseUrl: input.baseUrl?.trim().slice(0, 240) || null,
   });
   await sql.query(
-    `insert into connections (id, workspace_id, connector_definition_id, name, provider, status, config, created_by)
-     values ($1, $2, $3, $4, $5, 'disconnected', $6::jsonb, $7)`,
-    [id, input.workspaceId, definition.id, name, input.provider, config, userId],
+    `insert into connections (id, workspace_id, connector_definition_id, name, provider, status, secret_ref, config, created_by)
+     values ($1, $2, $3, $4, $5, 'disconnected', $6, $7::jsonb, $8)`,
+    [id, input.workspaceId, definition.id, name, input.provider, `nexo/${input.workspaceId}/${id}/api_key`, config, userId],
   );
   return { id };
 }

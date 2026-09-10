@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { randomUUID } from "node:crypto";
 import type { JsonObject } from "./server";
 
 export const getWorkspaceContext = createServerFn({ method: "GET" })
@@ -149,4 +150,16 @@ export const getWorkspaceConnectionReadiness = createServerFn({ method: "GET" })
     const { getSql } = await import("@/lib/db");
     const { assessConnectionReadiness } = await import("@/lib/connectors/readiness");
     return assessConnectionReadiness(await getSql(), context.userId, data);
+  });
+
+export const runWorkspaceConnectionHealthcheck = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; connectionId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { runConnectionHealthcheck } = await import("@/lib/connectors/healthcheck");
+    return runConnectionHealthcheck(await getSql(), context.userId, {
+      ...data,
+      traceId: randomUUID(),
+    });
   });

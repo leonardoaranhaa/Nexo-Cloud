@@ -38,6 +38,10 @@ from connector_definitions d
 where c.connector_definition_id is null
   and d.provider = c.provider;
 
+update connections
+set secret_ref = 'nexo/' || workspace_id || '/' || id || '/api_key'
+where secret_ref is null;
+
 create index if not exists connections_workspace_health_idx
   on connections (workspace_id, health_status);
 
