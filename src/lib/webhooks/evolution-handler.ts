@@ -2,6 +2,7 @@ import { jwtVerify } from "jose";
 import { randomUUID } from "node:crypto";
 import type { Sql } from "../db";
 import { createSecretResolver, type SecretProvider } from "../connectors/secrets.ts";
+import { enqueueAgentRuntimeJob } from "../agent-runtime/queue.ts";
 
 type JsonRecord = Record<string, unknown>;
 type DeliveryState = "sent" | "delivered" | "read" | "failed" | "unknown";
@@ -13,6 +14,7 @@ export type EvolutionWebhookOutcome = {
   eventId?: string;
   messageId?: string;
   deliveryId?: string;
+  jobId?: string;
 };
 
 export class WebhookRequestError extends Error {
@@ -175,7 +177,21 @@ async function persistInbound(sql: Sql, connection: Awaited<ReturnType<typeof lo
     `update connections set last_event_at = current_timestamp where id = $1 and workspace_id = $2`,
     [connection.id, connection.workspace_id],
   );
-  return { accepted: true, kind: "inbound", eventId: externalMessageId, messageId: actualId, ...(inserted[0] ? {} : { duplicate: true }) };
+  const job = await enqueueAgentRuntimeJob(sql, {
+    workspaceId: connection.workspace_id,
+    agentId,
+    conversationId,
+    inboundMessageId: actualId,
+    traceId: randomUUID(),
+  });
+  return {
+    accepted: true,
+    kind: "inbound",
+    eventId: externalMessageId,
+    messageId: actualId,
+    jobId: job.id,
+    ...(inserted[0] ? {} : { duplicate: true }),
+  };
 }
 
 async function persistDeliveryStatus(sql: Sql, connection: Awaited<ReturnType<typeof locateConnection>>, data: JsonRecord): Promise<EvolutionWebhookOutcome> {

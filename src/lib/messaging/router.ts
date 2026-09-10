@@ -82,13 +82,13 @@ async function findDelivery(sql: Sql, workspaceId: string, idempotencyKey: strin
   return rows[0];
 }
 
-export async function dispatchTextMessage(
+async function dispatchTextMessageInternal(
   sql: Sql,
-  userId: string,
+  userId: string | undefined,
   input: DispatchTextInput,
   secretProvider: SecretProvider,
 ): Promise<DispatchTextResult> {
-  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  if (userId) await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
   const agentId = text(input.agentId, "agentId", 120);
   const connectionId = text(input.connectionId, "connectionId", 120);
   const recipient = text(input.recipient, "recipient", 80);
@@ -231,4 +231,21 @@ export async function dispatchTextMessage(
     provider: target.provider,
     message: dispatch.message,
   };
+}
+
+export async function dispatchTextMessage(
+  sql: Sql,
+  userId: string,
+  input: DispatchTextInput,
+  secretProvider: SecretProvider,
+): Promise<DispatchTextResult> {
+  return dispatchTextMessageInternal(sql, userId, input, secretProvider);
+}
+
+export async function dispatchTextMessageAsRuntime(
+  sql: Sql,
+  input: DispatchTextInput,
+  secretProvider: SecretProvider,
+): Promise<DispatchTextResult> {
+  return dispatchTextMessageInternal(sql, undefined, input, secretProvider);
 }

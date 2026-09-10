@@ -14,7 +14,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "../../../");
 async function fixture() {
   const pg = new PGlite();
   await pg.waitReady;
-  for (const file of ["0002_multi_tenant_core.sql", "0003_connector_registry.sql", "0004_messaging_dispatch.sql", "0005_webhook_security.sql", "0006_webhook_delivery_states.sql"]) {
+  for (const file of ["0002_multi_tenant_core.sql", "0003_connector_registry.sql", "0004_messaging_dispatch.sql", "0005_webhook_security.sql", "0006_webhook_delivery_states.sql", "0007_agent_runtime_jobs.sql"]) {
     await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   }
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
