@@ -69,6 +69,33 @@ export const updateWorkspaceAgent = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export const publishWorkspaceAgent = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { publishAgent } = await import("./server");
+    return publishAgent(await getSql(), context.userId, data);
+  });
+
+export const listWorkspaceAgentVersions = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listAgentVersions } = await import("./server");
+    return listAgentVersions(await getSql(), context.userId, data);
+  });
+
+export const rollbackWorkspaceAgent = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentId: string; versionId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { rollbackAgent } = await import("./server");
+    return rollbackAgent(await getSql(), context.userId, data);
+  });
+
 export const archiveWorkspaceAgent = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { id: string }) => input)

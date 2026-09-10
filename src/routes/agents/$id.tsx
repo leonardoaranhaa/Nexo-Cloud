@@ -16,7 +16,7 @@ import { useNexo } from "@/lib/store";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { useState } from "react";
 import type { Agent, FlowNodeId } from "@/lib/types";
-import { archiveWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { archiveWorkspaceAgent, publishWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
@@ -116,9 +116,15 @@ function AgentStudioPage() {
               size="sm"
               variant="live"
               onClick={() => {
-                const next = { ...agent, status: "live" as const, updatedAt: Date.now() };
-                updateAgent(agent.id, { status: "live" });
-                void persistAgent(next).then(() => toast("Agente no ar")).catch(() => toast("Falha ao publicar."));
+                void (async () => {
+                  if (backendReady && workspaceId) {
+                    await publishWorkspaceAgent({ data: { workspaceId, agentId: agent.id } });
+                    await refresh(workspaceId);
+                  } else {
+                    updateAgent(agent.id, { status: "live" });
+                  }
+                  toast("Agente publicado com versão persistida.");
+                })().catch(() => toast("Falha ao publicar a versão."));
               }}
             >
               Publicar

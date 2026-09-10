@@ -406,6 +406,199 @@ export async function updateAgent(
   );
 }
 
+export type AgentVersionRecord = {
+  id: string;
+  agentId: string;
+  versionNumber: number;
+  status: "draft" | "published" | "retired";
+  createdBy: string;
+  createdAt: string;
+  publishedBy: string | null;
+  publishedAt: string | null;
+  retiredAt: string | null;
+};
+
+function agentVersionSelect() {
+  return `
+    select
+      av.id,
+      av.agent_id as "agentId",
+      av.version_number as "versionNumber",
+      av.status,
+      av.created_by as "createdBy",
+      av.created_at as "createdAt",
+      av.published_by as "publishedBy",
+      av.published_at as "publishedAt",
+      av.retired_at as "retiredAt"
+    from agent_versions av`;
+}
+
+export async function publishAgent(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; agentId: string },
+): Promise<AgentVersionRecord> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "publish");
+  const agent = await sql.query<{
+    id: string;
+    workspace_id: string;
+    name: string;
+    persona: string;
+    welcome_message: string;
+    system_prompt: string;
+    agent_type: string;
+    language: "pt" | "en" | "es";
+    model_provider: string;
+    model_name: string;
+    temperature: number;
+    max_tokens: number;
+    memory_window: number;
+    knowledge: JsonObject;
+    tools: JsonObject;
+    metadata: JsonObject;
+  }>(
+    `select id, workspace_id, name, persona, welcome_message, system_prompt,
+            agent_type, language, model_provider, model_name, temperature,
+            max_tokens, memory_window, knowledge, tools, metadata
+       from agents
+      where id = $1 and workspace_id = $2 and deleted_at is null
+      limit 1`,
+    [input.agentId, input.workspaceId],
+  );
+  if (!agent[0]) throw new Error("AGENT_NOT_FOUND");
+
+  const next = await sql.query<{ version_number: number }>(
+    `select coalesce(max(version_number), 0) + 1 as version_number
+       from agent_versions where agent_id = $1`,
+    [input.agentId],
+  );
+  const versionId = randomUUID();
+  const versionNumber = Number(next[0]?.version_number ?? 1);
+  const config = JSON.stringify({
+    name: agent[0].name,
+    persona: agent[0].persona,
+    welcomeMessage: agent[0].welcome_message,
+    systemPrompt: agent[0].system_prompt,
+    agentType: agent[0].agent_type,
+    language: agent[0].language,
+    modelProvider: agent[0].model_provider,
+    modelName: agent[0].model_name,
+    temperature: agent[0].temperature,
+    maxTokens: agent[0].max_tokens,
+    memoryWindow: agent[0].memory_window,
+    knowledge: agent[0].knowledge,
+    tools: agent[0].tools,
+    metadata: agent[0].metadata,
+  });
+
+  await sql.query(
+    `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
+     values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
+    [versionId, input.agentId, versionNumber, config, userId],
+  );
+  await sql.query(
+    `update agent_versions
+        set status = 'retired', retired_at = current_timestamp
+      where agent_id = $1 and status = 'published'`,
+    [input.agentId],
+  );
+  await sql.query(
+    `update agent_versions
+        set status = 'published', published_by = $2, published_at = current_timestamp
+      where id = $1 and agent_id = $3`,
+    [versionId, userId, input.agentId],
+  );
+  await sql.query(
+    `update agents set status = 'active', updated_by = $2, updated_at = current_timestamp
+      where id = $1 and workspace_id = $3 and deleted_at is null`,
+    [input.agentId, userId, input.workspaceId],
+  );
+
+  const result = await sql.query<AgentVersionRecord>(
+    `${agentVersionSelect()} where av.id = $1 and av.agent_id = $2`,
+    [versionId, input.agentId],
+  );
+  if (!result[0]) throw new Error("AGENT_VERSION_PUBLISH_FAILED");
+  return result[0];
+}
+
+export async function listAgentVersions(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; agentId: string },
+): Promise<AgentVersionRecord[]> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const agent = await sql.query<{ id: string }>(
+    `select id from agents where id = $1 and workspace_id = $2 and deleted_at is null limit 1`,
+    [input.agentId, input.workspaceId],
+  );
+  if (!agent[0]) throw new Error("AGENT_NOT_FOUND");
+  return sql.query<AgentVersionRecord>(
+    `${agentVersionSelect()} where av.agent_id = $1 order by av.version_number desc`,
+    [input.agentId],
+  );
+}
+
+export async function rollbackAgent(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; agentId: string; versionId: string },
+): Promise<AgentVersionRecord> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "publish");
+  const target = await sql.query<{ id: string; config: JsonObject }>(
+    `select av.id, av.config
+       from agent_versions av
+       join agents a on a.id = av.agent_id
+      where av.id = $1 and av.agent_id = $2 and a.workspace_id = $3
+      limit 1`,
+    [input.versionId, input.agentId, input.workspaceId],
+  );
+  if (!target[0]) throw new Error("AGENT_VERSION_NOT_FOUND");
+
+  return publishAgentFromConfig(sql, userId, input, target[0].config);
+}
+
+async function publishAgentFromConfig(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; agentId: string },
+  config: JsonObject,
+): Promise<AgentVersionRecord> {
+  const next = await sql.query<{ version_number: number }>(
+    `select coalesce(max(version_number), 0) + 1 as version_number
+       from agent_versions where agent_id = $1`,
+    [input.agentId],
+  );
+  const versionId = randomUUID();
+  const versionNumber = Number(next[0]?.version_number ?? 1);
+  await sql.query(
+    `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
+     values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
+    [versionId, input.agentId, versionNumber, JSON.stringify(config), userId],
+  );
+  await sql.query(
+    `update agent_versions set status = 'retired', retired_at = current_timestamp
+      where agent_id = $1 and status = 'published'`,
+    [input.agentId],
+  );
+  await sql.query(
+    `update agent_versions set status = 'published', published_by = $2, published_at = current_timestamp
+      where id = $1 and agent_id = $3`,
+    [versionId, userId, input.agentId],
+  );
+  await sql.query(
+    `update agents set status = 'active', updated_by = $2, updated_at = current_timestamp
+      where id = $1 and workspace_id = $3 and deleted_at is null`,
+    [input.agentId, userId, input.workspaceId],
+  );
+  const result = await sql.query<AgentVersionRecord>(
+    `${agentVersionSelect()} where av.id = $1 and av.agent_id = $2`,
+    [versionId, input.agentId],
+  );
+  if (!result[0]) throw new Error("AGENT_VERSION_ROLLBACK_FAILED");
+  return result[0];
+}
+
 export async function archiveAgent(sql: Sql, userId: string, id: string): Promise<void> {
   const target = await sql.query<{ workspace_id: string }>(
     `select workspace_id from agents where id = $1 and deleted_at is null limit 1`,

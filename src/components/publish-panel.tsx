@@ -5,18 +5,29 @@ import { PROVIDER_LABEL } from "@/lib/types";
 import { n8nExport, pythonExport } from "@/lib/codegen";
 import { useNexo } from "@/lib/store";
 import { webhookUrl } from "@/lib/webhooks";
+import { listWorkspaceAgentVersions, publishWorkspaceAgent, rollbackWorkspaceAgent } from "@/lib/multitenancy/api";
+import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { CodeBlock } from "./code-block";
 import { Segmented } from "./segmented";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function PublishPanel({ agent }: { agent: Agent }) {
   const connections = useNexo((s) => s.connections);
   const updateAgent = useNexo((s) => s.updateAgent);
   const updateConnection = useNexo((s) => s.updateConnection);
   const log = useNexo((s) => s.log);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
+  const { refresh } = useWorkspaceData();
+  const [versions, setVersions] = useState<Array<{
+    id: string;
+    versionNumber: number;
+    status: "draft" | "published" | "retired";
+    publishedAt: string | null;
+  }>>([]);
   const connection = connections.find((c) => c.id === agent.connectionId);
   const [track, setTrack] = useState<"n8n" | "python">(
     connection?.provider === "meta" ? "python" : "n8n",
@@ -26,7 +37,14 @@ export function PublishPanel({ agent }: { agent: Agent }) {
   const n8n = n8nExport(agent, connection);
   const hook = connection ? webhookUrl(connection) : "crie uma conexão primeiro";
 
-  function goLive() {
+  useEffect(() => {
+    if (!backendReady || !workspaceId) return;
+    void listWorkspaceAgentVersions({ data: { workspaceId, agentId: agent.id } })
+      .then(setVersions)
+      .catch(() => setVersions([]));
+  }, [agent.id, backendReady, workspaceId]);
+
+  async function goLive() {
     if (!connection) {
       toast("Ligue um canal antes de publicar.");
       return;
@@ -35,10 +53,32 @@ export function PublishPanel({ agent }: { agent: Agent }) {
       toast("Pareie o QR ou confirme o Phone number ID.");
       return;
     }
-    updateAgent(agent.id, { status: "live" });
-    updateConnection(connection.id, { lastEventAt: Date.now() });
-    log("publish", `${agent.name} publicado em ${connection.name}`);
-    toast("Agente no ar no canal de teste.");
+    try {
+      if (backendReady && workspaceId) {
+        await publishWorkspaceAgent({ data: { workspaceId, agentId: agent.id } });
+        await refresh(workspaceId);
+      } else {
+        updateAgent(agent.id, { status: "live" });
+      }
+      updateConnection(connection.id, { lastEventAt: Date.now() });
+      log("publish", `${agent.name} publicado em ${connection.name}`);
+      toast("Agente publicado com versão persistida.");
+    } catch {
+      toast("Não foi possível publicar a versão do agente.");
+    }
+  }
+
+  async function rollback(versionId: string) {
+    if (!backendReady || !workspaceId) return;
+    try {
+      await rollbackWorkspaceAgent({ data: { workspaceId, agentId: agent.id, versionId } });
+      await refresh(workspaceId);
+      const next = await listWorkspaceAgentVersions({ data: { workspaceId, agentId: agent.id } });
+      setVersions(next);
+      toast("Rollback publicado como uma nova versão.");
+    } catch {
+      toast("Não foi possível fazer rollback dessa versão.");
+    }
   }
 
   return (
@@ -84,6 +124,27 @@ export function PublishPanel({ agent }: { agent: Agent }) {
             Respostas curtas. Áudios entram transcritos. Não invente estoque nem preço.
           </p>
         </Card>
+
+        {backendReady && versions.length > 0 && (
+          <Card className="flex flex-col gap-3 p-4">
+            <div className="font-display text-sm font-semibold">Histórico de versões</div>
+            <div className="flex flex-col gap-2">
+              {versions.map((version) => (
+                <div key={version.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                  <div>
+                    <div className="text-sm">v{version.versionNumber}</div>
+                    <div className="text-xs text-muted">{version.status === "published" ? "Publicada" : version.status === "retired" ? "Retirada" : "Rascunho"}</div>
+                  </div>
+                  {version.status === "retired" && (
+                    <Button size="sm" variant="secondary" onClick={() => void rollback(version.id)}>
+                      Fazer rollback
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
 
       <div className="flex min-w-0 flex-col gap-4">
