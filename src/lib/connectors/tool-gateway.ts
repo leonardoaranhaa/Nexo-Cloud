@@ -6,6 +6,7 @@ import { EvolutionTextDispatcher } from "./evolution-messaging.ts";
 import type { ConnectorContext } from "./runtime.ts";
 import type { ClaimedWorkflowRun } from "../workflows/queue.ts";
 import type { WorkflowNode } from "../workflows/server.ts";
+import { McpRuntime } from "./mcp-runtime.ts";
 
 function object(value: unknown): JsonObject { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {}; }
 function text(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
@@ -38,8 +39,19 @@ export async function executeWorkflowTool(
   await sql.query(`insert into tool_executions (id, workspace_id, run_id, tool_id, connector_instance_id, requested_by, status, input_hash, input_redacted, started_at) values ($1,$2,$3,$4,$5,'workflow','running',$6,$7::jsonb,current_timestamp)`, [executionId, run.workspace_id, run.id, tool[0].id, connection[0].id, hash(input), JSON.stringify(inputRedacted)]);
   const startedAt = Date.now();
   try {
-    if (toolKey !== "evolution.send_text" || connection[0].provider !== "evolution") throw new Error("TOOL_ADAPTER_UNAVAILABLE");
     const config = object(connection[0].config);
+    if (toolKey === "mcp.call" && connection[0].provider === "mcp") {
+      const mcpToolName = text(node.config?.mcpToolName);
+      const allowedTools = Array.isArray(config.allowedTools) ? config.allowedTools.filter((item): item is string => typeof item === "string") : [];
+      if (!mcpToolName || !allowedTools.includes(mcpToolName)) throw new Error("MCP_TOOL_NOT_ALLOWED");
+      const runtime = new McpRuntime({ url: text(config.url), secretRef: connection[0].secret_ref, workspaceId: run.workspace_id, connectionId: connection[0].id, timeoutMs: tool[0].timeout_ms, getSecret: async () => "" }, secretProvider);
+      const result = await runtime.callTool(mcpToolName, object(node.config?.arguments ?? input));
+      await runtime.close();
+      const output = redacted(result);
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, latency_ms = $2, finished_at = current_timestamp where id = $3`, [JSON.stringify(output), Date.now() - startedAt, executionId]);
+      return output;
+    }
+    if (toolKey !== "evolution.send_text" || connection[0].provider !== "evolution") throw new Error("TOOL_ADAPTER_UNAVAILABLE");
     const connectorContext: ConnectorContext = { workspaceId: run.workspace_id, connectionId: connection[0].id, traceId: run.correlation_id, getSecret: (name) => secretProvider.resolve(connection[0].secret_ref, { workspaceId: run.workspace_id, connectionId: connection[0].id }).then((value) => name === "api_key" ? value : value) };
     const result = await new EvolutionTextDispatcher().sendText({ baseUrl: text(config.baseUrl), instance: text(config.instance), recipient: text(node.config?.recipient ?? input.recipient), text: text(node.config?.text ?? input.text), timeoutMs: tool[0].timeout_ms }, connectorContext);
     if (result.status !== "sent") throw new Error(`TOOL_${result.code.toUpperCase()}`);

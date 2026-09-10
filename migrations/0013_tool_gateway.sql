@@ -19,6 +19,9 @@ create unique index if not exists tools_scope_key_idx on tools (coalesce(workspa
 insert into tools (id, workspace_id, connector_definition_id, key, name, description, risk_level, input_schema)
 values ('tool_evolution_send_text', null, 'connector_def_evolution', 'evolution.send_text', 'Enviar texto via Evolution', 'Envia uma mensagem de texto por uma conexão Evolution autorizada.', 'write', '{"type":"object","required":["connectionId","recipient","text"]}')
 on conflict (id) do nothing;
+insert into tools (id, workspace_id, connector_definition_id, key, name, description, risk_level, input_schema)
+values ('tool_mcp_call', null, 'connector_def_mcp_generic', 'mcp.call', 'Chamar ferramenta MCP', 'Executa uma ferramenta explicitamente permitida em um servidor MCP conectado.', 'read', '{"type":"object","required":["connectionId","mcpToolName"]}')
+on conflict (id) do nothing;
 
 create table if not exists agent_tool_permissions (
   id text primary key,
