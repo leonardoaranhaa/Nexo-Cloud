@@ -26,6 +26,13 @@ export type Faq = {
   a: string;
 };
 
+export type AgentDevelopmentBlueprint = {
+  objectives: string[];
+  capabilities: string[];
+  guardrails: string[];
+  testScenarios: string[];
+};
+
 export type Agent = {
   id: string;
   name: string;
@@ -39,6 +46,7 @@ export type Agent = {
   maxTokens: number;
   memoryWindow: number;
   template: string;
+  developmentBlueprint?: AgentDevelopmentBlueprint;
   knowledge: {
     faqs: Faq[];
     notes: string;

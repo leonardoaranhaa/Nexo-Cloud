@@ -56,6 +56,10 @@ function CreateWizard() {
     welcomeMessage: "",
     systemPrompt: "",
     notes: "",
+    objectives: [] as string[],
+    capabilities: [] as string[],
+    guardrails: [] as string[],
+    testScenarios: [] as string[],
   });
 
   const agent = agents.find((a) => a.id === agentId);
@@ -79,6 +83,10 @@ function CreateWizard() {
             welcomeMessage: t.draft.welcomeMessage,
             systemPrompt: t.draft.systemPrompt,
             notes: t.draft.knowledge.notes,
+            objectives: ["Responder solicitações com consistência"],
+            capabilities: ["Responder FAQs", "Solicitar contexto antes de agir"],
+            guardrails: ["Não inventar informações ausentes", "Transferir casos sensíveis para uma pessoa"],
+            testScenarios: ["Pergunta frequente com resposta publicada", "Solicitação fora do escopo com handoff"],
           });
           const id = addAgent({
             ...t.draft,
@@ -96,14 +104,20 @@ function CreateWizard() {
           persona: res.persona,
           welcomeMessage: res.welcomeMessage,
           systemPrompt: res.systemPrompt,
-          knowledge: {
-            notes: res.notes,
-            faqs: res.faqs.map((f) => ({ ...f, id: createId("faq") })),
-          },
-          status: "draft",
-          connectionId,
-          template: "support",
-        });
+            knowledge: {
+              notes: res.notes,
+              faqs: res.faqs.map((f) => ({ ...f, id: createId("faq") })),
+            },
+            developmentBlueprint: {
+              objectives: res.objectives,
+              capabilities: res.capabilities,
+              guardrails: res.guardrails,
+              testScenarios: res.testScenarios,
+            },
+            status: "draft",
+            connectionId,
+            template: res.agentType,
+          });
         setAgentId(id);
         setDraft({
           name: res.name,
@@ -111,6 +125,10 @@ function CreateWizard() {
           welcomeMessage: res.welcomeMessage,
           systemPrompt: res.systemPrompt,
           notes: res.notes,
+          objectives: res.objectives,
+          capabilities: res.capabilities,
+          guardrails: res.guardrails,
+          testScenarios: res.testScenarios,
         });
         setStep(3);
       } catch {
@@ -135,6 +153,10 @@ function CreateWizard() {
       welcomeMessage: t.draft.welcomeMessage,
       systemPrompt: t.draft.systemPrompt,
       notes: t.draft.knowledge.notes,
+      objectives: ["Responder solicitações com consistência"],
+      capabilities: ["Responder FAQs", "Solicitar contexto antes de agir"],
+      guardrails: ["Não inventar informações ausentes", "Transferir casos sensíveis para uma pessoa"],
+      testScenarios: ["Pergunta frequente com resposta publicada", "Solicitação fora do escopo com handoff"],
     });
     setStep(3);
   }
@@ -380,6 +402,14 @@ function CreateWizard() {
                 ))}
               </ul>
             )}
+            {agent?.developmentBlueprint && (
+              <div className="mt-5 grid gap-4 border-t border-border pt-4">
+                <BlueprintList title="Objetivos" items={agent.developmentBlueprint.objectives} />
+                <BlueprintList title="Capacidades" items={agent.developmentBlueprint.capabilities} />
+                <BlueprintList title="Limites" items={agent.developmentBlueprint.guardrails} />
+                <BlueprintList title="Cenários para testar" items={agent.developmentBlueprint.testScenarios} />
+              </div>
+            )}
           </Card>
         </section>
       )}
@@ -450,5 +480,19 @@ function CreateWizard() {
         </section>
       )}
     </AppShell>
+  );
+}
+
+function BlueprintList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div>
+      <div className="text-xs font-medium text-fg">{title}</div>
+      <ul className="mt-1 flex flex-col gap-1">
+        {items.map((item) => (
+          <li key={item} className="text-xs leading-relaxed text-muted">• {item}</li>
+        ))}
+      </ul>
+    </div>
   );
 }

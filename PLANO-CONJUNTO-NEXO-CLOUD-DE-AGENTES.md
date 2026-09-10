@@ -157,7 +157,15 @@ A Home, a busca global, o contexto de workspace, a navegação de serviços, o M
 
 Ainda faltam configurações server-side completas, governança por papel, configuração por ambiente, onboarding guiado e refinamento operacional de estados vazios e saúde da plataforma.
 
-### 5.10 AWS, billing e produção
+### 5.10 Ambiente de desenvolvimento assistido por IA
+
+**Estado: primeira fatia implementada.**
+
+O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é anexado ao agente draft local antes da prova de tom e publicação.
+
+Ainda faltam persistência server-side do blueprint, edição estruturada por seção, indexação de documentos e sistemas, geração assistida de workflows e ferramentas, comparação de versões e testes automatizados de qualidade antes da publicação.
+
+### 5.11 AWS, billing e produção
 
 **Estado: postergado.**
 

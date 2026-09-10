@@ -1,16 +1,22 @@
 import { createServerFn } from "@tanstack/react-start";
 
 type ChatTurn = { role: "user" | "assistant" | "system"; content: string };
+type GeneratedAgentType = "support" | "sales" | "marketing" | "ads" | "traffic" | "operations" | "custom";
 
 type GenerateResult =
   | {
       ok: true;
       name: string;
+      agentType: GeneratedAgentType;
       persona: string;
       welcomeMessage: string;
       systemPrompt: string;
       faqs: { q: string; a: string }[];
       notes: string;
+      objectives: string[];
+      capabilities: string[];
+      guardrails: string[];
+      testScenarios: string[];
     }
   | { ok: false; error: string };
 
@@ -94,13 +100,13 @@ export const generateAgent = createServerFn({ method: "POST" })
         {
           role: "system",
           content:
-            "Você projeta agentes de WhatsApp. Responda APENAS JSON válido, sem markdown. Português brasileiro.",
+            "Você projeta agentes de negócio para o Nexo Cloud. Responda APENAS JSON válido, sem markdown. Português brasileiro. Não invente integrações, preços, políticas legais ou capacidades externas não informadas.",
         },
         {
           role: "user",
-          content: `Crie um agente a partir deste briefing:\n${brief}\n\nJSON:
-{"name":"Nome curto do agente","persona":"1 frase","welcomeMessage":"saudação WhatsApp curta","systemPrompt":"prompt de sistema detalhado, regras de tom e limites","faqs":[{"q":"...","a":"..."}],"notes":"notas internas curtas"}
-3 a 5 faqs. systemPrompt com regras de respostas curtas no WhatsApp.`,
+          content: `Crie um blueprint inicial de agente a partir deste briefing:\n${brief}\n\nJSON:
+{"name":"Nome curto do agente","agentType":"support|sales|marketing|ads|traffic|operations|custom","persona":"1 frase","welcomeMessage":"saudação curta","systemPrompt":"prompt de sistema detalhado, regras de tom e limites","faqs":[{"q":"...","a":"..."}],"notes":"notas internas curtas","objectives":["objetivo mensurável"],"capabilities":["capacidade que o agente pode executar"],"guardrails":["limite ou condição de segurança"],"testScenarios":["cenário de teste com resultado esperado"]}
+Inclua 3 a 5 faqs, 2 a 4 objetivos, 3 a 6 capacidades, 3 a 6 guardrails e 3 a 5 cenários de teste. Não declare uma integração como disponível sem ela estar no briefing. O systemPrompt deve orientar respostas curtas, coleta de contexto, uso de evidências, handoff e não invenção de dados.`,
         },
       ],
     });
@@ -127,13 +133,26 @@ export const generateAgent = createServerFn({ method: "POST" })
       .filter((f) => f.q && f.a)
       .slice(0, 6);
 
+    const list = (value: unknown, max: number, itemMax: number) =>
+      (Array.isArray(value) ? value : [])
+        .map((item) => String(item ?? "").trim().slice(0, itemMax))
+        .filter(Boolean)
+        .slice(0, max);
+    const allowedTypes = new Set(["support", "sales", "marketing", "ads", "traffic", "operations", "custom"]);
+    const agentType = String(json.agentType ?? "custom");
+
     return {
       ok: true,
       name: String(json.name ?? "Novo agente").slice(0, 48),
+      agentType: (allowedTypes.has(agentType) ? agentType : "custom") as GeneratedAgentType,
       persona: String(json.persona ?? "").slice(0, 220),
       welcomeMessage: String(json.welcomeMessage ?? "Olá!").slice(0, 180),
       systemPrompt: String(json.systemPrompt ?? "").slice(0, 2500),
       notes: String(json.notes ?? "").slice(0, 600),
       faqs,
+      objectives: list(json.objectives, 4, 180),
+      capabilities: list(json.capabilities, 6, 180),
+      guardrails: list(json.guardrails, 6, 220),
+      testScenarios: list(json.testScenarios, 5, 240),
     };
   });
