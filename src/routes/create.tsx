@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusDot } from "@/components/status-dot";
 import { generateAgent } from "@/lib/ai";
+import { createWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
 import { AGENT_TEMPLATES, type AgentTemplateId } from "@/lib/templates";
 import { useAgentChat } from "@/lib/use-agent-chat";
 import { useNexo } from "@/lib/store";
@@ -40,6 +41,8 @@ function CreateWizard() {
   const addAgent = useNexo((s) => s.addAgent);
   const updateAgent = useNexo((s) => s.updateAgent);
   const agents = useNexo((s) => s.agents);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
 
   const [step, setStep] = useState(1);
   const [connectionId, setConnectionId] = useState<string | null>(
@@ -50,6 +53,7 @@ function CreateWizard() {
   const [brief, setBrief] = useState("");
   const [busy, setBusy] = useState(false);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [persistedAgentId, setPersistedAgentId] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     name: "",
     persona: "",
@@ -64,6 +68,29 @@ function CreateWizard() {
 
   const agent = agents.find((a) => a.id === agentId);
   const chat = useAgentChat(agentId ?? undefined);
+
+  async function persistBlueprint(input: {
+    name: string;
+    persona: string;
+    welcomeMessage: string;
+    systemPrompt: string;
+    agentType: string;
+    objectives: string[];
+    capabilities: string[];
+    guardrails: string[];
+    testScenarios: string[];
+    sourceBrief: string;
+  }) {
+    if (!workspaceId || !backendReady) return;
+    try {
+      const created = await createWorkspaceAgent({ data: { workspaceId, name: input.name, persona: input.persona, welcomeMessage: input.welcomeMessage, systemPrompt: input.systemPrompt, agentType: input.agentType } });
+      setPersistedAgentId(created.id);
+      await upsertWorkspaceAgentDevelopmentBlueprint({ data: { workspaceId, agentId: created.id, agentType: input.agentType, objectives: input.objectives, capabilities: input.capabilities, guardrails: input.guardrails, testScenarios: input.testScenarios, sourceBrief: input.sourceBrief } });
+      toast.success("Blueprint salvo no workspace");
+    } catch {
+      toast("O rascunho local foi criado, mas não foi possível sincronizar com o workspace.");
+    }
+  }
 
   async function goReview() {
     if (source === "brief") {
@@ -93,6 +120,18 @@ function CreateWizard() {
             name: t.title,
             status: "draft",
             connectionId,
+          });
+          void persistBlueprint({
+            name: t.title,
+            persona: t.draft.persona,
+            welcomeMessage: t.draft.welcomeMessage,
+            systemPrompt: t.draft.systemPrompt,
+            agentType: "support",
+            objectives: ["Responder solicitações com consistência"],
+            capabilities: ["Responder FAQs", "Solicitar contexto antes de agir"],
+            guardrails: ["Não inventar informações ausentes", "Transferir casos sensíveis para uma pessoa"],
+            testScenarios: ["Pergunta frequente com resposta publicada", "Solicitação fora do escopo com handoff"],
+            sourceBrief: brief,
           });
           setAgentId(id);
           setStep(3);
@@ -130,6 +169,18 @@ function CreateWizard() {
           guardrails: res.guardrails,
           testScenarios: res.testScenarios,
         });
+        void persistBlueprint({
+          name: res.name,
+          persona: res.persona,
+          welcomeMessage: res.welcomeMessage,
+          systemPrompt: res.systemPrompt,
+          agentType: res.agentType,
+          objectives: res.objectives,
+          capabilities: res.capabilities,
+          guardrails: res.guardrails,
+          testScenarios: res.testScenarios,
+          sourceBrief: brief,
+        });
         setStep(3);
       } catch {
         toast("Falha ao gerar. Tente um modelo.");
@@ -158,6 +209,18 @@ function CreateWizard() {
       guardrails: ["Não inventar informações ausentes", "Transferir casos sensíveis para uma pessoa"],
       testScenarios: ["Pergunta frequente com resposta publicada", "Solicitação fora do escopo com handoff"],
     });
+    void persistBlueprint({
+      name: t.title,
+      persona: t.draft.persona,
+      welcomeMessage: t.draft.welcomeMessage,
+      systemPrompt: t.draft.systemPrompt,
+      agentType: template,
+      objectives: ["Responder solicitações com consistência"],
+      capabilities: ["Responder FAQs", "Solicitar contexto antes de agir"],
+      guardrails: ["Não inventar informações ausentes", "Transferir casos sensíveis para uma pessoa"],
+      testScenarios: ["Pergunta frequente com resposta publicada", "Solicitação fora do escopo com handoff"],
+      sourceBrief: "Modelo inicial do catálogo",
+    });
     setStep(3);
   }
 
@@ -174,6 +237,20 @@ function CreateWizard() {
       },
       connectionId,
     });
+    if (workspaceId && persistedAgentId && backendReady) {
+      void upsertWorkspaceAgentDevelopmentBlueprint({
+        data: {
+          workspaceId,
+          agentId: persistedAgentId,
+          agentType: agent?.template ?? "custom",
+          objectives: draft.objectives,
+          capabilities: draft.capabilities,
+          guardrails: draft.guardrails,
+          testScenarios: draft.testScenarios,
+          sourceBrief: brief,
+        },
+      });
+    }
   }
 
   return (

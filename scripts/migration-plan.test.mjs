@@ -88,6 +88,7 @@ test("the auth schema stays nested while app migrations are discoverable", () =>
       { name: "0028_nexo_learning_cases.sql", path: "0028_nexo_learning_cases.sql" },
       { name: "0029_agent_improvement_lab.sql", path: "0029_agent_improvement_lab.sql" },
       { name: "0030_tool_execution_domain.sql", path: "0030_tool_execution_domain.sql" },
+      { name: "0031_agent_development_blueprints.sql", path: "0031_agent_development_blueprints.sql" },
   ]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });

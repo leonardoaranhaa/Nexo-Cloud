@@ -44,6 +44,24 @@ export const createWorkspaceAgent = createServerFn({ method: "POST" })
     return createAgent(await getSql(), context.userId, data);
   });
 
+export const upsertWorkspaceAgentDevelopmentBlueprint = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: {
+    workspaceId: string;
+    agentId: string;
+    agentType: string;
+    objectives: string[];
+    capabilities: string[];
+    guardrails: string[];
+    testScenarios: string[];
+    sourceBrief?: string;
+  }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { upsertAgentDevelopmentBlueprint } = await import("./server");
+    return upsertAgentDevelopmentBlueprint(await getSql(), context.userId, data);
+  });
+
 export const updateWorkspaceAgent = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: {

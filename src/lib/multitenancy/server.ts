@@ -46,8 +46,18 @@ export type AgentRecord = {
   knowledge: JsonObject;
   tools: JsonObject;
   metadata: JsonObject;
+  developmentBlueprint: AgentDevelopmentBlueprint | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type AgentDevelopmentBlueprint = {
+  agentType: string;
+  objectives: string[];
+  capabilities: string[];
+  guardrails: string[];
+  testScenarios: string[];
+  sourceBrief: string;
 };
 
 export type ConnectionRecord = {
@@ -290,12 +300,23 @@ export async function listAgents(sql: Sql, userId: string, workspaceId: string):
       agents.knowledge,
       agents.tools,
       agents.metadata,
+      case when adb.id is null then null else json_build_object(
+        'agentType', adb.agent_type,
+        'objectives', adb.objectives,
+        'capabilities', adb.capabilities,
+        'guardrails', adb.guardrails,
+        'testScenarios', adb.test_scenarios,
+        'sourceBrief', adb.source_brief
+      ) end as "developmentBlueprint",
       agents.created_at as "createdAt",
       agents.updated_at as "updatedAt"
     from agents
     left join agent_connections ac
       on ac.agent_id = agents.id
      and ac.is_primary = true
+    left join agent_development_blueprints adb
+      on adb.agent_id = agents.id
+     and adb.workspace_id = agents.workspace_id
     where agents.workspace_id = ${workspaceId}
       and agents.deleted_at is null
     order by agents.updated_at desc
@@ -405,6 +426,59 @@ export async function updateAgent(
       input.workspaceId,
     ],
   );
+}
+
+function boundedBlueprintList(value: unknown, maxItems: number, maxLength: number): string[] {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => String(item ?? "").trim().slice(0, maxLength))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+export async function upsertAgentDevelopmentBlueprint(
+  sql: Sql,
+  userId: string,
+  input: {
+    workspaceId: string;
+    agentId: string;
+    agentType: string;
+    objectives: unknown;
+    capabilities: unknown;
+    guardrails: unknown;
+    testScenarios: unknown;
+    sourceBrief?: string;
+  },
+): Promise<AgentDevelopmentBlueprint> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const target = await sql.query<{ workspace_id: string }>(
+    `select workspace_id from agents where id = $1 and deleted_at is null limit 1`,
+    [input.agentId],
+  );
+  if (!target[0] || target[0].workspace_id !== input.workspaceId) throw new WorkspaceAccessError();
+  const blueprint: AgentDevelopmentBlueprint = {
+    agentType: String(input.agentType || "custom").slice(0, 40),
+    objectives: boundedBlueprintList(input.objectives, 8, 240),
+    capabilities: boundedBlueprintList(input.capabilities, 12, 240),
+    guardrails: boundedBlueprintList(input.guardrails, 12, 300),
+    testScenarios: boundedBlueprintList(input.testScenarios, 10, 320),
+    sourceBrief: String(input.sourceBrief ?? "").trim().slice(0, 2000),
+  };
+  await sql.query(
+    `insert into agent_development_blueprints
+      (id, workspace_id, agent_id, agent_type, objectives, capabilities, guardrails, test_scenarios, source_brief, created_by, updated_by)
+     values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9, $10, $10)
+     on conflict (workspace_id, agent_id) do update set
+       agent_type = excluded.agent_type,
+       objectives = excluded.objectives,
+       capabilities = excluded.capabilities,
+       guardrails = excluded.guardrails,
+       test_scenarios = excluded.test_scenarios,
+       source_brief = excluded.source_brief,
+       updated_by = excluded.updated_by,
+       updated_at = current_timestamp`,
+    [randomUUID(), input.workspaceId, input.agentId, blueprint.agentType, JSON.stringify(blueprint.objectives), JSON.stringify(blueprint.capabilities), JSON.stringify(blueprint.guardrails), JSON.stringify(blueprint.testScenarios), blueprint.sourceBrief, userId],
+  );
+  return blueprint;
 }
 
 export type AgentVersionRecord = {

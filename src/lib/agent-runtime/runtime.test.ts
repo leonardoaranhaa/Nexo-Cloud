@@ -45,6 +45,7 @@ async function fixture(baseUrl: string) {
     "0028_nexo_learning_cases.sql",
     "0029_agent_improvement_lab.sql",
     "0030_tool_execution_domain.sql",
+    "0031_agent_development_blueprints.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";
