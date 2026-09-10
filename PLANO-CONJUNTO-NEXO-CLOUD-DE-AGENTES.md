@@ -87,6 +87,10 @@ O Nexo Cloud é uma plataforma de engenharia de agentes, não um produto em que 
 
 Consequentemente, ferramentas de CRM, agenda, MCP, workflows, Marketplace, canais e operações sensíveis devem ser descobertas e autorizadas por contexto. O frontend pode explicar disponibilidade e pré-requisitos, mas a decisão efetiva deve ocorrer server-side, no workspace, na versão publicada e no Tool Gateway. Capacidades não aplicáveis devem permanecer ocultas ou explicitamente indisponíveis, sem mocks que sugiram que estão ativas.
 
+### 4.2 Próximos passos de experiência
+
+Depois da explicitação do contexto no shell, a evolução da experiência deve seguir esta ordem: separar Integrate de Build na navegação; dividir a tela do agente em configuração, conhecimento, ferramentas, testes, versões e publicação; apresentar disponibilidade, dependências, risco e escopo para cada capacidade; separar catálogo, instalações e atualizações no Marketplace; e distinguir configuração, saúde e operações destrutivas dos conectores. Cada etapa deve preservar a regra de que o recurso só aparece ou fica acionável quando o workspace, ambiente, versão e permissões o tornam aplicável.
+
 ## 5. Estado real consolidado
 
 ### 5.1 Fundamento multi-tenant e Control Plane
