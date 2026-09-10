@@ -5,6 +5,7 @@ import { PROVIDER_LABEL } from "@/lib/types";
 import { LANGUAGE_LABEL } from "@/lib/labels";
 import { useNexo } from "@/lib/store";
 import { updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { bindWorkspaceAgentConnection } from "@/lib/multitenancy/api";
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { createId } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -73,7 +74,15 @@ export function AgentEditor({
             <select
               id="ed-conn"
               value={agent.connectionId ?? ""}
-              onChange={(e) => patch({ connectionId: e.target.value || null })}
+              onChange={(e) => {
+                const connectionId = e.target.value || null;
+                patch({ connectionId });
+                if (backendReady && workspaceId) {
+                  void bindWorkspaceAgentConnection({
+                    data: { agentId: agent.id, workspaceId, connectionId },
+                  }).catch((error) => console.error("[agent] connection binding failed", error));
+                }
+              }}
               className="flex h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:outline-none"
             >
               <option value="">Sem conexão</option>

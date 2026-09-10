@@ -4,6 +4,7 @@ import type { Sql } from "@/lib/db";
 export type OrganizationRole = "owner" | "admin" | "member" | "billing";
 export type WorkspaceRole = "workspace_admin" | "builder" | "operator" | "analyst" | "viewer";
 export type WorkspacePermission = "read" | "write" | "publish" | "manage";
+export type ConnectionProvider = "evolution" | "meta" | "zapi";
 export type JsonValue =
   | string
   | number
@@ -45,6 +46,20 @@ export type AgentRecord = {
   metadata: JsonObject;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ConnectionRecord = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  provider: ConnectionProvider;
+  status: "pending" | "connected" | "disconnected" | "error" | "revoked";
+  phone: string | null;
+  instance: string | null;
+  phoneNumberId: string | null;
+  baseUrl: string | null;
+  lastEventAt: string | null;
+  createdAt: string;
 };
 
 export class WorkspaceAccessError extends Error {
@@ -397,4 +412,143 @@ export async function archiveAgent(sql: Sql, userId: string, id: string): Promis
     `update agents set status = 'archived', deleted_at = current_timestamp, updated_by = $2, updated_at = current_timestamp where id = $1`,
     [id, userId],
   );
+}
+
+function connectionSelect() {
+  return `
+    select
+      id,
+      workspace_id as "workspaceId",
+      name,
+      provider,
+      status,
+      config->>'phone' as phone,
+      config->>'instance' as instance,
+      config->>'phoneNumberId' as "phoneNumberId",
+      config->>'baseUrl' as "baseUrl",
+      last_healthcheck_at as "lastEventAt",
+      created_at as "createdAt"
+    from connections`;
+}
+
+export async function listConnections(
+  sql: Sql,
+  userId: string,
+  workspaceId: string,
+): Promise<ConnectionRecord[]> {
+  await requireWorkspaceAccess(sql, userId, workspaceId, "read");
+  return sql.query<ConnectionRecord>(
+    `${connectionSelect()} where workspace_id = $1 and deleted_at is null order by created_at desc`,
+    [workspaceId],
+  );
+}
+
+export async function createConnection(
+  sql: Sql,
+  userId: string,
+  input: {
+    workspaceId: string;
+    name: string;
+    provider: ConnectionProvider;
+    instance?: string;
+    phoneNumberId?: string;
+    baseUrl?: string;
+  },
+): Promise<{ id: string }> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const name = requiredText(input.name, "name", 120);
+  if (!["evolution", "meta", "zapi"].includes(input.provider)) throw new Error("INVALID_PROVIDER");
+  const id = randomUUID();
+  const status = input.provider === "evolution" || input.provider === "zapi" ? "disconnected" : "disconnected";
+  const config = JSON.stringify({
+    instance: input.instance?.trim().slice(0, 160) || null,
+    phoneNumberId: input.phoneNumberId?.trim().slice(0, 160) || null,
+    baseUrl: input.baseUrl?.trim().slice(0, 240) || null,
+  });
+  await sql.query(
+    `insert into connections (id, workspace_id, name, provider, status, config, created_by)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+    [id, input.workspaceId, name, input.provider, status, config, userId],
+  );
+  return { id };
+}
+
+export async function updateConnection(
+  sql: Sql,
+  userId: string,
+  input: {
+    id: string;
+    workspaceId: string;
+    name?: string;
+    instance?: string;
+    phoneNumberId?: string;
+    baseUrl?: string;
+    status?: ConnectionRecord["status"];
+    phone?: string;
+  },
+): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const current = await sql.query<{ workspace_id: string; config: JsonObject }>(
+    `select workspace_id, config from connections where id = $1 and deleted_at is null limit 1`,
+    [input.id],
+  );
+  if (!current[0] || current[0].workspace_id !== input.workspaceId) throw new WorkspaceAccessError();
+  const config = {
+    ...(current[0].config ?? {}),
+    ...(input.instance !== undefined ? { instance: input.instance.trim().slice(0, 160) || null } : {}),
+    ...(input.phoneNumberId !== undefined ? { phoneNumberId: input.phoneNumberId.trim().slice(0, 160) || null } : {}),
+    ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl.trim().slice(0, 240) || null } : {}),
+    ...(input.phone !== undefined ? { phone: input.phone.trim().slice(0, 80) || null } : {}),
+  };
+  await sql.query(
+    `update connections set
+       name = coalesce($2, name),
+       status = coalesce($3, status),
+       config = $4::jsonb,
+       last_healthcheck_at = case when $5 then current_timestamp else last_healthcheck_at end,
+       updated_at = current_timestamp
+     where id = $1 and workspace_id = $6 and deleted_at is null`,
+    [input.id, input.name?.trim().slice(0, 120) || null, input.status ?? null, JSON.stringify(config), Boolean(input.status), input.workspaceId],
+  );
+}
+
+export async function archiveConnection(sql: Sql, userId: string, id: string): Promise<void> {
+  const current = await sql.query<{ workspace_id: string }>(
+    `select workspace_id from connections where id = $1 and deleted_at is null limit 1`,
+    [id],
+  );
+  if (!current[0]) throw new Error("CONNECTION_NOT_FOUND");
+  await requireWorkspaceAccess(sql, userId, current[0].workspace_id, "write");
+  await sql.query(`delete from agent_connections where connection_id = $1`, [id]);
+  await sql.query(
+    `update connections set status = 'revoked', deleted_at = current_timestamp, updated_at = current_timestamp where id = $1`,
+    [id],
+  );
+}
+
+export async function bindAgentConnection(
+  sql: Sql,
+  userId: string,
+  input: { agentId: string; workspaceId: string; connectionId: string | null },
+): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const agent = await sql.query<{ workspace_id: string }>(
+    `select workspace_id from agents where id = $1 and deleted_at is null limit 1`,
+    [input.agentId],
+  );
+  if (!agent[0] || agent[0].workspace_id !== input.workspaceId) throw new WorkspaceAccessError();
+  if (input.connectionId) {
+    const connection = await sql.query<{ workspace_id: string }>(
+      `select workspace_id from connections where id = $1 and deleted_at is null limit 1`,
+      [input.connectionId],
+    );
+    if (!connection[0] || connection[0].workspace_id !== input.workspaceId) throw new WorkspaceAccessError();
+  }
+  await sql.query(`delete from agent_connections where agent_id = $1`, [input.agentId]);
+  if (input.connectionId) {
+    await sql.query(
+      `insert into agent_connections (agent_id, connection_id, is_primary) values ($1, $2, true)`,
+      [input.agentId, input.connectionId],
+    );
+  }
 }

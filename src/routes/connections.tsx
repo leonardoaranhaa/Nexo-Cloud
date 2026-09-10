@@ -16,6 +16,11 @@ import { useNexo } from "@/lib/store";
 import { PROVIDER_HINT, PROVIDER_LABEL } from "@/lib/types";
 import { copyText, formatPhone, formatRelative } from "@/lib/utils";
 import { simulatedPhone, webhookUrl } from "@/lib/webhooks";
+import {
+  archiveWorkspaceConnection,
+  updateWorkspaceConnection,
+} from "@/lib/multitenancy/api";
+import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
 type Search = { focus?: string };
 
@@ -33,8 +38,28 @@ function ConnectionsPage() {
   const updateConnection = useNexo((s) => s.updateConnection);
   const removeConnection = useNexo((s) => s.removeConnection);
   const log = useNexo((s) => s.log);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
+  const { refresh } = useWorkspaceData();
   const selected = connections.find((c) => c.id === focus) ?? connections[0];
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  function patchConnection(id: string, patch: Parameters<typeof updateConnection>[1]) {
+    updateConnection(id, patch);
+    if (backendReady && workspaceId) {
+      void updateWorkspaceConnection({
+        data: {
+          id,
+          workspaceId,
+          ...(patch.name !== undefined ? { name: patch.name } : {}),
+          ...(patch.instance !== undefined ? { instance: patch.instance } : {}),
+          ...(patch.phoneNumberId !== undefined ? { phoneNumberId: patch.phoneNumberId } : {}),
+          ...(patch.status !== undefined ? { status: patch.status === "qr" ? "disconnected" : patch.status } : {}),
+          ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+        },
+      }).catch((error) => console.error("[connection] update failed", error));
+    }
+  }
 
   useEffect(() => {
     if (!focus) return;
@@ -125,7 +150,7 @@ function ConnectionsPage() {
                 <Input
                   id="sel-name"
                   value={selected.name}
-                  onChange={(e) => updateConnection(selected.id, { name: e.target.value })}
+                  onChange={(e) => patchConnection(selected.id, { name: e.target.value })}
                 />
               </div>
               {selected.provider !== "meta" && (
@@ -134,7 +159,7 @@ function ConnectionsPage() {
                   <Input
                     id="sel-inst"
                     value={selected.instance ?? ""}
-                    onChange={(e) => updateConnection(selected.id, { instance: e.target.value })}
+                    onChange={(e) => patchConnection(selected.id, { instance: e.target.value })}
                   />
                 </div>
               )}
@@ -144,9 +169,7 @@ function ConnectionsPage() {
                   <Input
                     id="sel-pn"
                     value={selected.phoneNumberId ?? ""}
-                    onChange={(e) =>
-                      updateConnection(selected.id, { phoneNumberId: e.target.value })
-                    }
+                    onChange={(e) => patchConnection(selected.id, { phoneNumberId: e.target.value })}
                   />
                 </div>
               )}
@@ -172,7 +195,7 @@ function ConnectionsPage() {
                     seed={selected.id + (selected.instance ?? "")}
                     onConfirm={() => {
                       const phone = simulatedPhone(selected.id);
-                      updateConnection(selected.id, {
+                      patchConnection(selected.id, {
                         status: "connected",
                         phone,
                         lastEventAt: Date.now(),
@@ -193,7 +216,7 @@ function ConnectionsPage() {
                     toast("Informe o Phone number ID");
                     return;
                   }
-                  updateConnection(selected.id, {
+                  patchConnection(selected.id, {
                     status: "connected",
                     lastEventAt: Date.now(),
                   });
@@ -232,8 +255,14 @@ function ConnectionsPage() {
               variant="ghost"
               className="mt-4 text-danger hover:text-danger"
               onClick={() => {
-                removeConnection(selected.id);
-                toast("Conexão removida");
+                void (async () => {
+                  if (backendReady) {
+                    await archiveWorkspaceConnection({ data: { id: selected.id } });
+                    await refresh(workspaceId ?? undefined);
+                  }
+                  removeConnection(selected.id);
+                  toast("Conexão removida");
+                })().catch(() => toast("Não foi possível remover a conexão."));
               }}
             >
               <Trash2 className="size-3.5" />

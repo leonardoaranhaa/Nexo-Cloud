@@ -77,3 +77,67 @@ export const archiveWorkspaceAgent = createServerFn({ method: "POST" })
     await archiveAgent(await getSql(), context.userId, data.id);
     return { ok: true as const };
   });
+
+export const listWorkspaceConnections = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listConnections } = await import("./server");
+    return listConnections(await getSql(), context.userId, data.workspaceId);
+  });
+
+export const createWorkspaceConnection = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: {
+    workspaceId: string;
+    name: string;
+    provider: "evolution" | "meta" | "zapi";
+    instance?: string;
+    phoneNumberId?: string;
+    baseUrl?: string;
+  }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { createConnection } = await import("./server");
+    return createConnection(await getSql(), context.userId, data);
+  });
+
+export const updateWorkspaceConnection = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: {
+    id: string;
+    workspaceId: string;
+    name?: string;
+    instance?: string;
+    phoneNumberId?: string;
+    baseUrl?: string;
+    status?: "pending" | "connected" | "disconnected" | "error" | "revoked";
+    phone?: string;
+  }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { updateConnection } = await import("./server");
+    await updateConnection(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const archiveWorkspaceConnection = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { id: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { archiveConnection } = await import("./server");
+    await archiveConnection(await getSql(), context.userId, data.id);
+    return { ok: true as const };
+  });
+
+export const bindWorkspaceAgentConnection = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { agentId: string; workspaceId: string; connectionId: string | null }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { bindAgentConnection } = await import("./server");
+    await bindAgentConnection(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });

@@ -7,6 +7,8 @@ import { Label } from "./ui/label";
 import { PROVIDER_HINT, PROVIDER_LABEL, type Provider } from "@/lib/types";
 import { useNexo } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { createWorkspaceConnection } from "@/lib/multitenancy/api";
+import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
 export function CreateConnectionDialog({
   triggerLabel = "Nova conexão",
@@ -21,26 +23,40 @@ export function CreateConnectionDialog({
   const [instance, setInstance] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const addConnection = useNexo((s) => s.addConnection);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
   const navigate = useNavigate();
+  const { refresh } = useWorkspaceData();
+  const [busy, setBusy] = useState(false);
 
-  function submit() {
-    const id = addConnection({
-      name: name.trim() || PROVIDER_LABEL[provider],
-      provider,
-      status: provider === "evolution" || provider === "zapi" ? "qr" : "disconnected",
-      instance: instance.trim() || undefined,
-      phoneNumberId: phoneNumberId.trim() || undefined,
-      baseUrl: provider === "evolution" ? "https://evo.nexo.local" : undefined,
-    });
-    setOpen(false);
-    setName("");
-    setInstance("");
-    setPhoneNumberId("");
-    if (onCreated) {
-      onCreated(id);
-      return;
+  async function submit() {
+    setBusy(true);
+    try {
+      const data = {
+        name: name.trim() || PROVIDER_LABEL[provider],
+        provider,
+        instance: instance.trim() || undefined,
+        phoneNumberId: phoneNumberId.trim() || undefined,
+        baseUrl: provider === "evolution" ? "https://evo.nexo.local" : undefined,
+      };
+      const id = backendReady && workspaceId
+        ? (await createWorkspaceConnection({ data: { workspaceId, ...data } })).id
+        : addConnection({ ...data, status: provider === "meta" ? "disconnected" : "qr" });
+      if (backendReady && workspaceId) await refresh(workspaceId);
+      setOpen(false);
+      setName("");
+      setInstance("");
+      setPhoneNumberId("");
+      if (onCreated) {
+        onCreated(id);
+        return;
+      }
+      void navigate({ to: "/connections", search: { focus: id } });
+    } catch {
+      // Keep the dialog open so the user can correct the connection data.
+    } finally {
+      setBusy(false);
     }
-    void navigate({ to: "/connections", search: { focus: id } });
   }
 
   return (
@@ -105,7 +121,7 @@ export function CreateConnectionDialog({
           <Button variant="ghost" onClick={() => setOpen(false)}>
             Cancelar
           </Button>
-          <Button onClick={submit}>Criar</Button>
+          <Button onClick={() => void submit()} disabled={busy}>{busy ? "Salvando…" : "Criar"}</Button>
         </div>
       </DialogContent>
     </Dialog>
