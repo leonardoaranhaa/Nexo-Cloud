@@ -95,6 +95,8 @@ A navegação agora materializa a primeira etapa: **Build** concentra Agentes e 
 
 A tela de cada agente agora materializa o ciclo de vida em áreas persistentes: **Configuração**, **Conhecimento**, **Ferramentas**, **Testes**, **Versões** e **Publicação**. Os aliases antigos `create`, `test` e `publish` continuam sendo aceitos nos links existentes e são normalizados para as novas áreas, evitando quebra de navegação durante a migração.
 
+Na área **Ferramentas**, cada capacidade deve ser apresentada como recurso contextual, não como toggle isolado. O contrato mínimo de apresentação é: estado atual, dependências, escopo de atuação, risco operacional e ação de configuração. O estado deve derivar do contexto efetivo do agente e workspace — por exemplo, canal conectado, palavras-chave de handoff e base de conhecimento disponível — e não de uma disponibilidade global presumida.
+
 ## 5. Estado real consolidado
 
 ### 5.1 Fundamento multi-tenant e Control Plane

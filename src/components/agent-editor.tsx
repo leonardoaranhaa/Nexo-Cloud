@@ -11,6 +11,7 @@ import { createId } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { Badge } from "./ui/badge";
 import { Textarea } from "./ui/textarea";
 import { Slider } from "./ui/slider";
 import { Switch } from "./ui/switch";
@@ -65,6 +66,7 @@ export function AgentEditor({
     guardrails: [],
     testScenarios: [],
   };
+  const activeConnection = connections.find((connection) => connection.id === agent.connectionId);
 
   function patchBlueprint(field: keyof typeof blueprint, values: string[]) {
     patch({ developmentBlueprint: { ...blueprint, [field]: values } });
@@ -292,61 +294,61 @@ export function AgentEditor({
         </div>
       </Card>}
 
-      {show("tools") && <Card className="flex flex-col gap-4 p-4" data-node="hours">
-        <div className="font-display text-sm font-semibold">Ferramentas</div>
-        <ToggleRow
-          label="Horário de atendimento"
-          hint="Fora do expediente o bot avisa e não chama a IA."
-          checked={agent.tools.hoursEnabled}
-          onCheckedChange={(v) => patch({ tools: { ...agent.tools, hoursEnabled: v } })}
-        />
-        {agent.tools.hoursEnabled && (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Início" htmlFor="ed-hs">
-              <Input
-                id="ed-hs"
-                type="time"
-                value={agent.tools.hoursStart}
-                onChange={(e) => patch({ tools: { ...agent.tools, hoursStart: e.target.value } })}
-              />
-            </Field>
-            <Field label="Fim" htmlFor="ed-he">
-              <Input
-                id="ed-he"
-                type="time"
-                value={agent.tools.hoursEnd}
-                onChange={(e) => patch({ tools: { ...agent.tools, hoursEnd: e.target.value } })}
-              />
-            </Field>
-          </div>
-        )}
-        <ToggleRow
-          label="Handoff para humano"
-          hint="Palavras-chave desviam a conversa do modelo."
-          checked={agent.tools.handoff}
-          onCheckedChange={(v) => patch({ tools: { ...agent.tools, handoff: v } })}
-        />
-        {agent.tools.handoff && (
-          <Field label="Palavras-chave" htmlFor="ed-kw">
-            <Input
-              id="ed-kw"
-              value={agent.tools.handoffKeywords}
-              onChange={(e) => patch({ tools: { ...agent.tools, handoffKeywords: e.target.value } })}
-            />
-          </Field>
-        )}
-        <ToggleRow
-          label="Catálogo"
-          hint="O agente pode citar itens da base como se fossem oferta."
-          checked={agent.tools.catalog}
-          onCheckedChange={(v) => patch({ tools: { ...agent.tools, catalog: v } })}
-        />
-        <ToggleRow
-          label="Áudio transcrito"
-          hint="Mensagens de voz entram como texto entre parênteses."
-          checked={agent.tools.audio}
-          onCheckedChange={(v) => patch({ tools: { ...agent.tools, audio: v } })}
-        />
+      {show("tools") && <Card className="flex flex-col gap-5 p-4" data-node="hours">
+        <div>
+          <div className="font-display text-sm font-semibold">Capacidades do agente</div>
+          <p className="mt-1 text-xs leading-relaxed text-muted">Cada capacidade possui escopo, dependências e risco próprios. Ative somente o que faz sentido para este agente e workspace.</p>
+        </div>
+        <div className="grid gap-3">
+          <ContextualToolCard
+            title="Horário de atendimento"
+            description="Fora do expediente, o runtime informa o horário e não chama o modelo."
+            enabled={agent.tools.hoursEnabled}
+            state={agent.tools.hoursEnabled ? "Ativo" : "Disponível"}
+            stateTone={agent.tools.hoursEnabled ? "live" : "neutral"}
+            dependency="Nenhuma"
+            scope="Runtime · pré-resposta"
+            risk="Baixo"
+            onToggle={() => patch({ tools: { ...agent.tools, hoursEnabled: !agent.tools.hoursEnabled } })}
+          >
+            {agent.tools.hoursEnabled && <div className="grid grid-cols-2 gap-3 border-t border-border pt-3"><Field label="Início" htmlFor="ed-hs"><Input id="ed-hs" type="time" value={agent.tools.hoursStart} onChange={(e) => patch({ tools: { ...agent.tools, hoursStart: e.target.value } })} /></Field><Field label="Fim" htmlFor="ed-he"><Input id="ed-he" type="time" value={agent.tools.hoursEnd} onChange={(e) => patch({ tools: { ...agent.tools, hoursEnd: e.target.value } })} /></Field></div>}
+          </ContextualToolCard>
+          <ContextualToolCard
+            title="Handoff para humano"
+            description="Desvia a conversa quando o cliente pede uma pessoa ou uma situação exige revisão."
+            enabled={agent.tools.handoff}
+            state={agent.tools.handoff && activeConnection?.status === "connected" && agent.tools.handoffKeywords.trim() ? "Ativo" : agent.tools.handoff ? "Configuração pendente" : "Disponível"}
+            stateTone={agent.tools.handoff && activeConnection?.status === "connected" && agent.tools.handoffKeywords.trim() ? "live" : agent.tools.handoff ? "warn" : "neutral"}
+            dependency="Canal conectado + palavras-chave"
+            scope="Conversa · transferência"
+            risk="Médio"
+            onToggle={() => patch({ tools: { ...agent.tools, handoff: !agent.tools.handoff } })}
+          >
+            {agent.tools.handoff && <Field label="Palavras-chave" htmlFor="ed-kw"><Input id="ed-kw" value={agent.tools.handoffKeywords} onChange={(e) => patch({ tools: { ...agent.tools, handoffKeywords: e.target.value } })} /></Field>}
+          </ContextualToolCard>
+          <ContextualToolCard
+            title="Catálogo"
+            description="Permite citar itens aprovados da base de conhecimento sem inventar oferta."
+            enabled={agent.tools.catalog}
+            state={agent.tools.catalog && agent.knowledge.faqs.length > 0 ? "Ativo" : agent.tools.catalog ? "Base pendente" : "Disponível"}
+            stateTone={agent.tools.catalog && agent.knowledge.faqs.length > 0 ? "live" : agent.tools.catalog ? "warn" : "neutral"}
+            dependency="Base de conhecimento publicada"
+            scope="Conhecimento · somente leitura"
+            risk="Médio"
+            onToggle={() => patch({ tools: { ...agent.tools, catalog: !agent.tools.catalog } })}
+          />
+          <ContextualToolCard
+            title="Áudio transcrito"
+            description="Converte mensagens de voz em texto antes de enviá-las ao runtime."
+            enabled={agent.tools.audio}
+            state={agent.tools.audio && activeConnection?.status === "connected" ? "Ativo" : agent.tools.audio ? "Canal pendente" : "Disponível"}
+            stateTone={agent.tools.audio && activeConnection?.status === "connected" ? "live" : agent.tools.audio ? "warn" : "neutral"}
+            dependency="Canal conectado com entrada de áudio"
+            scope="Entrada · pré-runtime"
+            risk="Médio"
+            onToggle={() => patch({ tools: { ...agent.tools, audio: !agent.tools.audio } })}
+          />
+        </div>
       </Card>}
 
       {show("tests") && <Card className="flex flex-col gap-5 p-4" data-node="tests">
@@ -382,6 +384,40 @@ function Field({
       {children}
     </div>
   );
+}
+
+function ContextualToolCard({
+  title,
+  description,
+  enabled,
+  state,
+  stateTone,
+  dependency,
+  scope,
+  risk,
+  onToggle,
+  children,
+}: {
+  title: string;
+  description: string;
+  enabled: boolean;
+  state: string;
+  stateTone: "neutral" | "live" | "warn";
+  dependency: string;
+  scope: string;
+  risk: string;
+  onToggle: () => void;
+  children?: ReactNode;
+}) {
+  return <div className="rounded-lg border border-border bg-bg p-4">
+    <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><div className="text-sm font-medium">{title}</div><Badge tone={stateTone}>{state}</Badge></div><p className="mt-1 text-xs leading-relaxed text-muted">{description}</p></div><Switch checked={enabled} onCheckedChange={onToggle} aria-label={title} /></div>
+    <div className="mt-3 grid gap-2 border-t border-border pt-3 text-xs sm:grid-cols-3"><Meta label="Dependência" value={dependency} /><Meta label="Escopo" value={scope} /><Meta label="Risco" value={risk} /></div>
+    {children && <div className="mt-3">{children}</div>}
+  </div>;
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return <div><div className="text-[0.65rem] uppercase tracking-wide text-subtle">{label}</div><div className="mt-1 leading-relaxed text-muted">{value}</div></div>;
 }
 
 function SliderRow({
