@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Copy, Trash2 } from "lucide-react";
@@ -19,6 +19,7 @@ import { simulatedPhone, webhookUrl } from "@/lib/webhooks";
 import {
   archiveWorkspaceConnection,
   updateWorkspaceConnection,
+  getWorkspaceConnectionReadiness,
 } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
@@ -43,6 +44,8 @@ function ConnectionsPage() {
   const { refresh } = useWorkspaceData();
   const selected = connections.find((c) => c.id === focus) ?? connections[0];
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [readiness, setReadiness] = useState<string | null>(null);
+  const selectedId = selected?.id;
 
   function patchConnection(id: string, patch: Parameters<typeof updateConnection>[1]) {
     updateConnection(id, patch);
@@ -65,6 +68,24 @@ function ConnectionsPage() {
     if (!focus) return;
     cardRefs.current[focus]?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [focus]);
+
+  useEffect(() => {
+    if (!backendReady || !workspaceId || !selectedId) {
+      setReadiness(null);
+      return;
+    }
+    let cancelled = false;
+    void getWorkspaceConnectionReadiness({
+      data: { workspaceId, connectionId: selectedId },
+    }).then((result) => {
+      if (!cancelled) setReadiness(result.message);
+    }).catch(() => {
+      if (!cancelled) setReadiness("Não foi possível avaliar a configuração desta conexão.");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [backendReady, workspaceId, selectedId]);
 
   const bound = useMemo(
     () => agents.filter((a) => a.connectionId === selected?.id),
@@ -206,6 +227,12 @@ function ConnectionsPage() {
                   />
                 </div>
               )}
+
+            {readiness && (
+              <p className="mt-4 rounded-md border border-border bg-bg px-3 py-2 text-xs text-muted">
+                {readiness}
+              </p>
+            )}
 
             {selected.provider === "meta" && selected.status !== "connected" && (
               <Button

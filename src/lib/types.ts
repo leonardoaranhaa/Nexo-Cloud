@@ -13,6 +13,9 @@ export type Connection = {
   instance?: string;
   phoneNumberId?: string;
   baseUrl?: string;
+  connectorDefinitionKey?: string;
+  healthStatus?: "unknown" | "healthy" | "degraded" | "unhealthy";
+  healthError?: string;
   createdAt: number;
   lastEventAt?: number;
 };

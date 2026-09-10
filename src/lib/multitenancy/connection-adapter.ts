@@ -17,6 +17,9 @@ export function connectionRecordToUi(record: ConnectionRecord): Connection {
     instance: record.instance ?? undefined,
     phoneNumberId: record.phoneNumberId ?? undefined,
     baseUrl: record.baseUrl ?? undefined,
+    connectorDefinitionKey: record.connectorDefinitionKey ?? undefined,
+    healthStatus: record.healthStatus,
+    healthError: record.healthError ?? undefined,
     createdAt: epoch(record.createdAt) ?? Date.now(),
     lastEventAt: epoch(record.lastEventAt),
   };

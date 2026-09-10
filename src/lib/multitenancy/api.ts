@@ -141,3 +141,12 @@ export const bindWorkspaceAgentConnection = createServerFn({ method: "POST" })
     await bindAgentConnection(await getSql(), context.userId, data);
     return { ok: true as const };
   });
+
+export const getWorkspaceConnectionReadiness = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; connectionId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { assessConnectionReadiness } = await import("@/lib/connectors/readiness");
+    return assessConnectionReadiness(await getSql(), context.userId, data);
+  });

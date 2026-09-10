@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "@/lib/db";
+import { connectorDefinitionForProvider } from "../connectors/registry.ts";
 
 export type OrganizationRole = "owner" | "admin" | "member" | "billing";
 export type WorkspaceRole = "workspace_admin" | "builder" | "operator" | "analyst" | "viewer";
@@ -27,7 +28,6 @@ export type WorkspaceRecord = {
 export type AgentRecord = {
   id: string;
   workspaceId: string;
-  connectionId: string | null;
   name: string;
   slug: string;
   agentType: string;
@@ -41,6 +41,7 @@ export type AgentRecord = {
   temperature: number;
   maxTokens: number;
   memoryWindow: number;
+  connectionId: string | null;
   knowledge: JsonObject;
   tools: JsonObject;
   metadata: JsonObject;
@@ -53,7 +54,10 @@ export type ConnectionRecord = {
   workspaceId: string;
   name: string;
   provider: ConnectionProvider;
+  connectorDefinitionKey: string | null;
   status: "pending" | "connected" | "disconnected" | "error" | "revoked";
+  healthStatus: "unknown" | "healthy" | "degraded" | "unhealthy";
+  healthError: string | null;
   phone: string | null;
   instance: string | null;
   phoneNumberId: string | null;
@@ -265,34 +269,34 @@ export async function listAgents(sql: Sql, userId: string, workspaceId: string):
   await requireWorkspaceAccess(sql, userId, workspaceId, "read");
   return sql<AgentRecord>`
     select
-      id,
-      workspace_id as "workspaceId",
-      name,
-      slug,
-      agent_type as "agentType",
-      status,
-      language,
-      persona,
-      welcome_message as "welcomeMessage",
-      system_prompt as "systemPrompt",
-      model_provider as "modelProvider",
-      model_name as "modelName",
-      temperature::float8 as temperature,
-      max_tokens as "maxTokens",
-      memory_window as "memoryWindow",
+      agents.id,
+      agents.workspace_id as "workspaceId",
+      agents.name,
+      agents.slug,
+      agents.agent_type as "agentType",
+      agents.status,
+      agents.language,
+      agents.persona,
+      agents.welcome_message as "welcomeMessage",
+      agents.system_prompt as "systemPrompt",
+      agents.model_provider as "modelProvider",
+      agents.model_name as "modelName",
+      agents.temperature::float8 as temperature,
+      agents.max_tokens as "maxTokens",
+      agents.memory_window as "memoryWindow",
       ac.connection_id as "connectionId",
-      knowledge,
-      tools,
-      metadata,
-      created_at as "createdAt",
-      updated_at as "updatedAt"
+      agents.knowledge,
+      agents.tools,
+      agents.metadata,
+      agents.created_at as "createdAt",
+      agents.updated_at as "updatedAt"
     from agents
     left join agent_connections ac
       on ac.agent_id = agents.id
      and ac.is_primary = true
-    where workspace_id = ${workspaceId}
-      and deleted_at is null
-    order by updated_at desc
+    where agents.workspace_id = ${workspaceId}
+      and agents.deleted_at is null
+    order by agents.updated_at desc
   `;
 }
 
@@ -417,28 +421,28 @@ export async function archiveAgent(sql: Sql, userId: string, id: string): Promis
 function connectionSelect() {
   return `
     select
-      id,
-      workspace_id as "workspaceId",
-      name,
-      provider,
-      status,
-      config->>'phone' as phone,
-      config->>'instance' as instance,
-      config->>'phoneNumberId' as "phoneNumberId",
-      config->>'baseUrl' as "baseUrl",
-      last_healthcheck_at as "lastEventAt",
-      created_at as "createdAt"
-    from connections`;
+      c.id,
+      c.workspace_id as "workspaceId",
+      c.name,
+      c.provider,
+      d.key as "connectorDefinitionKey",
+      c.status,
+      c.health_status as "healthStatus",
+      c.health_error as "healthError",
+      c.config->>'phone' as phone,
+      c.config->>'instance' as instance,
+      c.config->>'phoneNumberId' as "phoneNumberId",
+      c.config->>'baseUrl' as "baseUrl",
+      c.last_healthcheck_at as "lastEventAt",
+      c.created_at as "createdAt"
+    from connections c
+    left join connector_definitions d on d.id = c.connector_definition_id`;
 }
 
-export async function listConnections(
-  sql: Sql,
-  userId: string,
-  workspaceId: string,
-): Promise<ConnectionRecord[]> {
+export async function listConnections(sql: Sql, userId: string, workspaceId: string): Promise<ConnectionRecord[]> {
   await requireWorkspaceAccess(sql, userId, workspaceId, "read");
   return sql.query<ConnectionRecord>(
-    `${connectionSelect()} where workspace_id = $1 and deleted_at is null order by created_at desc`,
+    `${connectionSelect()} where c.workspace_id = $1 and c.deleted_at is null order by c.created_at desc`,
     [workspaceId],
   );
 }
@@ -457,18 +461,18 @@ export async function createConnection(
 ): Promise<{ id: string }> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
   const name = requiredText(input.name, "name", 120);
-  if (!["evolution", "meta", "zapi"].includes(input.provider)) throw new Error("INVALID_PROVIDER");
+  const definition = connectorDefinitionForProvider(input.provider);
+  if (!definition) throw new Error("INVALID_PROVIDER");
   const id = randomUUID();
-  const status = input.provider === "evolution" || input.provider === "zapi" ? "disconnected" : "disconnected";
   const config = JSON.stringify({
     instance: input.instance?.trim().slice(0, 160) || null,
     phoneNumberId: input.phoneNumberId?.trim().slice(0, 160) || null,
     baseUrl: input.baseUrl?.trim().slice(0, 240) || null,
   });
   await sql.query(
-    `insert into connections (id, workspace_id, name, provider, status, config, created_by)
-     values ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
-    [id, input.workspaceId, name, input.provider, status, config, userId],
+    `insert into connections (id, workspace_id, connector_definition_id, name, provider, status, config, created_by)
+     values ($1, $2, $3, $4, $5, 'disconnected', $6::jsonb, $7)`,
+    [id, input.workspaceId, definition.id, name, input.provider, config, userId],
   );
   return { id };
 }
