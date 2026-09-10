@@ -4,7 +4,7 @@ import type { Agent, FlowNodeId } from "@/lib/types";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { LANGUAGE_LABEL } from "@/lib/labels";
 import { useNexo } from "@/lib/store";
-import { updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { updateWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
 import { bindWorkspaceAgentConnection } from "@/lib/multitenancy/api";
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { createId } from "@/lib/utils";
@@ -31,15 +31,39 @@ export function AgentEditor({
   useEffect(() => {
     if (!backendReady || !workspaceId) return;
     const timer = window.setTimeout(() => {
-      void updateWorkspaceAgent({
-        data: { id: agent.id, workspaceId, ...uiAgentToPersisted(agent) },
-      }).catch((error) => console.error("[agent] autosave failed", error));
+      void Promise.all([
+        updateWorkspaceAgent({ data: { id: agent.id, workspaceId, ...uiAgentToPersisted(agent) } }),
+        agent.developmentBlueprint
+          ? upsertWorkspaceAgentDevelopmentBlueprint({
+              data: {
+                workspaceId,
+                agentId: agent.id,
+                agentType: agent.template,
+                objectives: agent.developmentBlueprint.objectives,
+                capabilities: agent.developmentBlueprint.capabilities,
+                guardrails: agent.developmentBlueprint.guardrails,
+                testScenarios: agent.developmentBlueprint.testScenarios,
+              },
+            })
+          : Promise.resolve(),
+      ]).catch((error) => console.error("[agent] autosave failed", error));
     }, 700);
     return () => window.clearTimeout(timer);
   }, [agent, backendReady, workspaceId]);
 
   function patch(p: Partial<Agent>) {
     updateAgent(agent.id, p);
+  }
+
+  const blueprint = agent.developmentBlueprint ?? {
+    objectives: [],
+    capabilities: [],
+    guardrails: [],
+    testScenarios: [],
+  };
+
+  function patchBlueprint(field: keyof typeof blueprint, values: string[]) {
+    patch({ developmentBlueprint: { ...blueprint, [field]: values } });
   }
 
   return (
@@ -108,6 +132,37 @@ export function AgentEditor({
             </select>
           </Field>
         </div>
+      </Card>
+
+      <Card className="flex flex-col gap-5 p-4" data-node="blueprint">
+        <div>
+          <div className="font-display text-sm font-semibold">Blueprint operacional</div>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            Defina o resultado esperado, o que o agente pode fazer e os limites que devem ser respeitados.
+            As alterações são salvas no workspace automaticamente.
+          </p>
+        </div>
+        <BlueprintListEditor
+          title="Objetivos"
+          hint="Resultados que o agente deve perseguir."
+          values={blueprint.objectives}
+          placeholder="Ex.: qualificar o lead antes de encaminhar"
+          onChange={(values) => patchBlueprint("objectives", values)}
+        />
+        <BlueprintListEditor
+          title="Capacidades"
+          hint="Ações e comportamentos permitidos ao agente."
+          values={blueprint.capabilities}
+          placeholder="Ex.: consultar FAQ publicada"
+          onChange={(values) => patchBlueprint("capabilities", values)}
+        />
+        <BlueprintListEditor
+          title="Guardrails"
+          hint="Limites, condições de segurança e situações de handoff."
+          values={blueprint.guardrails}
+          placeholder="Ex.: não inventar preço ou disponibilidade"
+          onChange={(values) => patchBlueprint("guardrails", values)}
+        />
       </Card>
 
       <Card className="flex flex-col gap-4 p-4" data-node="agent">
@@ -360,6 +415,68 @@ function ToggleRow({
         <p className="mt-0.5 text-xs text-muted">{hint}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
+
+function BlueprintListEditor({
+  title,
+  hint,
+  values,
+  placeholder,
+  onChange,
+}: {
+  title: string;
+  hint: string;
+  values: string[];
+  placeholder: string;
+  onChange: (values: string[]) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">{title}</div>
+          <p className="mt-0.5 text-xs text-muted">{hint}</p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={() => onChange([...values, ""])}
+        >
+          <Plus className="size-3.5" />
+          Adicionar
+        </Button>
+      </div>
+      {values.length === 0 && <p className="text-xs text-subtle">Nenhum item definido.</p>}
+      <div className="flex flex-col gap-2">
+        {values.map((value, index) => (
+          <div key={`${title}-${index}`} className="flex items-center gap-2">
+            <span className="w-6 shrink-0 text-center font-mono text-xs text-subtle">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <Input
+              value={value}
+              placeholder={placeholder}
+              aria-label={`${title} ${index + 1}`}
+              onChange={(event) => {
+                const next = [...values];
+                next[index] = event.target.value;
+                onChange(next);
+              }}
+            />
+            <button
+              type="button"
+              className="rounded-md p-2 text-subtle hover:bg-elevated hover:text-fg"
+              aria-label={`Remover ${title.toLowerCase()} ${index + 1}`}
+              onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
