@@ -70,6 +70,7 @@ function CreateWizard() {
   const chat = useAgentChat(agentId ?? undefined);
 
   async function persistBlueprint(input: {
+    localAgentId?: string;
     name: string;
     persona: string;
     welcomeMessage: string;
@@ -84,6 +85,10 @@ function CreateWizard() {
     if (!workspaceId || !backendReady) return;
     try {
       const created = await createWorkspaceAgent({ data: { workspaceId, name: input.name, persona: input.persona, welcomeMessage: input.welcomeMessage, systemPrompt: input.systemPrompt, agentType: input.agentType } });
+      if (input.localAgentId) {
+        updateAgent(input.localAgentId, { id: created.id });
+        setAgentId(created.id);
+      }
       setPersistedAgentId(created.id);
       await upsertWorkspaceAgentDevelopmentBlueprint({ data: { workspaceId, agentId: created.id, agentType: input.agentType, objectives: input.objectives, capabilities: input.capabilities, guardrails: input.guardrails, testScenarios: input.testScenarios, sourceBrief: input.sourceBrief } });
       toast.success("Blueprint salvo no workspace");
@@ -122,6 +127,7 @@ function CreateWizard() {
             connectionId,
           });
           void persistBlueprint({
+            localAgentId: id,
             name: t.title,
             persona: t.draft.persona,
             welcomeMessage: t.draft.welcomeMessage,
@@ -170,6 +176,7 @@ function CreateWizard() {
           testScenarios: res.testScenarios,
         });
         void persistBlueprint({
+          localAgentId: id,
           name: res.name,
           persona: res.persona,
           welcomeMessage: res.welcomeMessage,
@@ -210,6 +217,7 @@ function CreateWizard() {
       testScenarios: ["Pergunta frequente com resposta publicada", "Solicitação fora do escopo com handoff"],
     });
     void persistBlueprint({
+      localAgentId: id,
       name: t.title,
       persona: t.draft.persona,
       welcomeMessage: t.draft.welcomeMessage,

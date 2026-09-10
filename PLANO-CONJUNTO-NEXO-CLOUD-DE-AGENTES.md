@@ -159,11 +159,11 @@ Ainda faltam configurações server-side completas, governança por papel, confi
 
 ### 5.10 Ambiente de desenvolvimento assistido por IA
 
-**Estado: primeira fatia implementada.**
+**Estado: primeira fatia implementada e persistida.**
 
-O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é anexado ao agente draft local antes da prova de tom e publicação.
+O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails.
 
-Ainda faltam persistência server-side do blueprint, edição estruturada por seção, indexação de documentos e sistemas, geração assistida de workflows e ferramentas, comparação de versões e testes automatizados de qualidade antes da publicação.
+Ainda faltam execução dos cenários de teste, indexação de documentos e sistemas, geração assistida de workflows e ferramentas, comparação de versões e testes automatizados de qualidade antes da publicação.
 
 ### 5.11 AWS, billing e produção
 
@@ -175,7 +175,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0030_tool_execution_domain.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab e domínio de execuções de ferramentas.
+O repositório possui migrations até `0031_agent_development_blueprints.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas e blueprints persistidos.
 
 As rotas principais são:
 
@@ -245,6 +245,8 @@ Começar somente depois de estabilizar Fases 3–5. A primeira versão deve ser 
 **Status: Marketplace interno parcial; plataforma aberta não iniciada.**
 
 Completar instalações, atualizações e operação do catálogo interno antes de abrir para terceiros.
+
+**Escopo futuro — Agent as a Service:** depois do fechamento do Marketplace interno, avaliar uma API pública versionada (`/v1`) para que plataformas externas consumam agentes publicados. O escopo inclui API keys/OAuth, escopos por workspace e ambiente, execução síncrona e assíncrona, idempotência, quotas, medição de uso, webhooks assinados, OpenAPI e SDKs. Não implementar nesta etapa nem expor rotas internas diretamente.
 
 ### Learning RAG
 

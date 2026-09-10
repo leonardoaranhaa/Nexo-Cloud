@@ -168,7 +168,15 @@ function AgentStudioPage() {
 
       {tab === "create" && (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-          <AgentEditor agent={agent} focusNode={focusNode} />
+          <AgentEditor
+            agent={agent}
+            focusNode={focusNode}
+            onRunScenario={(scenario) => {
+              setTab("test");
+              void send(scenario);
+              toast("Cenário enviado para o Agent Runtime");
+            }}
+          />
           <div className="xl:sticky xl:top-20 h-fit">
             <p className="mb-3 text-xs tracking-wide text-subtle uppercase">Pipeline</p>
             <div className="xl:max-w-full overflow-x-auto">

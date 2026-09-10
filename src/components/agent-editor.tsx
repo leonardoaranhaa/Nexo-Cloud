@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Play, Plus, Trash2 } from "lucide-react";
 import type { Agent, FlowNodeId } from "@/lib/types";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { LANGUAGE_LABEL } from "@/lib/labels";
@@ -19,9 +19,11 @@ import { Card } from "./ui/card";
 export function AgentEditor({
   agent,
   focusNode,
+  onRunScenario,
 }: {
   agent: Agent;
   focusNode?: FlowNodeId;
+  onRunScenario?: (scenario: string) => void;
 }) {
   const connections = useNexo((s) => s.connections);
   const updateAgent = useNexo((s) => s.updateAgent);
@@ -162,6 +164,14 @@ export function AgentEditor({
           values={blueprint.guardrails}
           placeholder="Ex.: não inventar preço ou disponibilidade"
           onChange={(values) => patchBlueprint("guardrails", values)}
+        />
+        <BlueprintListEditor
+          title="Cenários de teste"
+          hint="Conversas concretas para validar o comportamento antes da publicação."
+          values={blueprint.testScenarios}
+          placeholder="Ex.: cliente pergunta preço e informa o orçamento"
+          onChange={(values) => patchBlueprint("testScenarios", values)}
+          onRun={onRunScenario}
         />
       </Card>
 
@@ -425,12 +435,14 @@ function BlueprintListEditor({
   values,
   placeholder,
   onChange,
+  onRun,
 }: {
   title: string;
   hint: string;
   values: string[];
   placeholder: string;
   onChange: (values: string[]) => void;
+  onRun?: (value: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -466,6 +478,18 @@ function BlueprintListEditor({
                 onChange(next);
               }}
             />
+            {onRun && (
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                disabled={!value.trim()}
+                aria-label={`Executar ${title.toLowerCase()} ${index + 1}`}
+                onClick={() => onRun(value.trim())}
+              >
+                <Play className="size-3.5" />
+              </Button>
+            )}
             <button
               type="button"
               className="rounded-md p-2 text-subtle hover:bg-elevated hover:text-fg"
