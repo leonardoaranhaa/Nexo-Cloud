@@ -349,6 +349,15 @@ export const saveWorkspaceWorkflowDefinition = createServerFn({ method: "POST" }
     return { ok: true as const };
   });
 
+export const getWorkspaceWorkflowDefinition = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; workflowId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getWorkflowDefinition } = await import("../workflows/server");
+    return getWorkflowDefinition(await getSql(), context.userId, data);
+  });
+
 export const publishWorkspaceWorkflow = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string; workflowId: string }) => input)
@@ -375,4 +384,14 @@ export const listWorkspaceWorkflowRuns = createServerFn({ method: "GET" })
     const { getSql } = await import("@/lib/db");
     const { listWorkflowRuns } = await import("../workflows/server");
     return listWorkflowRuns(await getSql(), context.userId, data);
+  });
+
+export const decideWorkspaceWorkflowApproval = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; approvalId: string; decision: "approved" | "rejected"; reason?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { decideWorkflowApproval } = await import("../workflows/server");
+    await decideWorkflowApproval(await getSql(), context.userId, data);
+    return { ok: true as const };
   });

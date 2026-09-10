@@ -5,15 +5,15 @@ import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import test from "node:test";
 import type { Sql } from "../db.ts";
-import { createWorkflow, listWorkflowRuns, listWorkflows, publishWorkflow, runWorkflowManually, saveWorkflowDefinition } from "./server.ts";
+import { createWorkflow, decideWorkflowApproval, listWorkflowRuns, listWorkflows, publishWorkflow, receiveWorkflowWebhook, runWorkflowManually, saveWorkflowDefinition } from "./server.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../../");
 
 async function setup() {
   const pg = new PGlite();
   await pg.waitReady;
-  for (let number = 2; number <= 10; number += 1) {
-    const file = `${String(number).padStart(4, "0")}_${({ 2: "multi_tenant_core", 3: "connector_registry", 4: "messaging_dispatch", 5: "webhook_security", 6: "webhook_delivery_states", 7: "agent_runtime_jobs", 8: "conversation_handoff", 9: "agent_runtime_execution_logs", 10: "workflow_core" } as Record<number, string>)[number]}.sql`;
+  for (let number = 2; number <= 11; number += 1) {
+    const file = `${String(number).padStart(4, "0")}_${({ 2: "multi_tenant_core", 3: "connector_registry", 4: "messaging_dispatch", 5: "webhook_security", 6: "webhook_delivery_states", 7: "agent_runtime_jobs", 8: "conversation_handoff", 9: "agent_runtime_execution_logs", 10: "workflow_core", 11: "workflow_triggers_events" } as Record<number, string>)[number]}.sql`;
     await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   }
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
@@ -51,6 +51,26 @@ test("requires a published workflow and blocks cross-workspace access", async ()
     const workflow = await createWorkflow(sql, "builder", { workspaceId: "ws", name: "Rascunho" });
     await assert.rejects(runWorkflowManually(sql, "operator", { workspaceId: "ws", workflowId: workflow.id }), /WORKFLOW_NOT_PUBLISHED/);
     await assert.rejects(listWorkflows(sql, "builder", { workspaceId: "other" }), /Workspace access denied/);
+  } finally {
+    await pg.close();
+  }
+});
+
+test("deduplicates webhook events and persists human approvals", async () => {
+  const { pg, sql } = await setup();
+  try {
+    const workflow = await createWorkflow(sql, "builder", { workspaceId: "ws", name: "Aprovação" , triggerType: "webhook" });
+    await saveWorkflowDefinition(sql, "builder", { workspaceId: "ws", workflowId: workflow.id, definition: { nodes: [{ id: "approval", type: "approval", config: { title: "Aprovar envio" } }], edges: [] } });
+    await publishWorkflow(sql, "builder", { workspaceId: "ws", workflowId: workflow.id });
+    const trigger = (await pg.query<{ public_token: string; }>("select public_token from workflow_triggers where workflow_id = $1", [workflow.id])).rows[0];
+    assert.ok(trigger?.public_token);
+    const first = await receiveWorkflowWebhook(sql, { workspaceSlug: "ws", triggerToken: trigger.public_token, eventType: "lead.created", source: "test", externalEventId: "evt-1", payload: { lead: "1" } });
+    const duplicate = await receiveWorkflowWebhook(sql, { workspaceSlug: "ws", triggerToken: trigger.public_token, eventType: "lead.created", source: "test", externalEventId: "evt-1", payload: { lead: "1" } });
+    assert.equal(first.duplicate, false);
+    assert.equal(duplicate.duplicate, true);
+    const approval = (await pg.query<{ id: string }>("select id from workflow_approvals limit 1")).rows[0];
+    assert.ok(approval);
+    await decideWorkflowApproval(sql, "operator", { workspaceId: "ws", approvalId: approval.id, decision: "approved" });
   } finally {
     await pg.close();
   }
