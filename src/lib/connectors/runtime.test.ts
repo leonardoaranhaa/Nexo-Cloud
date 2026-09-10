@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { HttpHealthcheckAdapter } from "./runtime.ts";
 import { EvolutionApiAdapter } from "./evolution.ts";
+import { EvolutionTextDispatcher } from "./evolution-messaging.ts";
 import { createSecretResolver, memorySecretProvider, SecretResolverError } from "./secrets.ts";
 
 test("secret resolver resolves inside scope without exposing the value in errors", async () => {
@@ -58,7 +59,7 @@ test("http adapter rejects non-local insecure endpoints before network access", 
 test("Evolution adapter calls connectionState with the apikey header", async () => {
   const server = createServer((request, response) => {
     assert.equal(request.url, "/instance/connectionState/loja%2Fcentro");
-    assert.equal(request.headers.apikey, "evo-test-key");
+    assert.equal(request.headers.apikey, "test-key");
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ state: "open", token: "must-not-leak" }));
   });
@@ -77,12 +78,38 @@ test("Evolution adapter calls connectionState with the apikey header", async () 
         workspaceId: "ws-1",
         connectionId: "conn-1",
         traceId: "trace-1",
-        getSecret: async () => "evo-test-key",
+        getSecret: async () => "test-key",
       },
     );
     assert.equal(result.status, "healthy");
     assert.equal(result.httpStatus, 200);
-    assert.doesNotMatch(result.message, /evo-test-key|must-not-leak/);
+    assert.doesNotMatch(result.message, /test-key|must-not-leak/);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("Evolution dispatcher sends the documented text payload", async () => {
+  const server = createServer(async (request, response) => {
+    assert.equal(request.url, "/message/sendText/loja%2Fcentro");
+    assert.equal(request.headers.apikey, "test-key");
+    let body = "";
+    for await (const chunk of request) body += chunk;
+    assert.deepEqual(JSON.parse(body), { number: "5511999999999", textMessage: { text: "Olá" } });
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ key: { id: "provider-id" }, message: { text: "Olá" } }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("test server did not bind");
+  try {
+    const result = await new EvolutionTextDispatcher().sendText(
+      { baseUrl: `http://127.0.0.1:${address.port}`, instance: "loja/centro", recipient: "+55 (11) 99999-9999", text: "Olá", timeoutMs: 1000 },
+      { workspaceId: "ws-1", connectionId: "conn-1", traceId: "trace-1", getSecret: async () => "test-key" },
+    );
+    assert.equal(result.status, "sent");
+    assert.equal(result.code, "ok");
+    assert.doesNotMatch(result.message, /test-key|provider-id/);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

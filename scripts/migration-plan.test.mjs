@@ -61,6 +61,7 @@ test("the auth schema stays nested while app migrations are discoverable", () =>
   assert.deepEqual(pendingMigrations(readdirSync(migrationsDir), []), [
     { name: "0002_multi_tenant_core.sql", path: "0002_multi_tenant_core.sql" },
     { name: "0003_connector_registry.sql", path: "0003_connector_registry.sql" },
+    { name: "0004_messaging_dispatch.sql", path: "0004_messaging_dispatch.sql" },
   ]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });

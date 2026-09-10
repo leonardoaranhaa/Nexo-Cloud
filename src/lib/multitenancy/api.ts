@@ -183,3 +183,26 @@ export const provisionEvolutionConnectionCredential = createServerFn({ method: "
     await provisionEvolutionCredential(await getSql(), context.userId, data, provisioner);
     return { ok: true as const };
   });
+
+export const dispatchWorkspaceTextMessage = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: {
+    workspaceId: string;
+    agentId: string;
+    connectionId: string;
+    conversationId?: string;
+    recipient: string;
+    text: string;
+    idempotencyKey: string;
+    actor: "agent" | "user" | "workflow" | "system";
+    traceId: string;
+  }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { awsSecretsManagerProvider, unavailableSecretProvider } = await import("@/lib/connectors/secrets");
+    const { dispatchTextMessage } = await import("@/lib/messaging/router");
+    const provider = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
+      ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
+      : unavailableSecretProvider();
+    return dispatchTextMessage(await getSql(), context.userId, data, provider);
+  });
