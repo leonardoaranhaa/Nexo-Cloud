@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
 import { requireWorkspaceAccess, type JsonObject, type JsonValue } from "../multitenancy/server.ts";
 import { compileWorkflowDefinition } from "./compiler.ts";
+import { claimWorkflowRun } from "./queue.ts";
 
 export type WorkflowNode = { id: string; type: "agent" | "condition" | "wait" | "approval" | "tool"; name?: string; config?: JsonObject };
 export type WorkflowDefinition = { nodes: WorkflowNode[]; edges: { from: string; to: string; condition?: string }[] };
@@ -103,7 +104,9 @@ export async function runWorkflowManually(sql: Sql, userId: string, input: { wor
   if (existing[0]) return getWorkflowRun(sql, userId, { workspaceId: input.workspaceId, runId: existing[0].id });
   const runId = randomUUID();
   const inputValue = object(safeJson(input.input ?? {}));
-  await sql.query(`insert into workflow_runs (id, workspace_id, workflow_id, workflow_version_id, status, input, correlation_id, idempotency_key, attempts, started_at) values ($1,$2,$3,$4,'running',$5::jsonb,$6,$7,1,current_timestamp)`, [runId, input.workspaceId, input.workflowId, version[0].id, JSON.stringify(inputValue), randomUUID(), idempotencyKey]);
+  await sql.query(`insert into workflow_runs (id, workspace_id, workflow_id, workflow_version_id, status, input, correlation_id, idempotency_key) values ($1,$2,$3,$4,'queued',$5::jsonb,$6,$7)`, [runId, input.workspaceId, input.workflowId, version[0].id, JSON.stringify(inputValue), randomUUID(), idempotencyKey]);
+  const claimed = await claimWorkflowRun(sql, `manual:${userId}`);
+  if (!claimed || claimed.id !== runId) throw new Error("WORKFLOW_QUEUE_CLAIM_FAILED");
   const definition = normalizeDefinition(version[0].definition);
   let status: "succeeded" | "waiting" | "failed" = "succeeded";
   let errorCode: string | null = null;
