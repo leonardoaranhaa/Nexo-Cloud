@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 import { HttpHealthcheckAdapter } from "./runtime.ts";
+import { EvolutionApiAdapter } from "./evolution.ts";
 import { createSecretResolver, memorySecretProvider, SecretResolverError } from "./secrets.ts";
 
 test("secret resolver resolves inside scope without exposing the value in errors", async () => {
@@ -52,4 +53,37 @@ test("http adapter rejects non-local insecure endpoints before network access", 
     () => new HttpHealthcheckAdapter().validateConfig({ healthcheckUrl: "http://provider.example/health" }),
     /HTTPS/,
   );
+});
+
+test("Evolution adapter calls connectionState with the apikey header", async () => {
+  const server = createServer((request, response) => {
+    assert.equal(request.url, "/instance/connectionState/loja%2Fcentro");
+    assert.equal(request.headers.apikey, "evo-test-key");
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ state: "open", token: "must-not-leak" }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("test server did not bind");
+  try {
+    const result = await new EvolutionApiAdapter().healthcheck(
+      {
+        id: "conn-1",
+        provider: "evolution",
+        secretRef: "secret-1",
+        config: { baseUrl: `http://127.0.0.1:${address.port}`, instance: "loja/centro", timeoutMs: 1000 },
+      },
+      {
+        workspaceId: "ws-1",
+        connectionId: "conn-1",
+        traceId: "trace-1",
+        getSecret: async () => "evo-test-key",
+      },
+    );
+    assert.equal(result.status, "healthy");
+    assert.equal(result.httpStatus, 200);
+    assert.doesNotMatch(result.message, /evo-test-key|must-not-leak/);
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
 });

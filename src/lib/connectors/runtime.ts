@@ -1,6 +1,8 @@
 import type { ConnectionProvider } from "../multitenancy/server.ts";
 
 export type ConnectorConfig = {
+  baseUrl?: string;
+  instance?: string;
   healthcheckUrl?: string;
   authHeader?: string;
   authScheme?: "bearer" | "apikey" | "raw";
@@ -47,6 +49,8 @@ function asConfig(config: unknown): ConnectorConfig {
   if (!config || typeof config !== "object" || Array.isArray(config)) return {};
   const value = config as Record<string, unknown>;
   return {
+    baseUrl: typeof value.baseUrl === "string" ? value.baseUrl : undefined,
+    instance: typeof value.instance === "string" ? value.instance : undefined,
     healthcheckUrl: typeof value.healthcheckUrl === "string" ? value.healthcheckUrl : undefined,
     authHeader: typeof value.authHeader === "string" ? value.authHeader : undefined,
     authScheme: value.authScheme === "apikey" || value.authScheme === "raw" ? value.authScheme : "bearer",

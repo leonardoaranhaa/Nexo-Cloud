@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "@/lib/db";
 import { connectorDefinitionForProvider } from "../connectors/registry.ts";
+import type { SecretProvisioner } from "../connectors/secrets.ts";
 
 export type OrganizationRole = "owner" | "admin" | "member" | "billing";
 export type WorkspaceRole = "workspace_admin" | "builder" | "operator" | "analyst" | "viewer";
@@ -527,6 +528,61 @@ export async function archiveConnection(sql: Sql, userId: string, id: string): P
   await sql.query(
     `update connections set status = 'revoked', deleted_at = current_timestamp, updated_at = current_timestamp where id = $1`,
     [id],
+  );
+}
+
+export async function provisionEvolutionCredential(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; connectionId: string; apiKey: string; baseUrl: string; instance: string },
+  provisioner: SecretProvisioner,
+): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "manage");
+  const connection = await sql.query<{
+    workspace_id: string;
+    provider: ConnectionProvider;
+    secret_ref: string | null;
+    config: JsonObject;
+  }>(
+    `select workspace_id, provider, secret_ref, config
+       from connections
+      where id = $1 and workspace_id = $2 and deleted_at is null
+      limit 1`,
+    [input.connectionId, input.workspaceId],
+  );
+  if (!connection[0]) throw new Error("CONNECTION_NOT_FOUND");
+  if (connection[0].provider !== "evolution") throw new Error("EVOLUTION_CONNECTION_REQUIRED");
+  const apiKey = requiredText(input.apiKey, "apiKey", 512);
+  const instance = requiredText(input.instance, "instance", 160);
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(requiredText(input.baseUrl, "baseUrl", 240));
+  } catch {
+    throw new Error("INVALID_BASE_URL");
+  }
+  const local = baseUrl.hostname === "localhost" || baseUrl.hostname === "127.0.0.1" || baseUrl.hostname === "::1";
+  if (baseUrl.protocol !== "https:" && !local) throw new Error("BASE_URL_MUST_USE_HTTPS");
+
+  const secretRef = connection[0].secret_ref ?? `nexo/${input.workspaceId}/${input.connectionId}/api_key`;
+  await provisioner.put(secretRef, apiKey, {
+    workspaceId: input.workspaceId,
+    connectionId: input.connectionId,
+  });
+  const config = {
+    ...(connection[0].config ?? {}),
+    baseUrl: baseUrl.toString().replace(/\/$/, ""),
+    instance,
+  };
+  await sql.query(
+    `update connections
+        set secret_ref = $2,
+            config = $3::jsonb,
+            health_status = 'unknown',
+            health_error = null,
+            status = 'disconnected',
+            updated_at = current_timestamp
+      where id = $1 and workspace_id = $4 and deleted_at is null`,
+    [input.connectionId, secretRef, JSON.stringify(config), input.workspaceId],
   );
 }
 

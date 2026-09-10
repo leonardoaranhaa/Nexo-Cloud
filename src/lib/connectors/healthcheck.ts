@@ -7,6 +7,7 @@ import {
   type SecretProvider,
 } from "./secrets.ts";
 import { HttpHealthcheckAdapter, type ConnectorConfig, type HealthcheckResult } from "./runtime.ts";
+import { EvolutionApiAdapter } from "./evolution.ts";
 
 export type HealthcheckRun = HealthcheckResult & {
   connectionId: string;
@@ -21,9 +22,9 @@ type ConnectionRow = {
   config: ConnectorConfig;
 };
 
-function adapterForProvider(_provider: ConnectionProvider) {
+function adapterForProvider(provider: ConnectionProvider) {
+  if (provider === "evolution") return new EvolutionApiAdapter();
   // Provider-specific adapters will be added after their exact contracts are verified.
-  // The first safe adapter is an explicit HTTPS healthcheck with injected credentials.
   return new HttpHealthcheckAdapter();
 }
 

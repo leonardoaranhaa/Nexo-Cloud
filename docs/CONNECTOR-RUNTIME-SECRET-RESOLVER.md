@@ -25,7 +25,33 @@ Também é necessário que o secret exista no Secrets Manager com a referência 
 
 Quando `NEXO_SECRETS_BACKEND` não é `aws`, o sistema utiliza um provider que falha explicitamente como `SECRET_PROVIDER_UNAVAILABLE`. Isso evita que um healthcheck seja marcado como bem-sucedido por causa de um fallback local.
 
-## Primeiro adapter
+## Provisionamento e onboarding Evolution
+
+A tela administrativa da conexão Evolution envia a API key ao backend autenticado. A mutation exige permissão `manage` no workspace, grava a API key no AWS Secrets Manager e persiste somente a referência `secret_ref`, a URL base e o nome da instância no banco.
+
+O caminho esperado é:
+
+```text
+tela administrativa
+  → provisionEvolutionConnectionCredential
+      → AWS Secrets Manager
+          → secret_ref no banco
+```
+
+O provisionamento exige `NEXO_SECRETS_BACKEND=aws`. Sem esse backend, a operação falha explicitamente e não salva a credencial em fallback local.
+
+## Adapters
+
+O primeiro adapter específico é `EvolutionApiAdapter`. Ele usa o endpoint oficial:
+
+```text
+GET /instance/connectionState/{instanceName}
+Header: apikey: <secret resolvido no servidor>
+```
+
+A URL base e o nome da instância vêm da configuração não sensível da conexão. O adapter confirma a disponibilidade/autorização da API por status HTTP, mas não interpreta o corpo como estado WhatsApp até que o schema de resposta seja formalizado.
+
+O `HttpHealthcheckAdapter` continua disponível para conectores que forneçam uma URL explícita de healthcheck.
 
 O primeiro adapter é `HttpHealthcheckAdapter`. Ele aceita somente uma URL de healthcheck explicitamente configurada em `config.healthcheckUrl`. URLs externas devem usar HTTPS; HTTP só é aceito para loopback em testes locais.
 
@@ -57,7 +83,7 @@ A resposta persistida em `connections` contém somente `health_status`, `health_
 
 A documentação consultada dos provedores não apresentou um contrato comum e estável de healthcheck que possa ser aplicado indistintamente a Evolution API, Meta Cloud API e Z-API. A documentação da Meta confirma o uso de Bearer token e os endpoints da Cloud API, enquanto a Evolution confirma API key por header; isso não é suficiente para inventar uma rota única de estado.
 
-Por isso, o adapter atual não monta endpoints específicos por provedor. As implementações específicas devem ser adicionadas somente após confirmar, para cada versão do fornecedor:
+Por isso, apenas a Evolution possui adapter específico nesta fatia. Meta e Z-API ainda devem receber adapters próprios somente após confirmar, para cada versão do fornecedor:
 
 - URL e método;
 - header de autenticação;
@@ -77,3 +103,5 @@ A suíte `src/lib/connectors/runtime.test.ts` verifica:
 - envio autenticado para servidor local;
 - ausência do segredo e do corpo bruto na resposta;
 - rejeição de endpoint externo sem HTTPS.
+- chamada Evolution com o endpoint `connectionState` e header `apikey`;
+- ausência da API key na configuração persistida durante o onboarding.

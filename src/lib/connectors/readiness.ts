@@ -45,7 +45,7 @@ export async function assessConnectionReadiness(
 
   const configMissing = row.provider === "meta"
     ? !row.config?.phoneNumberId
-    : !row.config?.instance && !row.config?.baseUrl;
+    : !row.config?.instance || !row.config?.baseUrl;
   if (configMissing) {
     return {
       connectionId: row.id,
@@ -53,6 +53,16 @@ export async function assessConnectionReadiness(
       status: "needs_configuration",
       code: "provider_config_missing",
       message: "A configuração mínima do provedor ainda não foi preenchida.",
+    };
+  }
+
+  if (row.provider === "evolution") {
+    return {
+      connectionId: row.id,
+      provider: row.provider,
+      status: "ready",
+      code: "ready_for_healthcheck",
+      message: "Evolution configurada; o healthcheck oficial pode ser executado.",
     };
   }
 

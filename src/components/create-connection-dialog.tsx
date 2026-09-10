@@ -37,7 +37,7 @@ export function CreateConnectionDialog({
         provider,
         instance: instance.trim() || undefined,
         phoneNumberId: phoneNumberId.trim() || undefined,
-        baseUrl: provider === "evolution" ? "https://evo.nexo.local" : undefined,
+        baseUrl: undefined,
       };
       const id = backendReady && workspaceId
         ? (await createWorkspaceConnection({ data: { workspaceId, ...data } })).id

@@ -163,3 +163,23 @@ export const runWorkspaceConnectionHealthcheck = createServerFn({ method: "POST"
       traceId: randomUUID(),
     });
   });
+
+export const provisionEvolutionConnectionCredential = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: {
+    workspaceId: string;
+    connectionId: string;
+    apiKey: string;
+    baseUrl: string;
+    instance: string;
+  }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { awsSecretsManagerProvisioner, unavailableSecretProvisioner } = await import("@/lib/connectors/secrets");
+    const { provisionEvolutionCredential } = await import("./server");
+    const provisioner = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
+      ? awsSecretsManagerProvisioner({ region: process.env.AWS_REGION })
+      : unavailableSecretProvisioner();
+    await provisionEvolutionCredential(await getSql(), context.userId, data, provisioner);
+    return { ok: true as const };
+  });

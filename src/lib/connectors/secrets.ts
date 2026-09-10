@@ -1,4 +1,9 @@
-import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import {
+  CreateSecretCommand,
+  GetSecretValueCommand,
+  PutSecretValueCommand,
+  SecretsManagerClient,
+} from "@aws-sdk/client-secrets-manager";
 
 export type SecretScope = {
   workspaceId: string;
@@ -7,6 +12,10 @@ export type SecretScope = {
 
 export type SecretProvider = {
   resolve(secretRef: string, scope: SecretScope): Promise<string>;
+};
+
+export type SecretProvisioner = {
+  put(secretRef: string, value: string, scope: SecretScope): Promise<void>;
 };
 
 export class SecretResolverError extends Error {
@@ -54,6 +63,17 @@ export function unavailableSecretProvider(): SecretProvider {
   };
 }
 
+export function unavailableSecretProvisioner(): SecretProvisioner {
+  return {
+    async put(): Promise<void> {
+      throw new SecretResolverError(
+        "SECRET_PROVIDER_UNAVAILABLE",
+        "No server-side secret provisioner is configured",
+      );
+    },
+  };
+}
+
 export function awsSecretsManagerProvider(options: {
   region: string;
   namespace?: string;
@@ -76,6 +96,38 @@ export function awsSecretsManagerProvider(options: {
       } catch (error) {
         if (error instanceof SecretResolverError) throw error;
         throw new SecretResolverError("SECRET_PROVIDER_UNAVAILABLE", "AWS Secrets Manager could not resolve the secret");
+      }
+    },
+  };
+}
+
+export function awsSecretsManagerProvisioner(options: {
+  region: string;
+  namespace?: string;
+  client?: SecretsManagerClient;
+}): SecretProvisioner {
+  const client = options.client ?? new SecretsManagerClient({ region: options.region });
+  const namespace = options.namespace ?? "nexo";
+  return {
+    async put(secretRef: string, value: string, scope: SecretScope): Promise<void> {
+      const expectedPrefix = `${namespace}/${scope.workspaceId}/${scope.connectionId}/`;
+      if (!secretRef.startsWith(expectedPrefix)) {
+        throw new SecretResolverError("SECRET_SCOPE_INVALID", "Secret reference is outside the connection scope");
+      }
+      if (!value.trim()) {
+        throw new SecretResolverError("SECRET_NOT_FOUND", "Cannot provision an empty secret");
+      }
+      try {
+        await client.send(new CreateSecretCommand({
+          Name: secretRef,
+          SecretString: value,
+          Tags: [
+            { Key: "nexo:workspace-id", Value: scope.workspaceId },
+            { Key: "nexo:connection-id", Value: scope.connectionId },
+          ],
+        }));
+      } catch {
+        await client.send(new PutSecretValueCommand({ SecretId: secretRef, SecretString: value }));
       }
     },
   };

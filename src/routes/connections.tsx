@@ -23,6 +23,7 @@ import {
   runWorkspaceConnectionHealthcheck,
 } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
+import { EvolutionCredentialDialog } from "@/components/evolution-credential-dialog";
 
 type Search = { focus?: string };
 
@@ -259,6 +260,12 @@ function ConnectionsPage() {
                   {healthcheckBusy ? "Verificando…" : "Executar healthcheck"}
                 </Button>
                 {healthcheckMessage && <p className="mt-2 text-xs text-muted">{healthcheckMessage}</p>}
+              </div>
+            )}
+
+            {backendReady && selected.provider === "evolution" && (
+              <div className="mt-3">
+                <EvolutionCredentialDialog connection={selected} />
               </div>
             )}
 
