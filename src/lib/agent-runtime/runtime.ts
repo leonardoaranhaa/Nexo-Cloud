@@ -17,6 +17,7 @@ import { recordLearningEvent } from "../learning/server.ts";
 import { persistLearningEvaluation } from "../learning/evaluation.ts";
 import { indexLearningEvent } from "../learning/cases.ts";
 import { listPublishedAgentTools, type RuntimeAuthorizedTool } from "../connectors/tools-server.ts";
+import { availabilityToolOutput, listAvailability } from "../calendar/availability.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -362,6 +363,18 @@ async function executeAuthorizedRuntimeTools(
       });
       results.push({ id: call.id, name: call.name, output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
+      executed += 1;
+      continue;
+    }
+    if (tool.key === "calendar.list_availability") {
+      const output = availabilityToolOutput(await listAvailability(sql, context.job.workspace_id, {
+        from: text(call.arguments.from),
+        to: text(call.arguments.to),
+        durationMinutes: number(call.arguments.durationMinutes, 30, 5, 480),
+        limit: number(call.arguments.limit, 20, 1, 50),
+      }));
+      results.push({ id: call.id, name: call.name, output: object(output) });
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(output), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
     }

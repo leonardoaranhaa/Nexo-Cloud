@@ -81,6 +81,12 @@ O MVP funcional deve provar dois fluxos de alto valor:
 
 O núcleo deve permitir criar um workspace, criar agentes a partir de templates, configurar canais, publicar versões, receber mensagens, registrar eventos, operar o Inbox, usar ferramentas autorizadas, acompanhar runs e reverter uma publicação.
 
+### 4.1 Disponibilidade contextual de capacidades
+
+O Nexo Cloud é uma plataforma de engenharia de agentes, não um produto em que todas as capacidades aparecem indistintamente em todas as telas ou para todos os recursos. Cada capacidade deve estar disponível somente no contexto em que faz sentido, conforme o tipo de agente, workspace, ambiente, versão publicada, conexão, permissões, produto instalado e contrato da ferramenta. A experiência deve seguir a lógica de uma nuvem de engenharia, como na AWS: serviços, APIs, recursos e operações possuem escopo, pré-requisitos e políticas próprias; não devem ser expostos globalmente apenas para preencher a interface.
+
+Consequentemente, ferramentas de CRM, agenda, MCP, workflows, Marketplace, canais e operações sensíveis devem ser descobertas e autorizadas por contexto. O frontend pode explicar disponibilidade e pré-requisitos, mas a decisão efetiva deve ocorrer server-side, no workspace, na versão publicada e no Tool Gateway. Capacidades não aplicáveis devem permanecer ocultas ou explicitamente indisponíveis, sem mocks que sugiram que estão ativas.
+
 ## 5. Estado real consolidado
 
 ### 5.1 Fundamento multi-tenant e Control Plane
@@ -107,7 +113,7 @@ Ainda faltam validações com credenciais reais em produção, operação perman
 
 Estão implementados `lead.create_or_update`, `lead.update_qualification`, política de qualificação por produto, `lead.assign_owner`, distribuição round-robin, `lead.create_follow_up`, cancelamento, proteção de campos, estados comerciais e painel de métricas.
 
-Ainda faltam agenda, busca e reserva de horários, CRM externo, catálogo/disponibilidade conectado e ferramentas conversacionais completas para todas as operações comerciais.
+ A agenda foi iniciada como fatia parcial: existe a migration `0033_calendar_availability.sql` e a ferramenta nativa read-only `calendar.list_availability`, com isolamento por workspace e dispatch no Agent Runtime. Ainda faltam provisionamento/ingestão de slots, busca e reserva de horários, aprovação para escritas, CRM externo, catálogo/disponibilidade conectado e ferramentas conversacionais completas para todas as operações comerciais.
 
 ### 5.4 RAG operacional
 
@@ -175,7 +181,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0031_agent_development_blueprints.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas e blueprints persistidos.
+O repositório possui migrations até `0033_calendar_availability.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos e disponibilidade de agenda.
 
 As rotas principais são:
 
