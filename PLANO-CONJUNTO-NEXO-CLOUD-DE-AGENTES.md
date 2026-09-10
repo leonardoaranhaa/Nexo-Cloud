@@ -91,6 +91,8 @@ Consequentemente, ferramentas de CRM, agenda, MCP, workflows, Marketplace, canai
 
 Depois da explicitação do contexto no shell, a evolução da experiência deve seguir esta ordem: separar Integrate de Build na navegação; dividir a tela do agente em configuração, conhecimento, ferramentas, testes, versões e publicação; apresentar disponibilidade, dependências, risco e escopo para cada capacidade; separar catálogo, instalações e atualizações no Marketplace; e distinguir configuração, saúde e operações destrutivas dos conectores. Cada etapa deve preservar a regra de que o recurso só aparece ou fica acionável quando o workspace, ambiente, versão e permissões o tornam aplicável.
 
+A navegação agora materializa a primeira etapa: **Build** concentra Agentes e Marketplace, enquanto **Integrate** concentra Conectores. A seção deve crescer com Conhecimento, Ferramentas e MCP somente quando esses recursos possuírem contratos próprios de instalação, escopo e autorização.
+
 ## 5. Estado real consolidado
 
 ### 5.1 Fundamento multi-tenant e Control Plane

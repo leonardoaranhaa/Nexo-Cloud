@@ -17,6 +17,8 @@ const GROUPS: NavGroup[] = [
   { label: "Build", items: [
     { to: "/agents", label: "Agentes", icon: Bot },
     { to: "/marketplace", label: "Marketplace", icon: Store },
+  ] },
+  { label: "Integrate", items: [
     { to: "/connections", label: "Conectores", icon: Plug2 },
   ] },
   { label: "Run", items: [
