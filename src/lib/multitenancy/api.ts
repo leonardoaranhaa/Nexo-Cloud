@@ -409,3 +409,283 @@ export const decideWorkspaceWorkflowApproval = createServerFn({ method: "POST" }
     await decideWorkflowApproval(await getSql(), context.userId, data);
     return { ok: true as const };
   });
+
+
+export const listMarketplaceProducts = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { getSql } = await import("@/lib/db");
+    const { listMarketplaceProducts: list } = await import("@/lib/marketplace/server");
+    return list(await getSql());
+  });
+
+export const getMarketplaceProduct = createServerFn({ method: "GET" })
+  .validator((input: { productId: string }) => input)
+  .handler(async ({ data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getMarketplaceProduct: get } = await import("@/lib/marketplace/server");
+    return get(await getSql(), data.productId);
+  });
+
+export const listWorkspaceMarketplaceInstallations = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listMarketplaceInstallations } = await import("@/lib/marketplace/server");
+    return listMarketplaceInstallations(await getSql(), context.userId, data.workspaceId);
+  });
+
+export const installWorkspaceMarketplaceProduct = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; productId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { installMarketplaceProduct } = await import("@/lib/marketplace/server");
+    return installMarketplaceProduct(await getSql(), context.userId, data);
+  });
+
+export const updateWorkspaceMarketplaceCustomization = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; installationId: string; customizations: JsonObject }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { updateMarketplaceCustomization } = await import("@/lib/marketplace/server");
+    await updateMarketplaceCustomization(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+
+export const getWorkspaceMarketplaceInstallation = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; installationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getMarketplaceInstallation } = await import("@/lib/marketplace/server");
+    return getMarketplaceInstallation(await getSql(), context.userId, data);
+  });
+
+
+export const createWorkspaceKnowledgeDocument = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; title: string; content: string; sourceType?: "text" | "faq" | "markdown" | "url" | "file"; language?: string; sourceUri?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { createKnowledgeDocument } = await import("@/lib/knowledge/server");
+    return createKnowledgeDocument(await getSql(), context.userId, data);
+  });
+
+export const createWorkspaceKnowledgeSnapshot = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; name: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { createKnowledgeSnapshot } = await import("@/lib/knowledge/server");
+    return createKnowledgeSnapshot(await getSql(), context.userId, data);
+  });
+
+export const publishWorkspaceKnowledgeSnapshot = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; snapshotId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { publishKnowledgeSnapshot } = await import("@/lib/knowledge/server");
+    await publishKnowledgeSnapshot(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const searchWorkspaceKnowledge = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; query: string; limit?: number }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { requireWorkspaceAccess } = await import("./server");
+    const { retrieveKnowledge } = await import("@/lib/knowledge/server");
+    const sql = await getSql();
+    await requireWorkspaceAccess(sql, context.userId, data.workspaceId, "read");
+    return retrieveKnowledge(sql, data);
+  });
+
+
+export const createOrUpdateWorkspaceLead = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; externalContactId: string; conversationId?: string; name?: string; email?: string; phone?: string; stage?: "new" | "engaged" | "qualifying" | "qualified" | "nurture" | "handoff_pending" | "human_active" | "converted" | "lost"; score?: number; intent?: string; source?: string; qualificationData?: JsonObject; idempotencyKey: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { executeLeadCreateOrUpdate } = await import("@/lib/crm/leads");
+    return executeLeadCreateOrUpdate(await getSql(), context.userId, { ...data, requestedBy: "user" });
+  });
+
+
+export const updateWorkspaceLeadQualification = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; externalContactId: string; conversationId?: string; qualificationData: JsonObject; confirmedFields?: string[]; stage?: "new" | "engaged" | "qualifying" | "qualified" | "nurture" | "handoff_pending" | "human_active" | "converted" | "lost"; score?: number; idempotencyKey: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { executeLeadUpdateQualification } = await import("@/lib/crm/leads");
+    return executeLeadUpdateQualification(await getSql(), context.userId, { ...data, requestedBy: "user" });
+  });
+
+
+export const createWorkspaceQualificationPolicy = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; productId?: string; name: string; minimumScore: number; criteria: import("@/lib/crm/qualification").QualificationCriterion[] }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { createQualificationPolicy } = await import("@/lib/crm/qualification");
+    return createQualificationPolicy(await getSql(), context.userId, data);
+  });
+
+export const publishWorkspaceQualificationPolicy = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; policyId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { publishQualificationPolicy } = await import("@/lib/crm/qualification");
+    await publishQualificationPolicy(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const evaluateWorkspaceLeadQualification = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; externalContactId: string; productId?: string; agentId?: string; conversationId?: string; traceId?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { evaluateQualification } = await import("@/lib/crm/qualification");
+    return evaluateQualification(await getSql(), context.userId, data);
+  });
+
+
+export const createWorkspaceAssignmentRule = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; productId?: string; name: string; mode?: "round_robin" | "least_loaded"; ownerIds?: string[] }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { createAssignmentRule } = await import("@/lib/crm/assignment");
+    return createAssignmentRule(await getSql(), context.userId, data);
+  });
+
+export const publishWorkspaceAssignmentRule = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; ruleId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { publishAssignmentRule } = await import("@/lib/crm/assignment");
+    await publishAssignmentRule(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const assignWorkspaceLeadOwner = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; externalContactId: string; conversationId?: string; ownerId?: string; productId?: string; idempotencyKey: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { executeLeadAssignOwner } = await import("@/lib/crm/assignment");
+    return executeLeadAssignOwner(await getSql(), context.userId, { ...data, requestedBy: "user" });
+  });
+
+
+export const createWorkspaceLeadFollowUp = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; externalContactId: string; conversationId?: string; agentId: string; connectionId: string; cadenceId?: string; message: string; scheduledAt: string; stepNumber?: number; maxAttempts?: number; idempotencyKey: string; traceId?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { executeLeadCreateFollowUp } = await import("@/lib/crm/follow-ups");
+    return executeLeadCreateFollowUp(await getSql(), context.userId, { ...data, requestedBy: "user" });
+  });
+
+
+export const getWorkspaceLeadMetrics = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; from?: string; to?: string; agentId?: string; productId?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getLeadMetrics } = await import("@/lib/crm/metrics");
+    return getLeadMetrics(await getSql(), context.userId, data);
+  });
+
+
+export const createWorkspaceImprovementCandidate = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; caseId: string; candidateType?: "prompt" | "policy" | "manifest" | "cadence" }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { requireWorkspaceAccess } = await import("./server");
+    const { createImprovementCandidate } = await import("@/lib/learning/lab");
+    const sql = await getSql(); await requireWorkspaceAccess(sql, context.userId, data.workspaceId, "manage");
+    return createImprovementCandidate(sql, { ...data, requestedBy: context.userId });
+  });
+
+export const listWorkspaceImprovementCandidates = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; status?: "draft" | "review" | "approved" | "rejected" | "applied" }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listImprovementCandidates } = await import("@/lib/learning/lab");
+    return listImprovementCandidates(await getSql(), context.userId, data);
+  });
+
+export const reviewWorkspaceImprovementCandidate = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; candidateId: string; decision: "approved" | "rejected" }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { reviewImprovementCandidate } = await import("@/lib/learning/lab");
+    await reviewImprovementCandidate(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+
+export const listWorkspaceTools = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listWorkspaceTools } = await import("@/lib/connectors/tools-server");
+    return listWorkspaceTools(await getSql(), context.userId, data.workspaceId);
+  });
+
+export const listWorkspaceAgentToolPermissions = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentVersionId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listAgentToolPermissions } = await import("@/lib/connectors/tools-server");
+    return listAgentToolPermissions(await getSql(), context.userId, data);
+  });
+
+export const setWorkspaceAgentToolPermission = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentVersionId: string; toolId: string; enabled: boolean; requireApproval?: boolean; allowedScopes?: JsonObject }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { setAgentToolPermission } = await import("@/lib/connectors/tools-server");
+    return setAgentToolPermission(await getSql(), context.userId, data);
+  });
+
+export const requestWorkspaceToolExecutionApproval = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; toolExecutionId: string; reason?: string; expiresInMinutes?: number }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { requestToolExecutionApproval } = await import("@/lib/connectors/tools-server");
+    return requestToolExecutionApproval(await getSql(), context.userId, data);
+  });
+
+export const decideWorkspaceToolExecutionApproval = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; approvalId: string; decision: "approved" | "rejected"; reason?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { decideToolExecutionApproval } = await import("@/lib/connectors/tools-server");
+    await decideToolExecutionApproval(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const listWorkspaceToolExecutionApprovals = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; status?: "pending" | "approved" | "rejected" | "expired" }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listToolExecutionApprovals } = await import("@/lib/connectors/tools-server");
+    return listToolExecutionApprovals(await getSql(), context.userId, data);
+  });

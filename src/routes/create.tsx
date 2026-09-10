@@ -233,8 +233,8 @@ function CreateWizard() {
         <section className="max-w-2xl">
           <h2 className="font-display text-2xl font-semibold tracking-tight">Como o agente nasce</h2>
           <p className="mt-2 text-sm text-muted">
-            Briefing: o Grok escreve persona, prompt, saudação e FAQs. Modelo: você começa de um
-            esqueleto pronto.
+            Descreva o resultado esperado ou comece de um modelo pronto. O Nexo prepara persona,
+            regras, saudação e conhecimento inicial para revisão.
           </p>
           <div className="mt-5 grid grid-cols-2 gap-1 rounded-md bg-bg p-1">
             <button
@@ -242,7 +242,7 @@ function CreateWizard() {
               className={cn("h-9 rounded-sm text-sm", source === "brief" ? "bg-elevated text-fg" : "text-muted")}
               onClick={() => setSource("brief")}
             >
-              Briefing + Grok
+              Descrição do agente
             </button>
             <button
               type="button"
@@ -365,7 +365,7 @@ function CreateWizard() {
             </div>
           </div>
           <Card className="h-fit p-4">
-            <div className="font-display text-sm font-semibold">O que o Grok entregou</div>
+            <div className="font-display text-sm font-semibold">Configuração inicial</div>
             <p className="mt-2 text-sm leading-relaxed text-muted">
               Persona, saudação, regras de WhatsApp e FAQs. No próximo passo você manda uma
               mensagem real — horário, handoff e base já entram no fluxo.
@@ -430,7 +430,7 @@ function CreateWizard() {
                   });
                 }}
               >
-                Publicar (n8n / Python)
+                Publicar no Nexo Cloud
               </Button>
               <Button
                 variant="secondary"
@@ -443,7 +443,7 @@ function CreateWizard() {
                   });
                 }}
               >
-                Abrir estúdio
+                Ajustar configuração
               </Button>
             </div>
           </div>

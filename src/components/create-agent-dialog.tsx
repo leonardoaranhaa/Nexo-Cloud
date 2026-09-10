@@ -111,7 +111,7 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
       </DialogTrigger>
       <DialogContent title="Criar agente" className="max-h-[min(90dvh,720px)] overflow-y-auto">
         <p className="mt-1 text-sm text-muted">
-          O Grok escreve persona, prompt e FAQs. Depois você testa no telefone e publica.
+          Descreva o resultado desejado ou escolha um modelo. Depois revise, teste e publique uma versão do agente.
         </p>
         <div className="mt-4 mb-3 grid grid-cols-2 gap-1 rounded-md bg-bg p-1">
           <button
@@ -122,7 +122,7 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
             )}
             onClick={() => setTab("brief")}
           >
-            Briefing + Grok
+            Descrição do agente
           </button>
           <button
             type="button"
@@ -181,7 +181,7 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
               </button>
             ))}
             <div className="mt-2 flex justify-end">
-              <Button onClick={() => void fromTemplate()} disabled={busy}>Abrir no estúdio</Button>
+              <Button onClick={() => void fromTemplate()} disabled={busy}>Configurar modelo</Button>
             </div>
           </div>
         ) : (

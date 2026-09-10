@@ -18,7 +18,7 @@ export function NexoWordmark({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <div className="leading-tight">
           <div className="font-display text-sm font-semibold tracking-tight">Nexo</div>
-          <div className="text-[0.65rem] tracking-wide text-subtle uppercase">Estúdio</div>
+          <div className="text-[0.65rem] tracking-wide text-subtle uppercase">Cloud Console</div>
         </div>
       )}
     </div>

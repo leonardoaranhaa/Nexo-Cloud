@@ -21,7 +21,7 @@ const NODES: {
   { id: "memory", title: "Memória", icon: MemoryStick },
   { id: "knowledge", title: "Base", icon: BookOpen },
   { id: "handoff", title: "Humano", icon: UserRound },
-  { id: "agent", title: "Grok", icon: Bot },
+  { id: "agent", title: "Agent Runtime", icon: Bot },
   { id: "outbound", title: "Enviar", icon: Send },
 ];
 
@@ -104,7 +104,7 @@ function hint(agent: Agent, id: FlowNodeId) {
     case "handoff":
       return agent.tools.handoff ? "Palavras-chave ativas" : "Desligado";
     case "agent":
-      return `Grok · temp ${agent.temperature.toFixed(1)}`;
+      return `Runtime · temp ${agent.temperature.toFixed(1)}`;
     case "outbound":
       return "Devolve a resposta no canal";
   }

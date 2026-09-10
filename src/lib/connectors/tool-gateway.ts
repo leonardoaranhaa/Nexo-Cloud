@@ -7,6 +7,7 @@ import type { ConnectorContext } from "./runtime.ts";
 import type { ClaimedWorkflowRun } from "../workflows/queue.ts";
 import type { WorkflowNode } from "../workflows/server.ts";
 import { McpRuntime } from "./mcp-runtime.ts";
+import { assertConnectionInWorkspace, executionIdempotencyKey, resolveTool, validateToolInput } from "./tool-registry.ts";
 
 function object(value: unknown): JsonObject { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {}; }
 function text(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
@@ -28,15 +29,23 @@ export async function executeWorkflowTool(
 ): Promise<JsonObject> {
   const toolKey = text(node.config?.toolKey);
   if (!toolKey) throw new Error("WORKFLOW_TOOL_CONFIG_REQUIRED");
-  const tool = await sql.query<{ id: string; risk_level: "read" | "write" | "destructive"; timeout_ms: number }>(`select id, risk_level, timeout_ms from tools where (workspace_id = $1 or workspace_id is null) and key = $2 and status = 'active' order by workspace_id nulls last, version desc limit 1`, [run.workspace_id, toolKey]);
-  if (!tool[0]) throw new Error("TOOL_NOT_FOUND");
-  if (tool[0].risk_level !== "read" && node.config?.approved !== true) throw new Error("TOOL_APPROVAL_REQUIRED");
+  const tool = await resolveTool(sql, run.workspace_id, toolKey);
+  if (tool.riskLevel !== "read" && node.config?.approved !== true) throw new Error("TOOL_APPROVAL_REQUIRED");
   const connectionId = text(node.config?.connectionId);
+  await assertConnectionInWorkspace(sql, run.workspace_id, connectionId);
   const connection = await sql.query<{ id: string; provider: string; secret_ref: string; config: unknown }>(`select id, provider, secret_ref, config from connections where id = $1 and workspace_id = $2 and deleted_at is null and status in ('connected','pending') limit 1`, [connectionId, run.workspace_id]);
   if (!connection[0]) throw new Error("TOOL_CONNECTION_NOT_FOUND");
+  const validationInput: JsonObject = { ...input, connectionId };
+  if (toolKey === "mcp.call") validationInput.mcpToolName = text(node.config?.mcpToolName);
+  if (toolKey === "evolution.send_text") {
+    validationInput.recipient = text(node.config?.recipient ?? input.recipient);
+    validationInput.text = text(node.config?.text ?? input.text);
+  }
+  validateToolInput(validationInput, tool.inputSchema);
   const executionId = randomUUID();
   const inputRedacted = redacted(input);
-  await sql.query(`insert into tool_executions (id, workspace_id, run_id, tool_id, connector_instance_id, requested_by, status, input_hash, input_redacted, started_at) values ($1,$2,$3,$4,$5,'workflow','running',$6,$7::jsonb,current_timestamp)`, [executionId, run.workspace_id, run.id, tool[0].id, connection[0].id, hash(input), JSON.stringify(inputRedacted)]);
+  const idempotencyKey = executionIdempotencyKey(run.workspace_id, executionId, toolKey);
+  await sql.query(`insert into tool_executions (id, workspace_id, run_id, tool_id, connector_instance_id, requested_by, status, input_hash, input_redacted, trace_id, idempotency_key, started_at) values ($1,$2,$3,$4,$5,'workflow','running',$6,$7::jsonb,$8,$9,current_timestamp)`, [executionId, run.workspace_id, run.id, tool.id, connection[0].id, hash(validationInput), JSON.stringify(inputRedacted), run.correlation_id, idempotencyKey]);
   const startedAt = Date.now();
   try {
     const config = object(connection[0].config);
@@ -44,7 +53,7 @@ export async function executeWorkflowTool(
       const mcpToolName = text(node.config?.mcpToolName);
       const allowedTools = Array.isArray(config.allowedTools) ? config.allowedTools.filter((item): item is string => typeof item === "string") : [];
       if (!mcpToolName || !allowedTools.includes(mcpToolName)) throw new Error("MCP_TOOL_NOT_ALLOWED");
-      const runtime = new McpRuntime({ url: text(config.url), secretRef: connection[0].secret_ref, workspaceId: run.workspace_id, connectionId: connection[0].id, timeoutMs: tool[0].timeout_ms, getSecret: async () => "" }, secretProvider);
+      const runtime = new McpRuntime({ url: text(config.url), secretRef: connection[0].secret_ref, workspaceId: run.workspace_id, connectionId: connection[0].id, timeoutMs: tool.timeoutMs, getSecret: async () => "" }, secretProvider);
       const result = await runtime.callTool(mcpToolName, object(node.config?.arguments ?? input));
       await runtime.close();
       const output = redacted(result);
@@ -53,7 +62,7 @@ export async function executeWorkflowTool(
     }
     if (toolKey !== "evolution.send_text" || connection[0].provider !== "evolution") throw new Error("TOOL_ADAPTER_UNAVAILABLE");
     const connectorContext: ConnectorContext = { workspaceId: run.workspace_id, connectionId: connection[0].id, traceId: run.correlation_id, getSecret: (name) => secretProvider.resolve(connection[0].secret_ref, { workspaceId: run.workspace_id, connectionId: connection[0].id }).then((value) => name === "api_key" ? value : value) };
-    const result = await new EvolutionTextDispatcher().sendText({ baseUrl: text(config.baseUrl), instance: text(config.instance), recipient: text(node.config?.recipient ?? input.recipient), text: text(node.config?.text ?? input.text), timeoutMs: tool[0].timeout_ms }, connectorContext);
+    const result = await new EvolutionTextDispatcher().sendText({ baseUrl: text(config.baseUrl), instance: text(config.instance), recipient: text(node.config?.recipient ?? input.recipient), text: text(node.config?.text ?? input.text), timeoutMs: tool.timeoutMs }, connectorContext);
     if (result.status !== "sent") throw new Error(`TOOL_${result.code.toUpperCase()}`);
     const output: JsonObject = { status: result.status, latencyMs: result.latencyMs };
     if (result.providerMessageId) output.providerMessageId = result.providerMessageId;

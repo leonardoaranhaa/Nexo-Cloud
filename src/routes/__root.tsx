@@ -4,7 +4,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Nexo";
+const APP_NAME = "Nexo Cloud";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,7 +15,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#0b0c0b" },
       {
         name: "description",
-        content: "Estúdio que cria, testa e publica agentes de WhatsApp com Grok.",
+        content: "Plataforma de agentes para construir, operar e governar automações de negócio.",
       },
     ],
     links: [
@@ -61,7 +61,7 @@ function NotFound() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-bg px-6 text-center text-fg">
       <p className="font-display text-2xl font-semibold tracking-tight">Página não encontrada</p>
-      <p className="text-sm text-muted">Esse caminho não existe no estúdio.</p>
+      <p className="text-sm text-muted">Esse caminho não existe no console.</p>
       <a href="/" className="mt-2 text-sm text-live underline-offset-4 hover:underline">
         Voltar à visão geral
       </a>

@@ -1,11 +1,21 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "../db";
-import { localFallbackReply, isWithinHours, matchFaq, wantsHandoff } from "../pipeline.ts";
+import { localFallbackReply, isWithinHours } from "../pipeline.ts";
 import type { Agent } from "../types.ts";
 import { dispatchTextMessageAsRuntime } from "../messaging/router.ts";
 import { awsSecretsManagerProvider, unavailableSecretProvider, type SecretProvider } from "../connectors/secrets.ts";
 import { claimAgentRuntimeJob, completeAgentRuntimeJob, failAgentRuntimeJob, type AgentRuntimeJob } from "./queue.ts";
 import { finishRuntimeExecution, startRuntimeExecution, type ExecutionStep } from "./execution.ts";
+import { decideAgentTurn, decisionPrompt, persistAgentDecision, type AgentDecision, type CommercialState } from "./decision.ts";
+import { retrieveKnowledge, type KnowledgeEvidence } from "../knowledge/server.ts";
+import { executeLeadCreateOrUpdate, executeLeadUpdateQualification, extractQualificationData } from "../crm/leads.ts";
+import { evaluateQualification } from "../crm/qualification.ts";
+import { executeLeadAssignOwner } from "../crm/assignment.ts";
+import { executeLeadCreateFollowUp } from "../crm/follow-ups.ts";
+import { recordLearningEvent } from "../learning/server.ts";
+import { persistLearningEvaluation } from "../learning/evaluation.ts";
+import { indexLearningEvent } from "../learning/cases.ts";
+import { listPublishedAgentTools, type RuntimeAuthorizedTool } from "../connectors/tools-server.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -15,7 +25,8 @@ type RuntimeModel = {
     history: { role: "user" | "assistant"; content: string }[];
     maxTokens: number;
     temperature: number;
-  }): Promise<{ text?: string; usedAi: boolean }>;
+    tools?: { type: "function"; function: { name: string; description: string; parameters: JsonRecord } }[];
+  }): Promise<{ text?: string; usedAi: boolean; toolCalls?: { id: string; name: string; arguments: JsonRecord }[] }>;
 };
 
 type RuntimeContext = {
@@ -25,6 +36,10 @@ type RuntimeContext = {
   recipient: string;
   inboundText: string;
   history: { role: "user" | "assistant"; content: string }[];
+  commercialState: CommercialState;
+  ragEvidence: KnowledgeEvidence[];
+  productId?: string;
+  authorizedTools: RuntimeAuthorizedTool[];
 };
 
 function object(value: unknown): JsonRecord {
@@ -120,18 +135,23 @@ async function loadContext(sql: Sql, job: AgentRuntimeJob): Promise<RuntimeConte
     version_config: unknown;
     recipient: string;
     inbound_text: string;
+    commercial_state: CommercialState;
+    product_id: string | null;
   }>(
     `select a.id, a.name, a.persona, a.welcome_message, a.system_prompt, a.language,
             a.status, a.temperature, a.max_tokens, a.memory_window, a.knowledge, a.tools,
             ac.connection_id,
             c.external_contact_id as recipient,
             m.content->>'text' as inbound_text,
-            av.config as version_config
+            c.commercial_state,
+            av.config as version_config,
+            ai.product_id
        from agent_runtime_jobs j
        join agents a on a.id = j.agent_id and a.workspace_id = j.workspace_id and a.deleted_at is null
        join conversations c on c.id = j.conversation_id and c.workspace_id = j.workspace_id
        join messages m on m.id = j.inbound_message_id and m.workspace_id = j.workspace_id and m.direction = 'inbound'
        join agent_connections ac on ac.agent_id = a.id and ac.connection_id = c.connection_id and ac.is_primary = true
+       left join agent_installations ai on ai.agent_id = a.id and ai.workspace_id = j.workspace_id and ai.status in ('draft', 'staging', 'active')
        left join lateral (
          select config from agent_versions
           where agent_id = a.id and status = 'published'
@@ -155,7 +175,10 @@ async function loadContext(sql: Sql, job: AgentRuntimeJob): Promise<RuntimeConte
     role: item.direction === "inbound" ? "user" as const : "assistant" as const,
     content: contentText(item.content).slice(0, 4000),
   })).filter((item) => item.content);
-  return { job, agent, connectionId: row.connection_id, recipient: row.recipient, inboundText: text(row.inbound_text), history };
+  let ragEvidence: KnowledgeEvidence[] = [];
+  try { ragEvidence = await retrieveKnowledge(sql, { workspaceId: job.workspace_id, query: text(row.inbound_text), limit: 5 }); } catch { ragEvidence = []; }
+  const authorizedTools = await listPublishedAgentTools(sql, job.workspace_id, job.agent_id);
+  return { job, agent, connectionId: row.connection_id, recipient: row.recipient, inboundText: text(row.inbound_text), history, commercialState: row.commercial_state ?? "new", ragEvidence, productId: row.product_id ?? undefined, authorizedTools };
 }
 
 function xaiModel(): RuntimeModel {
@@ -169,15 +192,22 @@ function xaiModel(): RuntimeModel {
         body: JSON.stringify({
           model: process.env.NEXO_AGENT_MODEL || "grok-4.5",
           messages: [{ role: "system", content: input.systemPrompt }, ...input.history],
+          ...(input.tools?.length ? { tools: input.tools, tool_choice: "auto" } : {}),
           max_tokens: input.maxTokens,
           temperature: input.temperature,
         }),
         signal: AbortSignal.timeout(30000),
       });
       if (!response.ok) throw new Error(`AI_PROVIDER_${response.status}`);
-      const body = await response.json() as { choices?: { message?: { content?: unknown } }[] };
-      const value = body.choices?.[0]?.message?.content;
-      return { text: typeof value === "string" ? value.trim().slice(0, 4096) : "", usedAi: true };
+      const body = await response.json() as { choices?: { message?: { content?: unknown; tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[] } }[] };
+      const message = body.choices?.[0]?.message;
+      const toolCalls = (message?.tool_calls ?? []).map((call) => {
+        let args: JsonRecord = {};
+        try { args = object(call.function?.arguments ? JSON.parse(call.function.arguments) : {}); } catch { args = {}; }
+        return { id: text(call.id, randomUUID()), name: text(call.function?.name), arguments: args };
+      }).filter((call) => call.name);
+      const value = message?.content;
+      return { text: typeof value === "string" ? value.trim().slice(0, 4096) : "", usedAi: true, toolCalls };
     },
   };
 }
@@ -185,18 +215,24 @@ function xaiModel(): RuntimeModel {
 export async function executeAgentRuntime(
   context: RuntimeContext,
   model: RuntimeModel = xaiModel(),
-): Promise<{ reply?: string; usedAi: boolean; reason: string }> {
+): Promise<{ reply?: string; usedAi: boolean; reason: string; decision: AgentDecision; toolCalls?: { id: string; name: string; arguments: JsonRecord }[] }> {
   const { agent, inboundText } = context;
-  if (!inboundText) return { usedAi: false, reason: "empty_inbound" };
-  if (!isWithinHours(agent)) return { reply: localFallbackReply(agent, inboundText), usedAi: false, reason: "outside_hours" };
-  if (wantsHandoff(agent, inboundText)) return { reply: localFallbackReply(agent, inboundText), usedAi: false, reason: "handoff" };
-  const faq = matchFaq(agent, inboundText);
-  if (faq) return { reply: faq.a, usedAi: false, reason: "faq" };
+  const decision = decideAgentTurn(agent, { text: inboundText, currentState: context.commercialState, ragEvidence: context.ragEvidence });
+  if (!inboundText) return { usedAi: false, reason: "empty_inbound", decision };
+  if (!isWithinHours(agent)) return { reply: localFallbackReply(agent, inboundText), usedAi: false, reason: "outside_hours", decision: { ...decision, answerMode: "fallback", nextAction: "respond" } };
+  if (decision.nextAction === "handoff") return { reply: localFallbackReply(agent, inboundText), usedAi: false, reason: "handoff", decision };
+  if (decision.answerMode === "faq") return { reply: agent.knowledge.faqs.find((item) => `faq:${item.id}` === decision.evidence[0]?.sourceId)?.a, usedAi: false, reason: "faq", decision };
+  if (decision.answerMode === "ask") return { reply: "Para te orientar corretamente, pode me contar um pouco mais sobre o que você precisa?", usedAi: false, reason: "ask", decision };
+  const modelTools = context.authorizedTools.map((tool) => ({ type: "function" as const, function: { name: tool.key, description: tool.description.slice(0, 500), parameters: tool.inputSchema } }));
   const prompt = [
     agent.systemPrompt,
     agent.persona ? `Persona: ${agent.persona}` : "",
     agent.knowledge.notes ? `Notas de conhecimento: ${agent.knowledge.notes}` : "",
+    context.ragEvidence.length ? `Evidências publicadas:\n${context.ragEvidence.map((item) => `[${item.sourceId}] ${item.title}: ${item.excerpt}`).join("\n")}` : "",
+    `Decisão do runtime: intenção=${decision.intent}; confiança=${decision.confidence}; risco=${decision.risk}; próxima ação=${decision.nextAction}.`,
+    `Política da decisão: ${decisionPrompt(decision)}`,
     "Responda em texto curto, adequado para WhatsApp. Não invente políticas, preços ou dados ausentes.",
+    context.authorizedTools.length ? `Ferramentas autorizadas nesta versão publicada: ${context.authorizedTools.map((tool) => `${tool.key}${tool.requireApproval ? " (requer aprovação)" : ""}`).join(", ")}. Use-as somente quando necessário.` : "Nenhuma ferramenta está autorizada nesta versão publicada.",
   ].filter(Boolean).join("\n\n").slice(0, 12000);
   try {
     const result = await model.generate({
@@ -204,12 +240,64 @@ export async function executeAgentRuntime(
       history: context.history.slice(-(agent.memoryWindow * 2 + 1)).concat({ role: "user", content: inboundText }),
       maxTokens: agent.maxTokens,
       temperature: agent.temperature,
+      tools: modelTools,
     });
-    if (result.text) return { reply: result.text, usedAi: result.usedAi, reason: "ai" };
+    if (result.toolCalls?.length) return { reply: result.text || undefined, usedAi: result.usedAi, reason: "tool_call", decision, toolCalls: result.toolCalls };
+    if (result.text) return { reply: result.text, usedAi: result.usedAi, reason: decision.nextAction === "ask" ? "ask" : "ai", decision };
   } catch {
     // The deterministic fallback keeps the conversation available when the provider is down.
   }
-  return { reply: localFallbackReply(agent, inboundText), usedAi: false, reason: "fallback" };
+  return { reply: localFallbackReply(agent, inboundText), usedAi: false, reason: "fallback", decision: { ...decision, answerMode: "fallback", nextAction: "respond" } };
+}
+
+async function executeAuthorizedRuntimeTools(
+  sql: Sql,
+  context: RuntimeContext,
+  calls: { id: string; name: string; arguments: JsonRecord }[],
+): Promise<{ executed: number; approvalRequired: number }> {
+  let executed = 0;
+  let approvalRequired = 0;
+  for (const call of calls.slice(0, 3)) {
+    const tool = context.authorizedTools.find((item) => item.key === call.name);
+    if (!tool) throw new Error("RUNTIME_TOOL_NOT_AUTHORIZED");
+    const executionId = randomUUID();
+    const idempotencyKey = `runtime:${context.job.id}:tool:${call.id}`;
+    const input = { ...call.arguments, externalContactId: context.recipient, conversationId: context.job.conversation_id, idempotencyKey };
+    const existingExecution = await sql.query<{ id: string; status: string }>(`select id, status from tool_executions where workspace_id = $1 and idempotency_key = $2 limit 1`, [context.job.workspace_id, idempotencyKey]);
+    if (existingExecution[0]?.status === "succeeded") {
+      executed += 1;
+      continue;
+    }
+    if (!existingExecution[0]) {
+      await sql.query(`insert into tool_executions (id, workspace_id, tool_id, requested_by, status, input_hash, input_redacted, trace_id, idempotency_key, started_at) values ($1,$2,$3,'model',$4,$5,$6::jsonb,$7,$8,current_timestamp)`, [executionId, context.job.workspace_id, tool.id, tool.requireApproval ? "requested" : "running", call.name, JSON.stringify(input), context.job.trace_id, idempotencyKey]);
+    }
+    if (tool.requireApproval) {
+      await sql.query(`insert into tool_execution_approvals (id, workspace_id, tool_execution_id, requested_by, reason, expires_at) values ($1,$2,$3,'model',$4,current_timestamp + interval '30 minutes') on conflict (tool_execution_id) do nothing`, [randomUUID(), context.job.workspace_id, executionId, `Aprovação requerida pelo agente para ${tool.key}`]);
+      approvalRequired += 1;
+      continue;
+    }
+    if (tool.key === "lead.create_or_update") {
+      await executeLeadCreateOrUpdate(sql, null, {
+        workspaceId: context.job.workspace_id,
+        externalContactId: context.recipient,
+        conversationId: context.job.conversation_id,
+        stage: text(call.arguments.stage, context.commercialState) as CommercialState,
+        score: number(call.arguments.score, 0, 0, 100),
+        intent: text(call.arguments.intent, "general_inquiry"),
+        source: "agent_runtime_tool",
+        qualificationData: object(call.arguments.qualificationData) as import("../multitenancy/server.ts").JsonObject,
+        idempotencyKey,
+        traceId: context.job.trace_id,
+        requestedBy: "model",
+      });
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify({ status: "succeeded", tool: tool.key }), executionId, context.job.workspace_id]);
+      executed += 1;
+      continue;
+    }
+    await sql.query(`update tool_executions set status = 'failed', error_code = 'RUNTIME_TOOL_ADAPTER_UNAVAILABLE', error_message = $1, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [tool.key, executionId, context.job.workspace_id]);
+    throw new Error("RUNTIME_TOOL_ADAPTER_UNAVAILABLE");
+  }
+  return { executed, approvalRequired };
 }
 
 export async function runNextAgentRuntimeJob(
@@ -231,6 +319,71 @@ export async function runNextAgentRuntimeJob(
     const context = await loadContext(sql, job);
     const steps: ExecutionStep[] = [{ name: "load_context", status: "ok" }];
     const result = await executeAgentRuntime(context, model);
+    await persistAgentDecision(sql, {
+      workspaceId: job.workspace_id,
+      jobId: job.id,
+      conversationId: job.conversation_id,
+      agentId: job.agent_id,
+      traceId: job.trace_id,
+    }, result.decision);
+    steps.push({ name: "decision_protocol", status: "ok" });
+    if (result.toolCalls?.length) {
+      const toolResult = await executeAuthorizedRuntimeTools(sql, context, result.toolCalls);
+      steps.push({ name: "authorized_tool_calls", status: "ok", durationMs: toolResult.executed + toolResult.approvalRequired });
+    }
+    if ((result.decision.intent === "pricing_question" || result.decision.intent === "availability_question") && result.decision.nextAction !== "ask" && result.decision.nextAction !== "handoff") {
+      await executeLeadCreateOrUpdate(sql, null, {
+        workspaceId: job.workspace_id,
+        externalContactId: context.recipient,
+        conversationId: job.conversation_id,
+        stage: result.decision.commercialState,
+        score: Math.round(result.decision.confidence * 100),
+        intent: result.decision.intent,
+        source: "agent_runtime",
+        qualificationData: { intentConfidence: result.decision.confidence, evidenceCount: result.decision.evidence.length },
+        idempotencyKey: `runtime:${job.id}:lead`,
+        traceId: job.trace_id,
+        requestedBy: "model",
+      });
+      steps.push({ name: "lead_create_or_update", status: "ok" });
+      const qualificationData = extractQualificationData(context.inboundText, result.decision.intent);
+      if (Object.keys(qualificationData).length > 0) {
+        await executeLeadUpdateQualification(sql, null, {
+          workspaceId: job.workspace_id,
+          externalContactId: context.recipient,
+          conversationId: job.conversation_id,
+          qualificationData,
+          confirmedFields: Object.keys(qualificationData),
+          stage: result.decision.commercialState,
+          score: Math.round(result.decision.confidence * 100),
+          idempotencyKey: `runtime:${job.id}:qualification`,
+          traceId: job.trace_id,
+          requestedBy: "model",
+        });
+        steps.push({ name: "lead_update_qualification", status: "ok" });
+      }
+      const qualification = await evaluateQualification(sql, null, { workspaceId: job.workspace_id, externalContactId: context.recipient, productId: context.productId, conversationId: job.conversation_id, traceId: job.trace_id });
+      steps.push({ name: "lead_evaluate_qualification", status: "ok" });
+      if (qualification.ready) {
+        await executeLeadAssignOwner(sql, null, { workspaceId: job.workspace_id, externalContactId: context.recipient, productId: context.productId, conversationId: job.conversation_id, idempotencyKey: `runtime:${job.id}:assignment`, traceId: job.trace_id, requestedBy: "model" });
+        steps.push({ name: "lead_assign_owner", status: "ok" });
+      } else if (qualification.missingFields.length > 0 && result.reply) {
+        await executeLeadCreateFollowUp(sql, null, {
+          workspaceId: job.workspace_id,
+          externalContactId: context.recipient,
+          conversationId: job.conversation_id,
+          agentId: context.agent.id,
+          connectionId: context.connectionId,
+          message: "Olá! Retomando nossa conversa: posso ajudar a avançar com os próximos detalhes quando for conveniente.",
+          scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          stepNumber: 1,
+          idempotencyKey: `runtime:${job.id}:follow-up`,
+          traceId: job.trace_id,
+          requestedBy: "system",
+        });
+        steps.push({ name: "lead_create_follow_up", status: "ok" });
+      }
+    }
     steps.push({ name: result.reason, status: result.reason === "handoff" || result.reason === "outside_hours" ? "skip" : "ok" });
     if (result.reply) {
       const provider = secretProvider ?? (process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
@@ -248,6 +401,55 @@ export async function runNextAgentRuntimeJob(
         traceId: job.trace_id,
       }, provider);
       steps.push({ name: "dispatch_outbound", status: "ok" });
+    }
+    try {
+      const learningEvent = await recordLearningEvent(sql, {
+        workspaceId: job.workspace_id,
+        eventType: "agent_turn_completed",
+        agentId: context.agent.id,
+        productId: context.productId,
+        outcome: result.reason,
+        consentScope: "internal_only",
+        traceId: job.trace_id,
+        attributes: {
+          intent: result.decision.intent,
+          confidence: result.decision.confidence,
+          risk: result.decision.risk,
+          commercialState: result.decision.commercialState,
+          nextAction: result.decision.nextAction,
+          answerMode: result.decision.answerMode,
+          usedAi: result.usedAi,
+          evidenceCount: result.decision.evidence.length,
+          replyLength: result.reply?.length ?? 0,
+        },
+      });
+      steps.push({ name: "learning_event", status: "ok" });
+      if (learningEvent.id) {
+        const evaluation = await persistLearningEvaluation(sql, {
+          eventId: learningEvent.id,
+          workspaceId: job.workspace_id,
+          agentId: context.agent.id,
+          productId: context.productId,
+          attributes: {
+            intent: result.decision.intent,
+            confidence: result.decision.confidence,
+            risk: result.decision.risk,
+            commercialState: result.decision.commercialState,
+            answerMode: result.decision.answerMode,
+            nextAction: result.decision.nextAction,
+            evidenceCount: result.decision.evidence.length,
+            usedAi: result.usedAi,
+            replyLength: result.reply?.length ?? 0,
+          },
+        });
+        steps.push({ name: "learning_evaluation", status: "ok" });
+        if (evaluation.id) {
+          await indexLearningEvent(sql, learningEvent.id);
+          steps.push({ name: "learning_case_index", status: "ok" });
+        }
+      }
+    } catch {
+      // Learning telemetry is best effort and must never block customer service.
     }
     await completeAgentRuntimeJob(sql, job);
     if (executionId) {

@@ -39,8 +39,8 @@ function AgentsPage() {
       }
     >
       <p className="mb-6 max-w-2xl text-sm leading-relaxed text-muted">
-        Cada agente é um briefing + prompt + base + canal. O Grok cria o rascunho; o telefone
-        prova o tom; n8n ou Python publicam.
+        Cada agente combina objetivo, instruções, conhecimento, ferramentas e canais. Revise o
+        comportamento, teste a conversa e publique uma versão controlada.
       </p>
 
       {agents.length === 0 ? (

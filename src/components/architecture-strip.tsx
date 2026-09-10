@@ -16,9 +16,9 @@ const LAYERS = [
   },
   {
     n: "03",
-    title: "Motor Grok",
+    title: "Agent Runtime",
     icon: Bot,
-    body: "Gera o agente a partir do briefing e responde no playground.",
+    body: "Aplica instruções, conhecimento, ferramentas, handoff e políticas de resposta.",
   },
 ] as const;
 

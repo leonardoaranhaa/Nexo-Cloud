@@ -14,10 +14,15 @@ import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as GuideRouteImport } from './routes/guide'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as MetricsRouteImport } from './routes/metrics'
 import { Route as RunsRouteImport } from './routes/runs'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as WorkflowsRouteImport } from './routes/workflows'
 import { Route as AgentsIndexRouteImport } from './routes/agents/index'
 import { Route as AgentsIdRouteImport } from './routes/agents/$id'
+import { Route as MarketplaceIndexRouteImport } from './routes/marketplace/index'
+import { Route as MarketplaceAgentsProductIdRouteImport } from './routes/marketplace/agents/$productId'
+import { Route as MarketplaceInstalledInstallationIdRouteImport } from './routes/marketplace/installed/$installationId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -44,9 +49,19 @@ const InboxRoute = InboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MetricsRoute = MetricsRouteImport.update({
+  id: '/metrics',
+  path: '/metrics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RunsRoute = RunsRouteImport.update({
   id: '/runs',
   path: '/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorkflowsRoute = WorkflowsRouteImport.update({
@@ -64,6 +79,23 @@ const AgentsIdRoute = AgentsIdRouteImport.update({
   path: '/agents/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketplaceIndexRoute = MarketplaceIndexRouteImport.update({
+  id: '/marketplace/',
+  path: '/marketplace/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketplaceAgentsProductIdRoute =
+  MarketplaceAgentsProductIdRouteImport.update({
+    id: '/marketplace/agents/$productId',
+    path: '/marketplace/agents/$productId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const MarketplaceInstalledInstallationIdRoute =
+  MarketplaceInstalledInstallationIdRouteImport.update({
+    id: '/marketplace/installed/$installationId',
+    path: '/marketplace/installed/$installationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -71,10 +103,15 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/metrics': typeof MetricsRoute
   '/runs': typeof RunsRoute
+  '/settings': typeof SettingsRoute
   '/workflows': typeof WorkflowsRoute
   '/agents/$id': typeof AgentsIdRoute
   '/agents/': typeof AgentsIndexRoute
+  '/marketplace/': typeof MarketplaceIndexRoute
+  '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
+  '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,10 +119,15 @@ export interface FileRoutesByTo {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/metrics': typeof MetricsRoute
   '/runs': typeof RunsRoute
+  '/settings': typeof SettingsRoute
   '/workflows': typeof WorkflowsRoute
   '/agents/$id': typeof AgentsIdRoute
   '/agents': typeof AgentsIndexRoute
+  '/marketplace': typeof MarketplaceIndexRoute
+  '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
+  '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,10 +136,15 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/metrics': typeof MetricsRoute
   '/runs': typeof RunsRoute
+  '/settings': typeof SettingsRoute
   '/workflows': typeof WorkflowsRoute
   '/agents/$id': typeof AgentsIdRoute
   '/agents/': typeof AgentsIndexRoute
+  '/marketplace/': typeof MarketplaceIndexRoute
+  '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
+  '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,10 +154,15 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/metrics'
     | '/runs'
+    | '/settings'
     | '/workflows'
     | '/agents/$id'
     | '/agents/'
+    | '/marketplace/'
+    | '/marketplace/agents/$productId'
+    | '/marketplace/installed/$installationId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,10 +170,15 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/metrics'
     | '/runs'
+    | '/settings'
     | '/workflows'
     | '/agents/$id'
     | '/agents'
+    | '/marketplace'
+    | '/marketplace/agents/$productId'
+    | '/marketplace/installed/$installationId'
   id:
     | '__root__'
     | '/'
@@ -129,10 +186,15 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/metrics'
     | '/runs'
+    | '/settings'
     | '/workflows'
     | '/agents/$id'
     | '/agents/'
+    | '/marketplace/'
+    | '/marketplace/agents/$productId'
+    | '/marketplace/installed/$installationId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -141,10 +203,15 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   GuideRoute: typeof GuideRoute
   InboxRoute: typeof InboxRoute
+  MetricsRoute: typeof MetricsRoute
   RunsRoute: typeof RunsRoute
+  SettingsRoute: typeof SettingsRoute
   WorkflowsRoute: typeof WorkflowsRoute
   AgentsIdRoute: typeof AgentsIdRoute
   AgentsIndexRoute: typeof AgentsIndexRoute
+  MarketplaceIndexRoute: typeof MarketplaceIndexRoute
+  MarketplaceAgentsProductIdRoute: typeof MarketplaceAgentsProductIdRoute
+  MarketplaceInstalledInstallationIdRoute: typeof MarketplaceInstalledInstallationIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -184,11 +251,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/metrics': {
+      id: '/metrics'
+      path: '/metrics'
+      fullPath: '/metrics'
+      preLoaderRoute: typeof MetricsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/runs': {
       id: '/runs'
       path: '/runs'
       fullPath: '/runs'
       preLoaderRoute: typeof RunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/workflows': {
@@ -212,6 +293,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/marketplace/': {
+      id: '/marketplace/'
+      path: '/marketplace'
+      fullPath: '/marketplace/'
+      preLoaderRoute: typeof MarketplaceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketplace/agents/$productId': {
+      id: '/marketplace/agents/$productId'
+      path: '/marketplace/agents/$productId'
+      fullPath: '/marketplace/agents/$productId'
+      preLoaderRoute: typeof MarketplaceAgentsProductIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketplace/installed/$installationId': {
+      id: '/marketplace/installed/$installationId'
+      path: '/marketplace/installed/$installationId'
+      fullPath: '/marketplace/installed/$installationId'
+      preLoaderRoute: typeof MarketplaceInstalledInstallationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -221,10 +323,16 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   GuideRoute: GuideRoute,
   InboxRoute: InboxRoute,
+  MetricsRoute: MetricsRoute,
   RunsRoute: RunsRoute,
+  SettingsRoute: SettingsRoute,
   WorkflowsRoute: WorkflowsRoute,
   AgentsIdRoute: AgentsIdRoute,
   AgentsIndexRoute: AgentsIndexRoute,
+  MarketplaceIndexRoute: MarketplaceIndexRoute,
+  MarketplaceAgentsProductIdRoute: MarketplaceAgentsProductIdRoute,
+  MarketplaceInstalledInstallationIdRoute:
+    MarketplaceInstalledInstallationIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

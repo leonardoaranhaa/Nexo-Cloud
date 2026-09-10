@@ -75,6 +75,19 @@ test("the auth schema stays nested while app migrations are discoverable", () =>
       { name: "0015_internal_events.sql", path: "0015_internal_events.sql" },
       { name: "0016_workflow_wait_resume.sql", path: "0016_workflow_wait_resume.sql" },
       { name: "0017_meta_webhook_security.sql", path: "0017_meta_webhook_security.sql" },
+      { name: "0018_agent_marketplace.sql", path: "0018_agent_marketplace.sql" },
+      { name: "0019_agent_decision_protocol.sql", path: "0019_agent_decision_protocol.sql" },
+      { name: "0020_knowledge_rag.sql", path: "0020_knowledge_rag.sql" },
+      { name: "0021_crm_lead_tool.sql", path: "0021_crm_lead_tool.sql" },
+      { name: "0022_lead_qualification_tool.sql", path: "0022_lead_qualification_tool.sql" },
+      { name: "0023_product_qualification_policy.sql", path: "0023_product_qualification_policy.sql" },
+      { name: "0024_lead_assignment_tool.sql", path: "0024_lead_assignment_tool.sql" },
+      { name: "0025_lead_follow_up_tool.sql", path: "0025_lead_follow_up_tool.sql" },
+      { name: "0026_nexo_learning_foundation.sql", path: "0026_nexo_learning_foundation.sql" },
+      { name: "0027_nexo_learning_evaluations.sql", path: "0027_nexo_learning_evaluations.sql" },
+      { name: "0028_nexo_learning_cases.sql", path: "0028_nexo_learning_cases.sql" },
+      { name: "0029_agent_improvement_lab.sql", path: "0029_agent_improvement_lab.sql" },
+      { name: "0030_tool_execution_domain.sql", path: "0030_tool_execution_domain.sql" },
   ]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });

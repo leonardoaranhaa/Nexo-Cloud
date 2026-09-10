@@ -111,7 +111,7 @@ function nodeTitle(id: FlowNodeId) {
     memory: "Memória",
     knowledge: "Base",
     handoff: "Humano",
-    agent: "Grok",
+    agent: "Agent Runtime",
     outbound: "Enviar",
   };
   return map[id];
@@ -120,24 +120,24 @@ function nodeTitle(id: FlowNodeId) {
 function nodeCopy(agent: Agent, id: FlowNodeId) {
   switch (id) {
     case "inbound":
-      return "O middleware (Evolution, Meta ou Z-API) recebe a mensagem e dispara este estúdio — ou o n8n / Flask que você exportar.";
+      return "O conector recebe a mensagem, valida o evento e encaminha o turno para o Agent Runtime.";
     case "hours":
       return agent.tools.hoursEnabled
         ? `Atende das ${agent.tools.hoursStart} às ${agent.tools.hoursEnd}. Fora disso a IA não é chamada.`
         : "Filtro de horário desligado — o agente responde a qualquer momento.";
     case "memory":
-      return `Os últimos ${agent.memoryWindow} turnos vão no contexto. No Python isso vira um deque por telefone; no n8n, Window Buffer.`;
+      return `Os últimos ${agent.memoryWindow} turnos entram no contexto, separados por conversa e workspace.`;
     case "knowledge":
       return agent.knowledge.faqs.length
         ? `${agent.knowledge.faqs.length} FAQs injetados no prompt. O matching local entra se a IA estiver indisponível.`
         : "Sem FAQ. O modelo responde só com persona e notas.";
     case "handoff":
       return agent.tools.handoff
-        ? `Palavras-chave: ${agent.tools.handoffKeywords}. Ao detectar, o fluxo pula o Grok.`
+        ? `Palavras-chave: ${agent.tools.handoffKeywords}. Ao detectar, o fluxo é transferido para um operador.`
         : "Handoff desligado.";
     case "agent":
-      return `Grok 4.5 · temperatura ${agent.temperature.toFixed(1)} · até ${agent.maxTokens} tokens. Respostas curtas, no tom de WhatsApp.`;
+      return `Temperatura ${agent.temperature.toFixed(1)} · até ${agent.maxTokens} tokens. Respostas curtas e adequadas ao canal.`;
     case "outbound":
-      return "A resposta volta pelo mesmo provedor. No playground o canal é este telefone; no ar, o número pareado.";
+      return "A resposta volta pelo mesmo conector. O histórico e o delivery ficam disponíveis no Inbox e nas execuções.";
   }
 }

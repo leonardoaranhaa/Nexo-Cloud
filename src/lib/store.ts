@@ -5,6 +5,35 @@ import { SEED_AGENTS, SEED_CONNECTIONS, SEED_EVENTS, SEED_INBOX } from "./templa
 import { createId } from "./utils";
 
 type Inbox = Record<string, ChatMessage[]>;
+export type PlatformSettings = {
+  appearance: "system" | "light" | "dark";
+  compactNavigation: boolean;
+  reduceMotion: boolean;
+  autoRefreshSeconds: 5 | 15 | 30 | 60;
+  defaultMemoryWindow: number;
+  defaultTemperature: number;
+  notifyHandoffs: boolean;
+  notifyFailures: boolean;
+  notifyDeployments: boolean;
+  confirmHighRiskTools: boolean;
+  allowLocalFallback: boolean;
+  defaultEnvironment: "development" | "staging" | "production";
+};
+
+const DEFAULT_SETTINGS: PlatformSettings = {
+  appearance: "dark",
+  compactNavigation: false,
+  reduceMotion: false,
+  autoRefreshSeconds: 15,
+  defaultMemoryWindow: 12,
+  defaultTemperature: 0.4,
+  notifyHandoffs: true,
+  notifyFailures: true,
+  notifyDeployments: true,
+  confirmHighRiskTools: true,
+  allowLocalFallback: true,
+  defaultEnvironment: "development",
+};
 export type WorkspaceContext = {
   id: string;
   organizationId: string;
@@ -28,6 +57,7 @@ type NexoState = {
   environment: WorkspaceContext["environment"];
   workspaces: WorkspaceContext[];
   backendReady: boolean;
+  settings: PlatformSettings;
   setHydrated: (v: boolean) => void;
   setWorkspaceSnapshot: (workspaceId: string, agents: Agent[]) => void;
   setWorkspaceContext: (active: WorkspaceContext, workspaces: WorkspaceContext[]) => void;
@@ -45,6 +75,7 @@ type NexoState = {
   clearInbox: (agentId: string) => void;
   log: (kind: StudioEvent["kind"], text: string) => void;
   resetDemo: () => void;
+  updateSettings: (patch: Partial<PlatformSettings>) => void;
 };
 
 const seedInbox = (): Inbox => {
@@ -73,6 +104,7 @@ export const useNexo = create<NexoState>()(
       environment: "development",
       workspaces: [],
       backendReady: false,
+      settings: DEFAULT_SETTINGS,
       hydrated: false,
       setHydrated: (v) => set({ hydrated: v }),
       setWorkspaceSnapshot: (workspaceId, agents) => set({ workspaceId, agents, backendReady: true }),
@@ -149,6 +181,7 @@ export const useNexo = create<NexoState>()(
           events: [{ id: createId("ev"), at: Date.now(), kind, text }, ...s.events].slice(0, 24),
         })),
       resetDemo: () => set({ ...seed() }),
+      updateSettings: (patch) => set((state) => ({ settings: { ...state.settings, ...patch } })),
     }),
     {
       name: "nexo-studio-v1",
@@ -163,6 +196,7 @@ export const useNexo = create<NexoState>()(
         organizationName: s.organizationName,
         environment: s.environment,
         workspaces: s.workspaces,
+        settings: s.settings,
       }),
     },
   ),

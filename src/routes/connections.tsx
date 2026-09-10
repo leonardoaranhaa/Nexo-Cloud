@@ -116,9 +116,8 @@ function ConnectionsPage() {
   return (
     <AppShell title="Conexões" action={<CreateConnectionDialog />}>
       <p className="mb-6 max-w-2xl text-sm leading-relaxed text-muted">
-        Três jeitos de virar API: Evolution (QR, auto-hospedada), Meta Cloud (oficial, por
-        conversa) e Z-API (instância pronta). O agente nasce no estúdio e só entra no ar quando
-        o canal está pareado.
+        Conecte Evolution, Meta Cloud ou Z-API ao workspace. O canal precisa estar validado e
+        pareado antes de um agente entrar em operação.
       </p>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">

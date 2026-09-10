@@ -44,3 +44,17 @@ export async function pollScheduledWorkflows(sql: Sql, workerId: string, now = n
   }
   return { claimed: due.length, enqueued };
 }
+
+
+import { pollDueLeadFollowUps } from "../crm/follow-ups.ts";
+import { unavailableSecretProvider, type SecretProvider } from "../connectors/secrets.ts";
+
+export async function pollScheduledFollowUps(sql: Sql, workerId: string, secretProvider: SecretProvider = unavailableSecretProvider(), now = new Date(), limit = 20) {
+  return pollDueLeadFollowUps(sql, workerId, secretProvider, now, limit);
+}
+
+export async function pollScheduledAutomation(sql: Sql, workerId: string, secretProvider: SecretProvider = unavailableSecretProvider(), now = new Date(), limit = 20) {
+  const workflows = await pollScheduledWorkflows(sql, workerId, now, limit);
+  const followUps = await pollScheduledFollowUps(sql, workerId, secretProvider, now, limit);
+  return { workflows, followUps };
+}
