@@ -13,7 +13,7 @@ import { createId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PROVIDER_LABEL } from "@/lib/types";
-import { createWorkspaceAgent } from "@/lib/multitenancy/api";
+import { bindWorkspaceAgentConnection, createWorkspaceAgent } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
 export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLabel?: string }) {
@@ -43,6 +43,11 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
           agentType: template,
         },
       });
+      if (connectionId) {
+        await bindWorkspaceAgentConnection({
+          data: { agentId: created.id, workspaceId, connectionId },
+        });
+      }
       await refresh(workspaceId);
       return created.id;
     }
