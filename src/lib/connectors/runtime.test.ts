@@ -109,6 +109,7 @@ test("Evolution dispatcher sends the documented text payload", async () => {
     );
     assert.equal(result.status, "sent");
     assert.equal(result.code, "ok");
+    assert.equal(result.providerMessageId, "provider-id");
     assert.doesNotMatch(result.message, /test-key|provider-id/);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
