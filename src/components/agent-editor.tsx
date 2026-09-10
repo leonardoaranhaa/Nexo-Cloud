@@ -67,6 +67,7 @@ export function AgentEditor({
     testScenarios: [],
   };
   const activeConnection = connections.find((connection) => connection.id === agent.connectionId);
+  const completeFaqs = agent.knowledge.faqs.filter((faq) => faq.q.trim() && faq.a.trim()).length;
 
   function patchBlueprint(field: keyof typeof blueprint, values: string[]) {
     patch({ developmentBlueprint: { ...blueprint, [field]: values } });
@@ -214,85 +215,15 @@ export function AgentEditor({
         </div>
       </Card>}
 
-      {show("knowledge") && <Card className="flex flex-col gap-4 p-4" data-node="knowledge">
-        <div className="flex items-center justify-between">
-          <div className="font-display text-sm font-semibold">Base de conhecimento</div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() =>
-              patch({
-                knowledge: {
-                  ...agent.knowledge,
-                  faqs: [...agent.knowledge.faqs, { id: createId("faq"), q: "", a: "" }],
-                },
-              })
-            }
-          >
-            <Plus className="size-3.5" />
-            FAQ
-          </Button>
-        </div>
-        <Field label="Notas internas" htmlFor="ed-notes">
-          <Textarea
-            id="ed-notes"
-            className="min-h-20"
-            value={agent.knowledge.notes}
-            onChange={(e) =>
-              patch({ knowledge: { ...agent.knowledge, notes: e.target.value } })
-            }
-          />
-        </Field>
-        <div className="flex flex-col gap-3">
-          {agent.knowledge.faqs.length === 0 && (
-            <p className="text-sm text-muted">Nenhum FAQ. Adicione pares pergunta/resposta.</p>
-          )}
-          {agent.knowledge.faqs.map((faq, i) => (
-            <div key={faq.id} className="rounded-lg border border-border bg-bg p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="font-mono text-xs text-subtle">{String(i + 1).padStart(2, "0")}</span>
-                <button
-                  type="button"
-                  className="rounded-md p-1 text-subtle hover:bg-elevated hover:text-fg"
-                  aria-label="Remover FAQ"
-                  onClick={() =>
-                    patch({
-                      knowledge: {
-                        ...agent.knowledge,
-                        faqs: agent.knowledge.faqs.filter((f) => f.id !== faq.id),
-                      },
-                    })
-                  }
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-              <Input
-                value={faq.q}
-                placeholder="Pergunta"
-                className="mb-2"
-                onChange={(e) => {
-                  const faqs = agent.knowledge.faqs.map((f) =>
-                    f.id === faq.id ? { ...f, q: e.target.value } : f,
-                  );
-                  patch({ knowledge: { ...agent.knowledge, faqs } });
-                }}
-              />
-              <Textarea
-                value={faq.a}
-                placeholder="Resposta"
-                className="min-h-16"
-                onChange={(e) => {
-                  const faqs = agent.knowledge.faqs.map((f) =>
-                    f.id === faq.id ? { ...f, a: e.target.value } : f,
-                  );
-                  patch({ knowledge: { ...agent.knowledge, faqs } });
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      </Card>}
+      {show("knowledge") && <div className="flex flex-col gap-4" data-node="knowledge">
+        <div><div className="font-display text-lg font-semibold">Fontes de conhecimento</div><p className="mt-1 text-sm leading-relaxed text-muted">Cada fonte possui disponibilidade e escopo próprios. O runtime só usa conteúdo configurado e aprovado neste agente.</p></div>
+        <ContextualToolCard title="Notas internas" description="Contexto operacional privado usado como referência pelo agente durante a resposta." enabled={Boolean(agent.knowledge.notes.trim())} state={agent.knowledge.notes.trim() ? "Ativo" : "Disponível"} stateTone={agent.knowledge.notes.trim() ? "live" : "neutral"} dependency="Nenhuma" scope="Runtime · contexto interno" risk="Baixo" onToggle={() => document.getElementById("ed-notes")?.focus()} actionLabel="Configurar">
+          <Field label="Conteúdo da fonte" htmlFor="ed-notes"><Textarea id="ed-notes" className="min-h-24" value={agent.knowledge.notes} placeholder="Descreva contexto aprovado para este agente." onChange={(e) => patch({ knowledge: { ...agent.knowledge, notes: e.target.value } })} /></Field>
+        </ContextualToolCard>
+        <ContextualToolCard title="FAQ publicada" description="Pares de pergunta e resposta que o agente pode consultar em modo somente leitura." enabled={completeFaqs > 0} state={completeFaqs === agent.knowledge.faqs.length && completeFaqs > 0 ? "Ativo" : agent.knowledge.faqs.length > 0 ? "Configuração pendente" : "Disponível"} stateTone={completeFaqs === agent.knowledge.faqs.length && completeFaqs > 0 ? "live" : agent.knowledge.faqs.length > 0 ? "warn" : "neutral"} dependency="Pares pergunta/resposta completos" scope="Runtime · somente leitura" risk="Médio" onToggle={() => { if (agent.knowledge.faqs.length === 0) patch({ knowledge: { ...agent.knowledge, faqs: [{ id: createId("faq"), q: "", a: "" }] } }); }} actionLabel="Configurar">
+          <div className="flex flex-col gap-3"><div className="flex items-center justify-between"><span className="text-xs text-muted">{completeFaqs} de {agent.knowledge.faqs.length} entradas completas</span><Button size="sm" variant="secondary" onClick={() => patch({ knowledge: { ...agent.knowledge, faqs: [...agent.knowledge.faqs, { id: createId("faq"), q: "", a: "" }] } })}><Plus className="size-3.5" />Adicionar FAQ</Button></div>{agent.knowledge.faqs.length === 0 && <p className="text-sm text-muted">Nenhuma entrada. Adicione a primeira pergunta e resposta.</p>}{agent.knowledge.faqs.map((faq, i) => <div key={faq.id} className="rounded-lg border border-border bg-bg p-3"><div className="mb-2 flex items-center justify-between"><span className="font-mono text-xs text-subtle">{String(i + 1).padStart(2, "0")}</span><button type="button" className="rounded-md p-1 text-subtle hover:bg-elevated hover:text-fg" aria-label="Remover FAQ" onClick={() => patch({ knowledge: { ...agent.knowledge, faqs: agent.knowledge.faqs.filter((f) => f.id !== faq.id) } })}><Trash2 className="size-3.5" /></button></div><Input value={faq.q} placeholder="Pergunta" className="mb-2" onChange={(e) => patch({ knowledge: { ...agent.knowledge, faqs: agent.knowledge.faqs.map((f) => f.id === faq.id ? { ...f, q: e.target.value } : f) } })} /><Textarea value={faq.a} placeholder="Resposta" className="min-h-16" onChange={(e) => patch({ knowledge: { ...agent.knowledge, faqs: agent.knowledge.faqs.map((f) => f.id === faq.id ? { ...f, a: e.target.value } : f) } })} /></div>)}</div>
+        </ContextualToolCard>
+      </div>}
 
       {show("tools") && <Card className="flex flex-col gap-5 p-4" data-node="hours">
         <div>
@@ -396,6 +327,7 @@ function ContextualToolCard({
   scope,
   risk,
   onToggle,
+  actionLabel,
   children,
 }: {
   title: string;
@@ -407,10 +339,11 @@ function ContextualToolCard({
   scope: string;
   risk: string;
   onToggle: () => void;
+  actionLabel?: string;
   children?: ReactNode;
 }) {
   return <div className="rounded-lg border border-border bg-bg p-4">
-    <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><div className="text-sm font-medium">{title}</div><Badge tone={stateTone}>{state}</Badge></div><p className="mt-1 text-xs leading-relaxed text-muted">{description}</p></div><Switch checked={enabled} onCheckedChange={onToggle} aria-label={title} /></div>
+    <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><div className="text-sm font-medium">{title}</div><Badge tone={stateTone}>{state}</Badge></div><p className="mt-1 text-xs leading-relaxed text-muted">{description}</p></div>{actionLabel ? <Button size="sm" variant="secondary" onClick={onToggle}>{actionLabel}</Button> : <Switch checked={enabled} onCheckedChange={onToggle} aria-label={title} />}</div>
     <div className="mt-3 grid gap-2 border-t border-border pt-3 text-xs sm:grid-cols-3"><Meta label="Dependência" value={dependency} /><Meta label="Escopo" value={scope} /><Meta label="Risco" value={risk} /></div>
     {children && <div className="mt-3">{children}</div>}
   </div>;
