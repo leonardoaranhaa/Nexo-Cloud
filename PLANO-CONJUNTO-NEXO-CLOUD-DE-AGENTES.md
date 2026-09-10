@@ -101,6 +101,8 @@ A área **Conhecimento** segue o mesmo contrato para suas fontes: notas internas
 
 A área **Publicação** deve funcionar como uma superfície de readiness operacional. Canal, cenários de teste, handoff e versão candidata são cards independentes, com estados, dependências, escopo, risco e ações próprias. A publicação deve ser bloqueada quando os requisitos mínimos — canal conectado e cenário de teste configurado — não estiverem atendidos.
 
+O fluxo ponta a ponta deve possuir um único gate de publicação: ações globais do agente levam à área **Publicação** para revisão contextual, e somente o comando de publicação dessa área executa a criação da versão. Nenhum atalho deve contornar os requisitos ou criar uma publicação silenciosamente.
+
 ## 5. Estado real consolidado
 
 ### 5.1 Fundamento multi-tenant e Control Plane

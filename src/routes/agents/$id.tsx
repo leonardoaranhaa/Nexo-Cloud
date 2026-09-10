@@ -16,7 +16,7 @@ import { useNexo } from "@/lib/store";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { useState } from "react";
 import type { Agent, FlowNodeId } from "@/lib/types";
-import { archiveWorkspaceAgent, publishWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { archiveWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
@@ -118,19 +118,9 @@ function AgentStudioPage() {
             <Button
               size="sm"
               variant="live"
-              onClick={() => {
-                void (async () => {
-                  if (backendReady && workspaceId) {
-                    await publishWorkspaceAgent({ data: { workspaceId, agentId: agent.id } });
-                    await refresh(workspaceId);
-                  } else {
-                    updateAgent(agent.id, { status: "live" });
-                  }
-                  toast("Agente publicado com versão persistida.");
-                })().catch(() => toast("Falha ao publicar a versão."));
-              }}
+              onClick={() => setTab("publication")}
             >
-              Publicar
+              Revisar publicação
             </Button>
           ) : (
             <Button
