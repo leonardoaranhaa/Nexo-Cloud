@@ -9,9 +9,11 @@ export function webhookUrl(connection: Connection) {
     return `https://api.z-api.io/instances/${connection.instance || "sandbox"}/token/webhook`;
   }
   if (connection.provider === "meta") {
-    return `https://seu-dominio.com/api/webhooks/meta/${connection.id}`;
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:8081";
+    return `${origin}/api/webhooks/meta/${connection.id}`;
   }
-  return "https://seu-dominio.com/webhook";
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:8081";
+  return `${origin}/webhook`;
 }
 
 export function inboundPayload(provider: Provider, phone: string, text: string) {

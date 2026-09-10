@@ -100,6 +100,10 @@ function ConnectionsPage() {
         data: { workspaceId, connectionId: selectedId },
       });
       setHealthcheckMessage(`${result.status}: ${result.message}`);
+      patchConnection(selectedId, {
+        status: result.status === "healthy" ? "connected" : "error",
+        ...(result.status === "healthy" ? { lastEventAt: Date.now() } : {}),
+      });
       await refresh(workspaceId);
     } catch {
       setHealthcheckMessage("Não foi possível executar o healthcheck.");
@@ -273,27 +277,6 @@ function ConnectionsPage() {
               <div className="mt-3">
                 <MetaCredentialDialog connection={selected} />
               </div>
-            )}
-
-            {selected.provider === "meta" && selected.status !== "connected" && (
-              <Button
-                className="mt-4 w-full"
-                variant="live"
-                onClick={() => {
-                  if (!selected.phoneNumberId) {
-                    toast("Informe o Phone number ID");
-                    return;
-                  }
-                  patchConnection(selected.id, {
-                    status: "connected",
-                    lastEventAt: Date.now(),
-                  });
-                  log("connection", `${selected.name} ligada à Cloud API`);
-                  toast("Meta Cloud conectada no preview");
-                }}
-              >
-                Confirmar Cloud API
-              </Button>
             )}
 
             {selected.status === "connected" && selected.phone && (
