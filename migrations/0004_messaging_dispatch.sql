@@ -38,7 +38,7 @@ create table if not exists message_deliveries (
   provider text not null,
   provider_message_id text,
   status text not null default 'pending'
-    check (status in ('pending', 'sending', 'sent', 'failed', 'unknown')),
+    check (status in ('pending', 'sending', 'sent', 'delivered', 'read', 'failed', 'unknown')),
   attempt_count integer not null default 0 check (attempt_count >= 0),
   next_attempt_at timestamptz,
   idempotency_key text not null,

@@ -586,6 +586,35 @@ export async function provisionEvolutionCredential(
   );
 }
 
+export async function provisionEvolutionWebhookCredential(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; connectionId: string; secret: string },
+  provisioner: SecretProvisioner,
+): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "manage");
+  const connection = await sql.query<{ workspace_id: string; provider: ConnectionProvider }>(
+    `select workspace_id, provider
+       from connections
+      where id = $1 and workspace_id = $2 and deleted_at is null
+      limit 1`,
+    [input.connectionId, input.workspaceId],
+  );
+  if (!connection[0]) throw new Error("CONNECTION_NOT_FOUND");
+  if (connection[0].provider !== "evolution") throw new Error("EVOLUTION_CONNECTION_REQUIRED");
+  const secret = requiredText(input.secret, "secret", 1024);
+  const secretRef = `nexo/${input.workspaceId}/${input.connectionId}/webhook_jwt`;
+  await provisioner.put(secretRef, secret, {
+    workspaceId: input.workspaceId,
+    connectionId: input.connectionId,
+  });
+  await sql.query(
+    `update connections set webhook_secret_ref = $2, updated_at = current_timestamp
+      where id = $1 and workspace_id = $3 and deleted_at is null`,
+    [input.connectionId, secretRef, input.workspaceId],
+  );
+}
+
 export async function bindAgentConnection(
   sql: Sql,
   userId: string,

@@ -206,3 +206,17 @@ export const dispatchWorkspaceTextMessage = createServerFn({ method: "POST" })
       : unavailableSecretProvider();
     return dispatchTextMessage(await getSql(), context.userId, data, provider);
   });
+
+export const provisionEvolutionWebhookCredential = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; connectionId: string; secret: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { awsSecretsManagerProvisioner, unavailableSecretProvisioner } = await import("@/lib/connectors/secrets");
+    const { provisionEvolutionWebhookCredential } = await import("./server");
+    const provisioner = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
+      ? awsSecretsManagerProvisioner({ region: process.env.AWS_REGION })
+      : unavailableSecretProvisioner();
+    await provisionEvolutionWebhookCredential(await getSql(), context.userId, data, provisioner);
+    return { ok: true as const };
+  });

@@ -205,12 +205,13 @@ export async function dispatchTextMessage(
   await sql.query(
     `update message_deliveries
         set status = $2,
-            last_error_code = $3,
-            last_error_message = $4,
+            provider_message_id = $3,
+            last_error_code = $4,
+            last_error_message = $5,
             sent_at = case when $2 = 'sent' then current_timestamp else sent_at end,
             updated_at = current_timestamp
-      where id = $1 and workspace_id = $5`,
-    [deliveryId, status, dispatch.status === "sent" ? null : dispatch.code, dispatch.status === "sent" ? null : dispatch.message, input.workspaceId],
+      where id = $1 and workspace_id = $6`,
+    [deliveryId, status, dispatch.providerMessageId ?? null, dispatch.status === "sent" ? null : dispatch.code, dispatch.status === "sent" ? null : dispatch.message, input.workspaceId],
   );
   await sql.query(
     `update messages

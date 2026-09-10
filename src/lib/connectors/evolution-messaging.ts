@@ -14,6 +14,7 @@ export type EvolutionDispatchResult = {
   httpStatus?: number;
   latencyMs: number;
   message: string;
+  providerMessageId?: string;
 };
 
 function baseUrl(value: string): URL {
@@ -79,7 +80,15 @@ export class EvolutionTextDispatcher {
       });
       const latencyMs = Date.now() - startedAt;
       if (response.ok) {
-        return { status: "sent", code: "ok", httpStatus: response.status, latencyMs, message: "Evolution API accepted the text message" };
+        let providerMessageId: string | undefined;
+        try {
+          const body = await response.json() as { key?: { id?: unknown } };
+          providerMessageId = typeof body.key?.id === "string" ? body.key.id.slice(0, 240) : undefined;
+        } catch {
+          // A successful provider response without a parseable body is still sent;
+          // the delivery remains eligible for reconciliation through webhook data.
+        }
+        return { status: "sent", code: "ok", httpStatus: response.status, latencyMs, message: "Evolution API accepted the text message", ...(providerMessageId ? { providerMessageId } : {}) };
       }
       if (response.status === 400) return { status: "failed", code: "invalid_request", httpStatus: response.status, latencyMs, message: "Evolution API rejected the message payload" };
       if (response.status === 401 || response.status === 403) return { status: "failed", code: "unauthorized", httpStatus: response.status, latencyMs, message: "Evolution API rejected the configured apikey" };
