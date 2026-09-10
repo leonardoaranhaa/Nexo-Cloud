@@ -8,6 +8,7 @@ import {
 } from "./secrets.ts";
 import { HttpHealthcheckAdapter, type ConnectorConfig, type HealthcheckResult } from "./runtime.ts";
 import { EvolutionApiAdapter } from "./evolution.ts";
+import { MetaCloudApiAdapter } from "./meta-messaging.ts";
 
 export type HealthcheckRun = HealthcheckResult & {
   connectionId: string;
@@ -24,6 +25,7 @@ type ConnectionRow = {
 
 function adapterForProvider(provider: ConnectionProvider) {
   if (provider === "evolution") return new EvolutionApiAdapter();
+  if (provider === "meta") return new MetaCloudApiAdapter();
   // Provider-specific adapters will be added after their exact contracts are verified.
   return new HttpHealthcheckAdapter();
 }

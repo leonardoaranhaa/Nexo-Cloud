@@ -3,6 +3,7 @@ import type { Sql } from "../db";
 import { requireWorkspaceAccess, type ConnectionProvider, type JsonObject } from "../multitenancy/server.ts";
 import { createSecretResolver, type SecretProvider } from "../connectors/secrets.ts";
 import { EvolutionTextDispatcher, evolutionConfig } from "../connectors/evolution-messaging.ts";
+import { MetaTextDispatcher } from "../connectors/meta-messaging.ts";
 
 type DeliveryStatus = "sent" | "failed" | "unknown";
 
@@ -116,7 +117,7 @@ async function dispatchTextMessageInternal(
   }
   if (target.agent_status !== "active") throw new Error("AGENT_NOT_ACTIVE");
   if (target.connection_status === "revoked") throw new Error("CONNECTION_REVOKED");
-  if (target.provider !== "evolution") throw new Error("PROVIDER_DISPATCH_NOT_IMPLEMENTED");
+  if (target.provider !== "evolution" && target.provider !== "meta") throw new Error("PROVIDER_DISPATCH_NOT_IMPLEMENTED");
   if (!target.secret_ref) throw new Error("CONNECTION_SECRET_REF_MISSING");
 
   let conversationId = input.conversationId?.trim() || "";
@@ -184,11 +185,16 @@ async function dispatchTextMessageInternal(
   }
 
   const resolveSecret = createSecretResolver(secretProvider);
-  const dispatch = await new EvolutionTextDispatcher().sendText(
-    {
-      ...evolutionConfig(target.config),
-      recipient,
-      text: content,
+  const dispatch = target.provider === "evolution"
+    ? await new EvolutionTextDispatcher().sendText({ ...evolutionConfig(target.config), recipient, text: content }, {
+      workspaceId: input.workspaceId, connectionId, traceId,
+      getSecret: (name) => { if (name !== "api_key") throw new Error("SECRET_NAME_NOT_ALLOWED"); return resolveSecret(target.secret_ref!, { workspaceId: input.workspaceId, connectionId }); },
+    })
+    : await new MetaTextDispatcher().sendText({
+      baseUrl: typeof target.config.baseUrl === "string" ? target.config.baseUrl : undefined,
+      graphVersion: typeof target.config.graphVersion === "string" ? target.config.graphVersion : undefined,
+      phoneNumberId: typeof target.config.phoneNumberId === "string" ? target.config.phoneNumberId : "",
+      recipient, text: content,
     },
     {
       workspaceId: input.workspaceId,

@@ -43,8 +43,9 @@ export async function assessConnectionReadiness(
     };
   }
 
+  const providerConfig = row.config as Record<string, unknown>;
   const configMissing = row.provider === "meta"
-    ? !row.config?.phoneNumberId
+    ? typeof providerConfig.phoneNumberId !== "string" || typeof providerConfig.graphVersion !== "string"
     : !row.config?.instance || !row.config?.baseUrl;
   if (configMissing) {
     return {
@@ -56,13 +57,13 @@ export async function assessConnectionReadiness(
     };
   }
 
-  if (row.provider === "evolution") {
+  if (row.provider === "evolution" || row.provider === "meta") {
     return {
       connectionId: row.id,
       provider: row.provider,
       status: "ready",
       code: "ready_for_healthcheck",
-      message: "Evolution configurada; o healthcheck oficial pode ser executado.",
+      message: `${row.provider === "meta" ? "Meta Cloud API" : "Evolution"} configurada; o healthcheck oficial pode ser executado.`,
     };
   }
 
