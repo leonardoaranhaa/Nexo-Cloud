@@ -311,3 +311,12 @@ export const sendWorkspaceConversationMessage = createServerFn({ method: "POST" 
       traceId: data.traceId,
     }, provider);
   });
+
+export const listWorkspaceAgentRuntimeExecutions = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; status?: "running" | "succeeded" | "failed" | "skipped"; agentId?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listAgentRuntimeExecutions } = await import("./server");
+    return listAgentRuntimeExecutions(await getSql(), context.userId, data);
+  });

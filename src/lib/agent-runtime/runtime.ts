@@ -5,6 +5,7 @@ import type { Agent } from "../types.ts";
 import { dispatchTextMessageAsRuntime } from "../messaging/router.ts";
 import { awsSecretsManagerProvider, unavailableSecretProvider, type SecretProvider } from "../connectors/secrets.ts";
 import { claimAgentRuntimeJob, completeAgentRuntimeJob, failAgentRuntimeJob, type AgentRuntimeJob } from "./queue.ts";
+import { finishRuntimeExecution, startRuntimeExecution, type ExecutionStep } from "./execution.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -219,9 +220,18 @@ export async function runNextAgentRuntimeJob(
 ): Promise<{ jobId?: string; status: "idle" | "succeeded" | "queued" | "dead"; reason?: string }> {
   const job = await claimAgentRuntimeJob(sql, workerId);
   if (!job) return { status: "idle" };
+  const startedAt = Date.now();
+  let executionId: string | undefined;
+  try {
+    executionId = (await startRuntimeExecution(sql, job)).id;
+  } catch {
+    // Observability must never prevent the job from being retried or completed.
+  }
   try {
     const context = await loadContext(sql, job);
+    const steps: ExecutionStep[] = [{ name: "load_context", status: "ok" }];
     const result = await executeAgentRuntime(context, model);
+    steps.push({ name: result.reason, status: result.reason === "handoff" || result.reason === "outside_hours" ? "skip" : "ok" });
     if (result.reply) {
       const provider = secretProvider ?? (process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
         ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
@@ -237,12 +247,44 @@ export async function runNextAgentRuntimeJob(
         actor: "agent",
         traceId: job.trace_id,
       }, provider);
+      steps.push({ name: "dispatch_outbound", status: "ok" });
     }
     await completeAgentRuntimeJob(sql, job);
+    if (executionId) {
+      try {
+        await finishRuntimeExecution(sql, executionId, {
+          status: "succeeded",
+          reason: result.reason,
+          aiProvider: result.usedAi ? "xai" : "local",
+          modelName: result.usedAi ? process.env.NEXO_AGENT_MODEL || "grok-4.5" : "fallback",
+          durationMs: Date.now() - startedAt,
+          historyCount: context.history.length,
+          inputChars: context.inboundText.length,
+          outputChars: result.reply?.length ?? 0,
+          steps,
+        });
+      } catch {
+        // Observability is best effort and must not change a successful job.
+      }
+    }
     return { jobId: job.id, status: "succeeded", reason: result.reason };
   } catch (error) {
     const reason = error instanceof Error ? error.message : "AGENT_RUNTIME_FAILED";
     const status = await failAgentRuntimeJob(sql, job, "AGENT_RUNTIME_FAILED", reason);
+    if (executionId) {
+      try {
+        await finishRuntimeExecution(sql, executionId, {
+          status: "failed",
+          reason: "runtime_error",
+          durationMs: Date.now() - startedAt,
+          errorCode: "AGENT_RUNTIME_FAILED",
+          errorMessage: reason,
+          steps: [{ name: "runtime", status: "error" }],
+        });
+      } catch {
+        // Keep the original runtime failure as the source of truth.
+      }
+    }
     return { jobId: job.id, status, reason: "AGENT_RUNTIME_FAILED" };
   }
 }

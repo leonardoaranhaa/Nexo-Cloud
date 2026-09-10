@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Bot, Inbox, LayoutGrid, Plug2, Waypoints } from "lucide-react";
+import { Activity, Bot, Inbox, LayoutGrid, Plug2, Waypoints } from "lucide-react";
 import { NexoWordmark } from "./brand";
 import { cn } from "@/lib/utils";
 import { useNexo } from "@/lib/store";
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/connections", label: "Conexões", icon: Plug2 },
   { to: "/agents", label: "Agentes", icon: Bot },
   { to: "/inbox", label: "Inbox", icon: Inbox },
+  { to: "/runs", label: "Execuções", icon: Activity },
   { to: "/guide", label: "Caminhos", icon: Waypoints },
 ] as const;
 

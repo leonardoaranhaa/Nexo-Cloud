@@ -22,6 +22,8 @@ async function fixture(baseUrl: string) {
     "0005_webhook_security.sql",
     "0006_webhook_delivery_states.sql",
     "0007_agent_runtime_jobs.sql",
+    "0008_conversation_handoff.sql",
+    "0009_agent_runtime_execution_logs.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";
@@ -62,10 +64,15 @@ test("Agent Runtime processes one inbound job and dispatches one outbound reply"
     const jobs = await pg.query<{ status: string }>("select status from agent_runtime_jobs where id = $1", [queued.id]);
     const messages = await pg.query<{ direction: string; status: string; content: { text?: string } }>("select direction, status, content from messages where workspace_id = 'ws' order by created_at");
     const deliveries = await pg.query<{ provider_message_id: string }>("select provider_message_id from message_deliveries where workspace_id = 'ws'");
+    const executions = await pg.query<{ status: string; reason: string; ai_provider: string; output_chars: number }>("select status, reason, ai_provider, output_chars from agent_runtime_execution_logs where workspace_id = 'ws'");
     assert.equal(jobs.rows[0]?.status, "succeeded");
     assert.equal(messages.rows.filter((row) => row.direction === "outbound").length, 1);
     assert.equal(messages.rows.find((row) => row.direction === "outbound")?.status, "sent");
     assert.equal(deliveries.rows[0]?.provider_message_id, "provider-runtime-1");
+    assert.equal(executions.rows[0]?.status, "succeeded");
+    assert.equal(executions.rows[0]?.reason, "ai");
+    assert.equal(executions.rows[0]?.ai_provider, "xai");
+    assert.ok((executions.rows[0]?.output_chars ?? 0) > 0);
   } finally {
     await pg.close();
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));

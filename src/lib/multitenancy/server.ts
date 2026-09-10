@@ -780,6 +780,66 @@ export async function assertConversationAccess(
   return rows[0];
 }
 
+export type AgentRuntimeExecutionRecord = {
+  id: string;
+  workspaceId: string;
+  jobId: string;
+  agentId: string;
+  agentName: string;
+  conversationId: string;
+  externalContactId: string;
+  traceId: string;
+  attemptCount: number;
+  status: "running" | "succeeded" | "failed" | "skipped";
+  reason: string | null;
+  aiProvider: string | null;
+  modelName: string | null;
+  durationMs: number | null;
+  historyCount: number;
+  inputChars: number;
+  outputChars: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  steps: JsonValue[];
+  createdAt: string;
+  completedAt: string | null;
+};
+
+export async function listAgentRuntimeExecutions(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; status?: "running" | "succeeded" | "failed" | "skipped"; agentId?: string },
+): Promise<AgentRuntimeExecutionRecord[]> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const params: unknown[] = [input.workspaceId];
+  const filters = ["e.workspace_id = $1"];
+  if (input.status) {
+    params.push(input.status);
+    filters.push(`e.status = $${params.length}`);
+  }
+  if (input.agentId) {
+    params.push(input.agentId);
+    filters.push(`e.agent_id = $${params.length}`);
+  }
+  return sql.query<AgentRuntimeExecutionRecord>(
+    `select e.id, e.workspace_id as "workspaceId", e.job_id as "jobId", e.agent_id as "agentId",
+            a.name as "agentName", e.conversation_id as "conversationId",
+            c.external_contact_id as "externalContactId", e.trace_id as "traceId",
+            e.attempt_count as "attemptCount", e.status, e.reason,
+            e.ai_provider as "aiProvider", e.model_name as "modelName",
+            e.duration_ms as "durationMs", e.history_count as "historyCount",
+            e.input_chars as "inputChars", e.output_chars as "outputChars",
+            e.error_code as "errorCode", e.error_message as "errorMessage",
+            e.steps, e.created_at as "createdAt", e.completed_at as "completedAt"
+       from agent_runtime_execution_logs e
+       join agents a on a.id = e.agent_id and a.workspace_id = e.workspace_id
+       join conversations c on c.id = e.conversation_id and c.workspace_id = e.workspace_id
+      where ${filters.join(" and ")}
+      order by e.created_at desc limit 100`,
+    params,
+  );
+}
+
 function connectionSelect() {
   return `
     select

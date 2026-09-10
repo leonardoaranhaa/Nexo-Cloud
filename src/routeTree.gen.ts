@@ -14,6 +14,7 @@ import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as GuideRouteImport } from './routes/guide'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as RunsRouteImport } from './routes/runs'
 import { Route as AgentsIndexRouteImport } from './routes/agents/index'
 import { Route as AgentsIdRouteImport } from './routes/agents/$id'
 
@@ -42,6 +43,11 @@ const InboxRoute = InboxRouteImport.update({
   path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsRoute = RunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentsIndexRoute = AgentsIndexRouteImport.update({
   id: '/agents/',
   path: '/agents/',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/runs': typeof RunsRoute
   '/agents/$id': typeof AgentsIdRoute
   '/agents/': typeof AgentsIndexRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/runs': typeof RunsRoute
   '/agents/$id': typeof AgentsIdRoute
   '/agents': typeof AgentsIndexRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/runs': typeof RunsRoute
   '/agents/$id': typeof AgentsIdRoute
   '/agents/': typeof AgentsIndexRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/runs'
     | '/agents/$id'
     | '/agents/'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/runs'
     | '/agents/$id'
     | '/agents'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/runs'
     | '/agents/$id'
     | '/agents/'
   fileRoutesById: FileRoutesById
@@ -117,6 +129,7 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   GuideRoute: typeof GuideRoute
   InboxRoute: typeof InboxRoute
+  RunsRoute: typeof RunsRoute
   AgentsIdRoute: typeof AgentsIdRoute
   AgentsIndexRoute: typeof AgentsIndexRoute
 }
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs': {
+      id: '/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof RunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agents/': {
       id: '/agents/'
       path: '/agents'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   GuideRoute: GuideRoute,
   InboxRoute: InboxRoute,
+  RunsRoute: RunsRoute,
   AgentsIdRoute: AgentsIdRoute,
   AgentsIndexRoute: AgentsIndexRoute,
 }
