@@ -5,7 +5,7 @@ import { compileWorkflowDefinition, evaluateCondition } from "./compiler.ts";
 import { claimWorkflowRun, completeWorkflowRun, failOrRetryWorkflowRun, type ClaimedWorkflowRun } from "./queue.ts";
 import type { WorkflowDefinition, WorkflowNode } from "./server.ts";
 
-type Json = Record<string, unknown>;
+type Json = JsonObject;
 export type WorkflowNodeHandlers = {
   agent: (node: WorkflowNode, input: Json, run: ClaimedWorkflowRun) => Promise<Json>;
   tool: (node: WorkflowNode, input: Json, run: ClaimedWorkflowRun) => Promise<Json>;
