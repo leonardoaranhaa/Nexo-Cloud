@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogTrigger } from "./ui/dialog";
@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { bindWorkspaceAgentConnection, createWorkspaceAgent } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
+import { guidanceForWorkspaceGoal, type WorkspaceGoal } from "@/lib/workspace-goal";
 
 export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLabel?: string }) {
   const [open, setOpen] = useState(false);
@@ -28,8 +29,14 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
   const workspaceId = useNexo((s) => s.workspaceId);
   const backendReady = useNexo((s) => s.backendReady);
   const connections = useNexo((s) => s.connections);
+  const workspaceGoal = useNexo((s) => s.workspaces.find((workspace) => workspace.id === s.workspaceId)?.onboardingGoal ?? null);
+  const guidance = guidanceForWorkspaceGoal(workspaceGoal as WorkspaceGoal);
   const navigate = useNavigate();
   const { refresh } = useWorkspaceData();
+
+  useEffect(() => {
+    if (open && guidance) setTemplate(guidance.recommendedTemplate);
+  }, [open, guidance]);
 
   async function persistOrCreate(draft: typeof AGENT_TEMPLATES[number]["draft"], nextName: string) {
     if (backendReady && workspaceId) {
@@ -111,8 +118,9 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
       </DialogTrigger>
       <DialogContent title="Criar agente" className="max-h-[min(90dvh,720px)] overflow-y-auto">
         <p className="mt-1 text-sm text-muted">
-          Descreva o resultado desejado ou escolha um modelo. Depois revise, teste e publique uma versão do agente.
+          Descreva o resultado desejado ou escolha um template. Depois revise, teste e publique uma versão do agente.
         </p>
+        {guidance && <div className="mt-4 rounded-lg border border-accent/40 bg-elevated/60 p-3"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Recomendação para este workspace</div><div className="mt-1 text-sm font-medium">{guidance.title}</div><p className="mt-1 text-xs leading-relaxed text-muted">{guidance.description}</p></div>}
         <div className="mt-4 mb-3 grid grid-cols-2 gap-1 rounded-md bg-bg p-1">
           <button
             type="button"
@@ -175,8 +183,8 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
                   "rounded-lg border px-3 py-3 text-left",
                   template === t.id ? "border-accent bg-elevated" : "border-border bg-bg",
                 )}
-              >
-                <div className="text-sm font-medium">{t.title}</div>
+                >
+                <div className="flex items-center gap-2 text-sm font-medium">{t.title}{guidance?.recommendedTemplate === t.id && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">Recomendado</span>}</div>
                 <div className="mt-0.5 text-xs text-muted">{t.blurb}</div>
               </button>
             ))}
@@ -196,7 +204,7 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
               />
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {SAMPLE_BRIEFS.map((s) => (
+              {(guidance?.briefs ?? SAMPLE_BRIEFS).map((s) => (
                 <button
                   key={s}
                   type="button"

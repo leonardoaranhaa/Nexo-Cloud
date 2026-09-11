@@ -16,6 +16,7 @@ import { Textarea } from "./ui/textarea";
 import { Slider } from "./ui/slider";
 import { Switch } from "./ui/switch";
 import { Card } from "./ui/card";
+import { guidanceForWorkspaceGoal, type WorkspaceGoal } from "@/lib/workspace-goal";
 
 export function AgentEditor({
   agent,
@@ -32,6 +33,8 @@ export function AgentEditor({
   const updateAgent = useNexo((s) => s.updateAgent);
   const workspaceId = useNexo((s) => s.workspaceId);
   const backendReady = useNexo((s) => s.backendReady);
+  const workspaceGoal = useNexo((s) => s.workspaces.find((workspace) => workspace.id === s.workspaceId)?.onboardingGoal ?? null);
+  const workspaceGuidance = guidanceForWorkspaceGoal(workspaceGoal as WorkspaceGoal);
 
   useEffect(() => {
     if (!backendReady || !workspaceId) return;
@@ -77,6 +80,7 @@ export function AgentEditor({
 
   return (
     <div className="flex flex-col gap-5">
+      {show("configuration") && workspaceGuidance && <Card className="border-accent/30 bg-elevated/40 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Direção do workspace</div><div className="mt-1 font-display text-sm font-semibold">{workspaceGuidance.title}</div><p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">{workspaceGuidance.description}</p></div><span className="rounded-full border border-accent/30 px-2 py-1 text-[10px] font-semibold text-accent">Sugestões contextuais</span></div><div className="mt-3 flex flex-wrap gap-2">{workspaceGuidance.nextSteps.map((nextStep) => <span key={nextStep} className="rounded-full border border-border bg-bg px-2.5 py-1 text-xs text-muted">{nextStep}</span>)}</div></Card>}
       {show("configuration") && <Card className="flex flex-col gap-4 p-4">
         <div className="font-display text-sm font-semibold">Identidade</div>
         <Field label="Nome" htmlFor="ed-name">
