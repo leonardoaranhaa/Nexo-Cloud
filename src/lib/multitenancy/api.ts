@@ -817,3 +817,22 @@ export const executeNexoBotAction = createServerFn({ method: "POST" })
     const { executeNexoBotAction: runAction } = await import("@/lib/nexo-bot/server");
     return runAction(await getSql(), context.userId, data);
   });
+
+
+export const listNexoBotAuditEvents = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; eventType?: import("@/lib/nexo-bot/audit").NexoBotAuditEventType; actionType?: string; status?: import("@/lib/nexo-bot/audit").NexoBotAuditStatus; from?: string; to?: string; limit?: number }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listNexoBotAuditEvents: listEvents } = await import("@/lib/nexo-bot/audit");
+    return listEvents(await getSql(), context.userId, data);
+  });
+
+export const getNexoBotAuditSummary = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; from?: string; to?: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getNexoBotAuditSummary: getSummary } = await import("@/lib/nexo-bot/audit");
+    return getSummary(await getSql(), context.userId, data);
+  });

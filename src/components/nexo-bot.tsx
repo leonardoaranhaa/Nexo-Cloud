@@ -49,10 +49,23 @@ export function NexoBot() {
     }
   }
 
-  function runAction(action: NexoBotAction) {
+  async function runAction(action: NexoBotAction) {
     if (action.requiresConfirmation) return;
-    setOpen(false);
-    void navigate({ to: action.route });
+    if (!workspaceId || !backendReady || loading) return;
+    setLoading(true);
+    try {
+      const result = await executeNexoBotAction({ data: { workspaceId, action } });
+      if (result.ok) {
+        setOpen(false);
+        void navigate({ to: action.route });
+      } else {
+        setMessages((current) => [...current, { id: crypto.randomUUID(), role: "bot", text: result.message }]);
+      }
+    } catch {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "bot", text: "Não foi possível abrir essa área agora." }]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function confirmAction(messageId: string, action: NexoBotAction) {

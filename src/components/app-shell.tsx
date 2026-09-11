@@ -9,7 +9,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { WorkspaceOnboardingDialog } from "./workspace-onboarding-dialog";
 
-type RoutePath = "/" | "/connections" | "/agents" | "/inbox" | "/runs" | "/workflows" | "/metrics" | "/calendar" | "/guide" | "/marketplace" | "/settings";
+type RoutePath = "/" | "/connections" | "/agents" | "/inbox" | "/runs" | "/workflows" | "/metrics" | "/calendar" | "/guide" | "/marketplace" | "/settings" | "/nexo-bot/audit";
 type NavItem = { to: RoutePath; label: string; icon: typeof Bot };
 type NavGroup = { label: string; items: NavItem[] };
 
@@ -30,6 +30,7 @@ const GROUPS: NavGroup[] = [
     { to: "/calendar", label: "Agenda", icon: CalendarDays },
     { to: "/runs", label: "Execuções", icon: Activity },
     { to: "/metrics", label: "Métricas de conversão", icon: BarChart3 },
+    { to: "/nexo-bot/audit", label: "Auditoria do Nexo Bot", icon: Bot },
   ] },
   { label: "Govern", items: [{ to: "/settings", label: "Configurações", icon: Settings2 }] },
 ];

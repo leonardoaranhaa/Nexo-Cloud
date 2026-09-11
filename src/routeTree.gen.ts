@@ -22,6 +22,7 @@ import { Route as WorkflowsRouteImport } from './routes/workflows'
 import { Route as AgentsIndexRouteImport } from './routes/agents/index'
 import { Route as AgentsIdRouteImport } from './routes/agents/$id'
 import { Route as MarketplaceIndexRouteImport } from './routes/marketplace/index'
+import { Route as NexoBotAuditRouteImport } from './routes/nexo-bot/audit'
 import { Route as MarketplaceAgentsProductIdRouteImport } from './routes/marketplace/agents/$productId'
 import { Route as MarketplaceInstalledIndexRouteImport } from './routes/marketplace/installed/index'
 import { Route as MarketplaceInstalledInstallationIdRouteImport } from './routes/marketplace/installed/$installationId'
@@ -91,6 +92,11 @@ const MarketplaceIndexRoute = MarketplaceIndexRouteImport.update({
   path: '/marketplace/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NexoBotAuditRoute = NexoBotAuditRouteImport.update({
+  id: '/nexo-bot/audit',
+  path: '/nexo-bot/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MarketplaceAgentsProductIdRoute =
   MarketplaceAgentsProductIdRouteImport.update({
     id: '/marketplace/agents/$productId',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/workflows': typeof WorkflowsRoute
   '/agents/$id': typeof AgentsIdRoute
+  '/nexo-bot/audit': typeof NexoBotAuditRoute
   '/agents/': typeof AgentsIndexRoute
   '/marketplace/': typeof MarketplaceIndexRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/workflows': typeof WorkflowsRoute
   '/agents/$id': typeof AgentsIdRoute
+  '/nexo-bot/audit': typeof NexoBotAuditRoute
   '/agents': typeof AgentsIndexRoute
   '/marketplace': typeof MarketplaceIndexRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/workflows': typeof WorkflowsRoute
   '/agents/$id': typeof AgentsIdRoute
+  '/nexo-bot/audit': typeof NexoBotAuditRoute
   '/agents/': typeof AgentsIndexRoute
   '/marketplace/': typeof MarketplaceIndexRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/workflows'
     | '/agents/$id'
+    | '/nexo-bot/audit'
     | '/agents/'
     | '/marketplace/'
     | '/marketplace/agents/$productId'
@@ -197,6 +207,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/workflows'
     | '/agents/$id'
+    | '/nexo-bot/audit'
     | '/agents'
     | '/marketplace'
     | '/marketplace/agents/$productId'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/workflows'
     | '/agents/$id'
+    | '/nexo-bot/audit'
     | '/agents/'
     | '/marketplace/'
     | '/marketplace/agents/$productId'
@@ -234,6 +246,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   WorkflowsRoute: typeof WorkflowsRoute
   AgentsIdRoute: typeof AgentsIdRoute
+  NexoBotAuditRoute: typeof NexoBotAuditRoute
   AgentsIndexRoute: typeof AgentsIndexRoute
   MarketplaceIndexRoute: typeof MarketplaceIndexRoute
   MarketplaceAgentsProductIdRoute: typeof MarketplaceAgentsProductIdRoute
@@ -334,6 +347,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketplaceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/nexo-bot/audit': {
+      id: '/nexo-bot/audit'
+      path: '/nexo-bot/audit'
+      fullPath: '/nexo-bot/audit'
+      preLoaderRoute: typeof NexoBotAuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/marketplace/agents/$productId': {
       id: '/marketplace/agents/$productId'
       path: '/marketplace/agents/$productId'
@@ -370,6 +390,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   WorkflowsRoute: WorkflowsRoute,
   AgentsIdRoute: AgentsIdRoute,
+  NexoBotAuditRoute: NexoBotAuditRoute,
   AgentsIndexRoute: AgentsIndexRoute,
   MarketplaceIndexRoute: MarketplaceIndexRoute,
   MarketplaceAgentsProductIdRoute: MarketplaceAgentsProductIdRoute,
