@@ -5,6 +5,7 @@ import type { Agent } from "../types.ts";
 import { dispatchTextMessageAsRuntime } from "../messaging/router.ts";
 import { awsSecretsManagerProvider, unavailableSecretProvider, type SecretProvider } from "../connectors/secrets.ts";
 import { claimAgentRuntimeJob, completeAgentRuntimeJob, failAgentRuntimeJob, type AgentRuntimeJob } from "./queue.ts";
+import { reserveRuntimeQuota, RuntimeQuotaExceededError } from "./quota.ts";
 import { finishRuntimeExecution, startRuntimeExecution, type ExecutionStep } from "./execution.ts";
 import { decideAgentTurn, decisionPrompt, persistAgentDecision, type AgentDecision, type CommercialState } from "./decision.ts";
 import { retrieveKnowledge, type KnowledgeEvidence } from "../knowledge/server.ts";
@@ -455,6 +456,17 @@ export async function runNextAgentRuntimeJob(
 ): Promise<{ jobId?: string; status: "idle" | "succeeded" | "queued" | "dead"; reason?: string }> {
   const job = await claimAgentRuntimeJob(sql, workerId);
   if (!job) return { status: "idle" };
+  try {
+    await reserveRuntimeQuota(sql, job);
+  } catch (error) {
+    if (error instanceof RuntimeQuotaExceededError) {
+      await failAgentRuntimeJob(sql, job, error.code, `Limite diário excedido para ${error.scope}.`, 1);
+      return { jobId: job.id, status: "dead", reason: error.code };
+    }
+    const reason = error instanceof Error ? error.message : "RUNTIME_QUOTA_UNAVAILABLE";
+    const status = await failAgentRuntimeJob(sql, job, "RUNTIME_QUOTA_UNAVAILABLE", reason);
+    return { jobId: job.id, status, reason: "RUNTIME_QUOTA_UNAVAILABLE" };
+  }
   const startedAt = Date.now();
   let executionId: string | undefined;
   try {

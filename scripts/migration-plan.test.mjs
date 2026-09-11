@@ -89,6 +89,13 @@ test("the auth schema stays nested while app migrations are discoverable", () =>
       { name: "0029_agent_improvement_lab.sql", path: "0029_agent_improvement_lab.sql" },
       { name: "0030_tool_execution_domain.sql", path: "0030_tool_execution_domain.sql" },
       { name: "0031_agent_development_blueprints.sql", path: "0031_agent_development_blueprints.sql" },
+      { name: "0032_native_conversation_tools.sql", path: "0032_native_conversation_tools.sql" },
+      { name: "0033_calendar_availability.sql", path: "0033_calendar_availability.sql" },
+      { name: "0034_workspace_onboarding.sql", path: "0034_workspace_onboarding.sql" },
+      { name: "0035_workspace_integrations.sql", path: "0035_workspace_integrations.sql" },
+      { name: "0036_calendar_booking.sql", path: "0036_calendar_booking.sql" },
+      { name: "0037_marketplace_installation_revisions.sql", path: "0037_marketplace_installation_revisions.sql" },
+      { name: "0038_agent_runtime_quotas.sql", path: "0038_agent_runtime_quotas.sql" },
   ]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });

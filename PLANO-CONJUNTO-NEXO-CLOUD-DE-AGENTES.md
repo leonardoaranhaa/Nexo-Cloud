@@ -197,7 +197,7 @@ Ainda faltam execução dos cenários de teste, indexação de documentos e sist
 
 A documentação IaC e AWS existe, mas a implantação permanente não está ativa. O preview local utiliza PGlite e assets empacotados. Não existe ainda infraestrutura permanente com banco gerenciado, workers, filas, storage, secrets, alertas, quotas, custo por uso e billing.
 
-A postergação é temporária e não remove AWS do roadmap. Ela não deve bloquear o fechamento do núcleo funcional local.
+A postergação é temporária e não remove AWS do roadmap. Ela não deve bloquear o fechamento do núcleo funcional local. Como primeira fatia de readiness operacional, o Agent Runtime agora aplica quotas diárias server-side por workspace e por agente, com consumo persistido e isolamento por workspace.
 
 ## 6. Migrations, rotas e validação atual
 
