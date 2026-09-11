@@ -4,8 +4,8 @@ import { requireWorkspaceAccess, type ConnectionProvider } from "../multitenancy
 export type ConnectionReadiness = {
   connectionId: string;
   provider: ConnectionProvider;
-  status: "ready" | "needs_configuration" | "not_checked";
-  code: "ready_for_healthcheck" | "secret_ref_missing" | "provider_config_missing" | "transport_not_implemented";
+  status: "ready" | "needs_configuration" | "not_checked" | "unhealthy";
+  code: "healthcheck_healthy" | "healthcheck_required" | "healthcheck_failed" | "secret_ref_missing" | "provider_config_missing" | "transport_not_implemented";
   message: string;
 };
 
@@ -14,6 +14,7 @@ type ConnectionRow = {
   workspace_id: string;
   provider: ConnectionProvider;
   secret_ref: string | null;
+  health_status: "healthy" | "degraded" | "unhealthy" | "unknown" | null;
   config: { instance?: string | null; phoneNumberId?: string | null; baseUrl?: string | null };
 };
 
@@ -24,7 +25,7 @@ export async function assessConnectionReadiness(
 ): Promise<ConnectionReadiness> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
   const rows = await sql.query<ConnectionRow>(
-    `select id, workspace_id, provider, secret_ref, config
+    `select id, workspace_id, provider, secret_ref, health_status, config
        from connections
       where id = $1 and workspace_id = $2 and deleted_at is null
       limit 1`,
@@ -58,12 +59,30 @@ export async function assessConnectionReadiness(
   }
 
   if (row.provider === "evolution" || row.provider === "meta") {
+    if (row.health_status === "healthy") {
+      return {
+        connectionId: row.id,
+        provider: row.provider,
+        status: "ready",
+        code: "healthcheck_healthy",
+        message: `${row.provider === "meta" ? "Meta Cloud API" : "Evolution"} respondeu ao último healthcheck; a conexão está pronta para uso contextual.`,
+      };
+    }
+    if (row.health_status === "unhealthy" || row.health_status === "degraded") {
+      return {
+        connectionId: row.id,
+        provider: row.provider,
+        status: "unhealthy",
+        code: "healthcheck_failed",
+        message: `O último healthcheck do provedor retornou estado ${row.health_status}; corrija a conexão antes de publicar.`,
+      };
+    }
     return {
       connectionId: row.id,
       provider: row.provider,
-      status: "ready",
-      code: "ready_for_healthcheck",
-      message: `${row.provider === "meta" ? "Meta Cloud API" : "Evolution"} configurada; o healthcheck oficial pode ser executado.`,
+      status: "not_checked",
+      code: "healthcheck_required",
+      message: `${row.provider === "meta" ? "Meta Cloud API" : "Evolution"} configurada, mas ainda não foi validada por healthcheck.`,
     };
   }
 

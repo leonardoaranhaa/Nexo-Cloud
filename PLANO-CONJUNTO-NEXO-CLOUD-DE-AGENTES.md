@@ -115,7 +115,7 @@ O contexto de workspace deve ser orientado ao usuário: quando houver um único 
 
 Já existem organizações, workspaces, memberships, papéis, autorização server-side, agentes, conexões, conversas, mensagens, eventos, versões, publicação, rollback, contexto global de organização/workspace/ambiente e isolamento por workspace.
 
-Ainda faltam para produção: ambientes reais Development/Staging/Production, banco gerenciado, storage, observabilidade externa, deploy permanente e configuração definitiva de secrets.
+Ainda faltam para produção: ambientes reais Development/Staging/Production, banco gerenciado, storage, observabilidade externa, deploy permanente, configuração definitiva de secrets, quotas e alertas operacionais. A readiness de conexões agora diferencia configuração preenchida, healthcheck pendente, healthcheck saudável e healthcheck degradado/indisponível.
 
 ### 5.2 Atendimento, canais e Agent Runtime
 
