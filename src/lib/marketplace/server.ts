@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { Sql } from "@/lib/db";
-import { requireWorkspaceAccess } from "@/lib/multitenancy/server";
-import type { JsonObject } from "@/lib/multitenancy/server";
+import type { Sql } from "../db.ts";
+import { requireWorkspaceAccess } from "../multitenancy/server.ts";
+import type { JsonObject, JsonValue } from "../multitenancy/server.ts";
 
 export type MarketplaceProduct = {
   id: string;
@@ -26,24 +26,221 @@ export type MarketplaceInstallation = {
   workspaceId: string;
   productId: string;
   productName: string;
+  offerMode: "trial" | "subscription" | "license" | "rental" | "internal";
   agentId: string;
   agentName: string;
   versionId: string;
   versionNumber: number;
+  latestVersionId: string;
+  latestVersionNumber: number;
+  updateAvailable: boolean;
+  rollbackAvailable: boolean;
+  revisionCount: number;
+  lastRevisionAt: string | null;
   status: "draft" | "staging" | "active" | "paused" | "uninstalled";
   customizations: JsonObject;
+};
+
+export type MarketplaceInstallationRevision = {
+  id: string;
+  installationId: string;
+  workspaceId: string;
+  fromVersionId: string;
+  fromVersionNumber: number;
+  toVersionId: string;
+  toVersionNumber: number;
+  action: "update" | "rollback";
+  createdBy: string;
+  createdAt: string;
+};
+
+export type MarketplaceInstallationUpdatePlan = {
+  installationId: string;
+  available: boolean;
+  currentVersionId: string;
+  currentVersionNumber: number;
+  targetVersionId: string;
+  targetVersionNumber: number;
+  changelog: string;
+  changedFields: string[];
+  protectedChanges: string[];
+  preservedCustomizations: string[];
+  requiresStaging: true;
 };
 
 const productSelect = `
   select p.id, p.slug, p.name, p.description, p.category,
          p.provider_type as "providerType", p.risk_level as "riskLevel",
-         v.id as "versionId", v.version_number as "versionNumber",
-         v.manifest, v.changelog,
-         o.id as "offerId", o.mode as "offerMode", o.price_cents as "priceCents", o.currency
+         latest.id as "versionId", latest.version_number as "versionNumber",
+         latest.manifest, latest.changelog,
+         offer.id as "offerId", offer.mode as "offerMode", offer.price_cents as "priceCents", offer.currency
     from agent_products p
-    join agent_product_versions v on v.product_id = p.id and v.status = 'published'
-    join agent_product_offers o on o.product_id = p.id and o.version_id = v.id and o.status = 'active'
+    join lateral (
+      select v.id, v.version_number, v.manifest, v.changelog
+        from agent_product_versions v
+       where v.product_id = p.id and v.status = 'published'
+       order by v.version_number desc
+       limit 1
+    ) latest on true
+    join lateral (
+      select o.id, o.mode, o.price_cents, o.currency
+        from agent_product_offers o
+       where o.product_id = p.id and o.version_id = latest.id and o.status = 'active'
+       order by o.price_cents asc, o.created_at asc
+       limit 1
+    ) offer on true
 `;
+
+const installationSelect = `
+  select i.id, i.workspace_id as "workspaceId", i.product_id as "productId",
+         p.name as "productName", i.agent_id as "agentId", a.name as "agentName",
+         entitlement.mode as "offerMode",
+         i.version_id as "versionId", current_version.version_number as "versionNumber",
+         latest.id as "latestVersionId", latest.version_number as "latestVersionNumber",
+         (latest.version_number > current_version.version_number) as "updateAvailable",
+         exists (
+           select 1 from agent_installation_revisions rollback_revision
+            where rollback_revision.installation_id = i.id
+              and rollback_revision.workspace_id = i.workspace_id
+              and rollback_revision.action = 'update'
+              and rollback_revision.to_version_id = i.version_id
+         ) as "rollbackAvailable",
+         (select count(*)::int from agent_installation_revisions revision_count
+           where revision_count.installation_id = i.id and revision_count.workspace_id = i.workspace_id) as "revisionCount",
+         (select max(last_revision.created_at) from agent_installation_revisions last_revision
+           where last_revision.installation_id = i.id and last_revision.workspace_id = i.workspace_id) as "lastRevisionAt",
+         i.status, i.customizations
+    from agent_installations i
+    join agent_products p on p.id = i.product_id
+    join agents a on a.id = i.agent_id and a.workspace_id = i.workspace_id
+    join agent_entitlements entitlement on entitlement.id = i.entitlement_id and entitlement.workspace_id = i.workspace_id
+    join agent_product_versions current_version on current_version.id = i.version_id
+    join lateral (
+      select v.id, v.version_number
+        from agent_product_versions v
+       where v.product_id = i.product_id and v.status = 'published'
+       order by v.version_number desc
+       limit 1
+    ) latest on true
+`;
+
+function stringValue(value: JsonValue | undefined, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function numberValue(value: JsonValue | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function objectValue(value: JsonValue | undefined): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
+}
+
+function sameJson(left: JsonValue | undefined, right: JsonValue | undefined): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function editableFields(manifest: JsonObject): Set<string> {
+  return new Set(Array.isArray(manifest.editableFields) ? manifest.editableFields.filter((value): value is string => typeof value === "string") : []);
+}
+
+function protectedFields(manifest: JsonObject): Set<string> {
+  return new Set(Array.isArray(manifest.protectedComponents) ? manifest.protectedComponents.filter((value): value is string => typeof value === "string") : []);
+}
+
+function manifestDiff(currentManifest: JsonObject, nextManifest: JsonObject) {
+  const ignored = new Set(["editableFields", "protectedComponents"]);
+  const fields = new Set([...Object.keys(currentManifest), ...Object.keys(nextManifest)]);
+  const changedFields = [...fields].filter((field) => !ignored.has(field) && !sameJson(currentManifest[field], nextManifest[field]));
+  const protectedSet = protectedFields(currentManifest);
+  const nextProtectedSet = protectedFields(nextManifest);
+  const protectedChanges = changedFields.filter((field) => protectedSet.has(field) || nextProtectedSet.has(field) || !editableFields(currentManifest).has(field));
+  return { changedFields, protectedChanges };
+}
+
+function mergeManifestWithCustomizations(manifest: JsonObject, customizations: JsonObject): JsonObject {
+  const editable = editableFields(manifest);
+  const merged: JsonObject = { ...manifest };
+  for (const [key, value] of Object.entries(customizations)) {
+    if (editable.has(key)) merged[key] = value;
+  }
+  return merged;
+}
+
+async function currentAgentConfig(sql: Sql, agentId: string, workspaceId: string): Promise<JsonObject> {
+  const rows = await sql.query<{
+    name: string;
+    persona: string;
+    welcome_message: string;
+    system_prompt: string;
+    agent_type: string;
+    language: string;
+    model_provider: string;
+    model_name: string;
+    temperature: number;
+    max_tokens: number;
+    memory_window: number;
+    knowledge: JsonObject;
+    tools: JsonObject;
+    metadata: JsonObject;
+  }>(
+    `select name, persona, welcome_message, system_prompt, agent_type, language,
+            model_provider, model_name, temperature, max_tokens, memory_window,
+            knowledge, tools, metadata
+       from agents where id = $1 and workspace_id = $2 and deleted_at is null limit 1`,
+    [agentId, workspaceId],
+  );
+  const agent = rows[0];
+  if (!agent) throw new Error("MARKETPLACE_AGENT_NOT_FOUND");
+  return {
+    name: agent.name,
+    persona: agent.persona,
+    welcomeMessage: agent.welcome_message,
+    systemPrompt: agent.system_prompt,
+    agentType: agent.agent_type,
+    language: agent.language,
+    modelProvider: agent.model_provider,
+    modelName: agent.model_name,
+    temperature: agent.temperature,
+    maxTokens: agent.max_tokens,
+    memoryWindow: agent.memory_window,
+    knowledge: agent.knowledge,
+    tools: agent.tools,
+    metadata: agent.metadata,
+  };
+}
+
+async function stageAgentConfig(sql: Sql, userId: string, workspaceId: string, agentId: string, config: JsonObject): Promise<void> {
+  const currentDraft = await sql.query<{ id: string }>(
+    `select id from agent_versions where agent_id = $1 and status = 'draft' order by version_number desc limit 1`,
+    [agentId],
+  );
+  const configJson = JSON.stringify(config);
+  if (currentDraft[0]) {
+    await sql.query(`update agent_versions set config = $1::jsonb where id = $2 and agent_id = $3`, [configJson, currentDraft[0].id, agentId]);
+  } else {
+    const next = await sql.query<{ version_number: number }>(`select coalesce(max(version_number), 0) + 1 as version_number from agent_versions where agent_id = $1`, [agentId]);
+    await sql.query(
+      `insert into agent_versions (id, agent_id, version_number, status, config, created_by) values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
+      [randomUUID(), agentId, Number(next[0]?.version_number ?? 1), configJson, userId],
+    );
+  }
+  await sql.query(
+    `update agents set name = $1, persona = $2, welcome_message = $3, system_prompt = $4,
+            agent_type = $5, language = $6, model_provider = $7, model_name = $8,
+            temperature = $9, max_tokens = $10, memory_window = $11,
+            knowledge = $12::jsonb, tools = $13::jsonb, metadata = $14::jsonb,
+            updated_by = $15, updated_at = current_timestamp
+       where id = $16 and workspace_id = $17 and deleted_at is null`,
+    [
+      stringValue(config.name), stringValue(config.persona), stringValue(config.welcomeMessage), stringValue(config.systemPrompt),
+      stringValue(config.agentType, "support"), stringValue(config.language, "pt"), stringValue(config.modelProvider, "internal"), stringValue(config.modelName, "default"),
+      numberValue(config.temperature, 0.2), numberValue(config.maxTokens, 800), numberValue(config.memoryWindow, 12),
+      JSON.stringify(objectValue(config.knowledge)), JSON.stringify(objectValue(config.tools)), JSON.stringify(objectValue(config.metadata)),
+      userId, agentId, workspaceId,
+    ],
+  );
+}
 
 export async function listMarketplaceProducts(sql: Sql): Promise<MarketplaceProduct[]> {
   return sql.query<MarketplaceProduct>(`${productSelect} where p.status = 'published' order by p.name asc`);
@@ -57,75 +254,82 @@ export async function getMarketplaceProduct(sql: Sql, productId: string): Promis
 
 export async function listMarketplaceInstallations(sql: Sql, userId: string, workspaceId: string): Promise<MarketplaceInstallation[]> {
   await requireWorkspaceAccess(sql, userId, workspaceId, "read");
-  return sql<MarketplaceInstallation>`
-    select i.id, i.workspace_id as "workspaceId", i.product_id as "productId",
-           p.name as "productName", i.agent_id as "agentId", a.name as "agentName", i.version_id as "versionId",
-           v.version_number as "versionNumber", i.status, i.customizations
-      from agent_installations i
-      join agent_products p on p.id = i.product_id
-      join agent_versions av on av.agent_id = i.agent_id and av.status = 'draft'
-      join agents a on a.id = i.agent_id and a.workspace_id = i.workspace_id
-      join agent_product_versions v on v.id = i.version_id
-     where i.workspace_id = ${workspaceId} and i.status <> 'uninstalled'
-     order by i.updated_at desc
-  `;
+  return sql.query<MarketplaceInstallation>(`${installationSelect} where i.workspace_id = $1 and i.status <> 'uninstalled' order by i.updated_at desc`, [workspaceId]);
 }
 
 export async function getMarketplaceInstallation(sql: Sql, userId: string, input: { workspaceId: string; installationId: string }): Promise<MarketplaceInstallation> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
-  const rows = await sql<MarketplaceInstallation>`
-    select i.id, i.workspace_id as "workspaceId", i.product_id as "productId",
-           p.name as "productName", i.agent_id as "agentId", a.name as "agentName", i.version_id as "versionId",
-           v.version_number as "versionNumber", i.status, i.customizations
-      from agent_installations i
-      join agent_products p on p.id = i.product_id
-      join agents a on a.id = i.agent_id and a.workspace_id = i.workspace_id
-      join agent_product_versions v on v.id = i.version_id
-     where i.id = ${input.installationId} and i.workspace_id = ${input.workspaceId}
-       and i.status <> 'uninstalled' limit 1
-  `;
+  const rows = await sql.query<MarketplaceInstallation>(`${installationSelect} where i.id = $1 and i.workspace_id = $2 and i.status <> 'uninstalled' limit 1`, [input.installationId, input.workspaceId]);
   if (!rows[0]) throw new Error("MARKETPLACE_INSTALLATION_NOT_FOUND");
   return rows[0];
+}
+
+export async function listMarketplaceInstallationRevisions(sql: Sql, userId: string, input: { workspaceId: string; installationId: string }): Promise<MarketplaceInstallationRevision[]> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const rows = await sql<MarketplaceInstallationRevision & { fromVersionNumber: number; toVersionNumber: number }>`
+    select r.id, r.installation_id as "installationId", r.workspace_id as "workspaceId",
+           r.from_version_id as "fromVersionId", from_version.version_number as "fromVersionNumber",
+           r.to_version_id as "toVersionId", to_version.version_number as "toVersionNumber",
+           r.action, r.created_by as "createdBy", r.created_at as "createdAt"
+      from agent_installation_revisions r
+      join agent_product_versions from_version on from_version.id = r.from_version_id
+      join agent_product_versions to_version on to_version.id = r.to_version_id
+     where r.installation_id = ${input.installationId} and r.workspace_id = ${input.workspaceId}
+     order by r.created_at desc
+  `;
+  return rows;
+}
+
+export async function getMarketplaceInstallationUpdatePlan(sql: Sql, userId: string, input: { workspaceId: string; installationId: string }): Promise<MarketplaceInstallationUpdatePlan> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const installation = await getMarketplaceInstallation(sql, userId, input);
+  const product = await getMarketplaceProduct(sql, installation.productId);
+  const currentRows = await sql.query<{ manifest: JsonObject }>(`select manifest from agent_product_versions where id = $1 and product_id = $2 limit 1`, [installation.versionId, installation.productId]);
+  const currentManifest = currentRows[0]?.manifest ?? {};
+  const diff = manifestDiff(currentManifest, product.manifest);
+  const editable = editableFields(currentManifest);
+  return {
+    installationId: installation.id,
+    available: product.versionNumber > installation.versionNumber,
+    currentVersionId: installation.versionId,
+    currentVersionNumber: installation.versionNumber,
+    targetVersionId: product.versionId,
+    targetVersionNumber: product.versionNumber,
+    changelog: product.changelog,
+    changedFields: diff.changedFields,
+    protectedChanges: diff.protectedChanges,
+    preservedCustomizations: Object.keys(installation.customizations).filter((field) => editable.has(field)),
+    requiresStaging: true,
+  };
 }
 
 export async function installMarketplaceProduct(sql: Sql, userId: string, input: { workspaceId: string; productId: string }): Promise<MarketplaceInstallation> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
   const product = await getMarketplaceProduct(sql, input.productId);
-  const existing = await sql<MarketplaceInstallation>`
-    select i.id, i.workspace_id as "workspaceId", i.product_id as "productId",
-           p.name as "productName", i.agent_id as "agentId", a.name as "agentName", i.version_id as "versionId",
-           v.version_number as "versionNumber", i.status, i.customizations
-      from agent_installations i join agent_products p on p.id = i.product_id
-      join agents a on a.id = i.agent_id join agent_product_versions v on v.id = i.version_id
-     where i.workspace_id = ${input.workspaceId} and i.product_id = ${input.productId}
-       and i.status <> 'uninstalled' limit 1
-  `;
+  const existing = await sql.query<MarketplaceInstallation>(`${installationSelect} where i.workspace_id = $1 and i.product_id = $2 and i.status <> 'uninstalled' limit 1`, [input.workspaceId, input.productId]);
   if (existing[0]) return existing[0];
 
   const installationId = randomUUID();
   const entitlementId = randomUUID();
   const agentId = randomUUID();
   const agentVersionId = randomUUID();
+  const manifest = product.manifest;
   const slug = `${product.slug}-${agentId.slice(0, 8)}`;
-  const manifest = product.manifest as Record<string, any>;
   await sql.query(
-    `insert into agent_entitlements (id, workspace_id, product_id, offer_id, mode, created_by)
-     values ($1, $2, $3, $4, $5, $6)`,
+    `insert into agent_entitlements (id, workspace_id, product_id, offer_id, mode, created_by) values ($1, $2, $3, $4, $5, $6)`,
     [entitlementId, input.workspaceId, product.id, product.offerId, product.offerMode, userId],
   );
   await sql.query(
     `insert into agents (id, workspace_id, name, slug, agent_type, language, persona, welcome_message, system_prompt, metadata, created_by, updated_by)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $11)`,
-    [agentId, input.workspaceId, manifest.name ?? product.name, slug, manifest.agentType ?? "support", manifest.language ?? "pt", manifest.persona ?? "", manifest.welcomeMessage ?? "", manifest.systemPrompt ?? "", JSON.stringify({ marketplaceProductId: product.id, marketplaceInstallationId: installationId }), userId],
+    [agentId, input.workspaceId, stringValue(manifest.name, product.name), slug, stringValue(manifest.agentType, "support"), stringValue(manifest.language, "pt"), stringValue(manifest.persona), stringValue(manifest.welcomeMessage), stringValue(manifest.systemPrompt), JSON.stringify({ marketplaceProductId: product.id, marketplaceInstallationId: installationId }), userId],
   );
   await sql.query(
-    `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
-     values ($1, $2, 1, 'draft', $3::jsonb, $4)`,
+    `insert into agent_versions (id, agent_id, version_number, status, config, created_by) values ($1, $2, 1, 'draft', $3::jsonb, $4)`,
     [agentVersionId, agentId, JSON.stringify({ ...manifest, marketplaceProductId: product.id, marketplaceVersionId: product.versionId }), userId],
   );
   await sql.query(
-    `insert into agent_installations (id, workspace_id, product_id, version_id, entitlement_id, agent_id, customizations, created_by)
-     values ($1, $2, $3, $4, $5, $6, '{}'::jsonb, $7)`,
+    `insert into agent_installations (id, workspace_id, product_id, version_id, entitlement_id, agent_id, customizations, created_by) values ($1, $2, $3, $4, $5, $6, '{}'::jsonb, $7)`,
     [installationId, input.workspaceId, product.id, product.versionId, entitlementId, agentId, userId],
   );
   return (await listMarketplaceInstallations(sql, userId, input.workspaceId)).find((item) => item.id === installationId)!;
@@ -137,15 +341,17 @@ export async function updateMarketplaceCustomization(sql: Sql, userId: string, i
     select v.manifest from agent_installations i join agent_product_versions v on v.id = i.version_id
      where i.id = ${input.installationId} and i.workspace_id = ${input.workspaceId} and i.status <> 'uninstalled' limit 1`;
   if (!rows[0]) throw new Error("MARKETPLACE_INSTALLATION_NOT_FOUND");
-  const editable = new Set(Array.isArray(rows[0].manifest.editableFields) ? rows[0].manifest.editableFields : []);
+  const editable = editableFields(rows[0].manifest);
   const safe = Object.fromEntries(Object.entries(input.customizations).filter(([key]) => editable.has(key))) as JsonObject;
   await sql.query(`update agent_installations set customizations = $1::jsonb, updated_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(safe), input.installationId, input.workspaceId]);
   const agent = await sql<{ agent_id: string }>`select agent_id from agent_installations where id = ${input.installationId} and workspace_id = ${input.workspaceId}`;
   if (agent[0]) {
     await sql.query(
-      `update agents set name = coalesce($1, name), persona = coalesce($2, persona), welcome_message = coalesce($3, welcome_message), updated_by = $4, updated_at = current_timestamp where id = $5 and workspace_id = $6`,
-      [typeof safe.name === "string" ? safe.name.slice(0, 120) : null, typeof safe.persona === "string" ? safe.persona.slice(0, 500) : null, typeof safe.welcomeMessage === "string" ? safe.welcomeMessage.slice(0, 1000) : null, userId, agent[0].agent_id, input.workspaceId],
+      `update agents set name = coalesce($1, name), persona = coalesce($2, persona), welcome_message = coalesce($3, welcome_message), language = coalesce($4, language), updated_by = $5, updated_at = current_timestamp where id = $6 and workspace_id = $7`,
+      [typeof safe.name === "string" ? safe.name.slice(0, 120) : null, typeof safe.persona === "string" ? safe.persona.slice(0, 500) : null, typeof safe.welcomeMessage === "string" ? safe.welcomeMessage.slice(0, 1000) : null, typeof safe.language === "string" ? safe.language.slice(0, 8) : null, userId, agent[0].agent_id, input.workspaceId],
     );
+    const draft = await sql<{ id: string }>`select id from agent_versions where agent_id = ${agent[0].agent_id} and status = 'draft' order by version_number desc limit 1`;
+    if (draft[0]) await sql.query(`update agent_versions set config = config || $1::jsonb where id = $2 and agent_id = $3`, [JSON.stringify(safe), draft[0].id, agent[0].agent_id]);
   }
 }
 
@@ -154,11 +360,13 @@ export async function updateMarketplaceInstallation(sql: Sql, userId: string, in
   const current = await getMarketplaceInstallation(sql, userId, input);
   const product = await getMarketplaceProduct(sql, current.productId);
   if (product.versionNumber <= current.versionNumber) return current;
-  const currentConfigRows = await sql<{ config: JsonObject }>`select config from agent_versions where agent_id = ${current.agentId} and status = 'draft' limit 1`;
-  const fromConfig = currentConfigRows[0]?.config ?? {};
-  const toConfig = { ...(product.manifest as JsonObject), marketplaceProductId: product.id, marketplaceVersionId: product.versionId };
-  await sql.query(`insert into agent_installation_revisions (id,installation_id,workspace_id,from_version_id,to_version_id,from_config,to_config,action,created_by) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,'update',$8)`, [randomUUID(), current.id, input.workspaceId, current.versionId, product.versionId, JSON.stringify(fromConfig), JSON.stringify(toConfig), userId]);
-  await sql.query(`update agent_versions set config = $1::jsonb where agent_id = $2 and status = 'draft'`, [JSON.stringify(toConfig), current.agentId]);
+  const fromConfig = await currentAgentConfig(sql, current.agentId, input.workspaceId);
+  const toConfig = mergeManifestWithCustomizations({ ...product.manifest, marketplaceProductId: product.id, marketplaceVersionId: product.versionId }, current.customizations);
+  await sql.query(
+    `insert into agent_installation_revisions (id,installation_id,workspace_id,from_version_id,to_version_id,from_config,to_config,action,created_by) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,'update',$8)`,
+    [randomUUID(), current.id, input.workspaceId, current.versionId, product.versionId, JSON.stringify(fromConfig), JSON.stringify(toConfig), userId],
+  );
+  await stageAgentConfig(sql, userId, input.workspaceId, current.agentId, toConfig);
   await sql.query(`update agent_installations set version_id = $1, status = 'staging', updated_at = current_timestamp where id = $2 and workspace_id = $3`, [product.versionId, current.id, input.workspaceId]);
   return getMarketplaceInstallation(sql, userId, input);
 }
@@ -166,11 +374,20 @@ export async function updateMarketplaceInstallation(sql: Sql, userId: string, in
 export async function rollbackMarketplaceInstallation(sql: Sql, userId: string, input: { workspaceId: string; installationId: string }): Promise<MarketplaceInstallation> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
   const current = await getMarketplaceInstallation(sql, userId, input);
-  const revisions = await sql<{ from_version_id: string; to_version_id: string; from_config: JsonObject; to_config: JsonObject }>`select from_version_id, to_version_id, from_config, to_config from agent_installation_revisions where installation_id = ${current.id} and workspace_id = ${input.workspaceId} order by created_at desc limit 1`;
+  const revisions = await sql<{ from_version_id: string; to_version_id: string; from_config: JsonObject; to_config: JsonObject }>`
+    select from_version_id, to_version_id, from_config, to_config
+      from agent_installation_revisions
+     where installation_id = ${current.id} and workspace_id = ${input.workspaceId}
+       and action = 'update' and to_version_id = ${current.versionId}
+     order by created_at desc limit 1
+  `;
   const revision = revisions[0];
   if (!revision) throw new Error("MARKETPLACE_ROLLBACK_NOT_AVAILABLE");
-  await sql.query(`insert into agent_installation_revisions (id,installation_id,workspace_id,from_version_id,to_version_id,from_config,to_config,action,created_by) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,'rollback',$8)`, [randomUUID(), current.id, input.workspaceId, current.versionId, revision.from_version_id, JSON.stringify(revision.to_config), JSON.stringify(revision.from_config), userId]);
-  await sql.query(`update agent_versions set config = $1::jsonb where agent_id = $2 and status = 'draft'`, [JSON.stringify(revision.from_config), current.agentId]);
-  await sql.query(`update agent_installations set version_id = $1, status = 'draft', updated_at = current_timestamp where id = $2 and workspace_id = $3`, [revision.from_version_id, current.id, input.workspaceId]);
+  await sql.query(
+    `insert into agent_installation_revisions (id,installation_id,workspace_id,from_version_id,to_version_id,from_config,to_config,action,created_by) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,'rollback',$8)`,
+    [randomUUID(), current.id, input.workspaceId, current.versionId, revision.from_version_id, JSON.stringify(revision.to_config), JSON.stringify(revision.from_config), userId],
+  );
+  await stageAgentConfig(sql, userId, input.workspaceId, current.agentId, revision.from_config);
+  await sql.query(`update agent_installations set version_id = $1, status = 'staging', updated_at = current_timestamp where id = $2 and workspace_id = $3`, [revision.from_version_id, current.id, input.workspaceId]);
   return getMarketplaceInstallation(sql, userId, input);
 }

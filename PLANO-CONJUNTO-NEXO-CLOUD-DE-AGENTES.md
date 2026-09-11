@@ -165,7 +165,7 @@ Ainda faltam executor universal de nós `agent` e `tool`, editor visual completo
 
 Existem produtos, versões, ofertas, entitlements, instalações, manifestos, catálogo, detalhe, instalação, agente draft, customização, publicação e vínculo por workspace. O produto inicial é **Nexo Atendimento + Qualificação**.
 
-As instalações agora possuem lista geral em `/marketplace/installed`, revisão persistida de configuração, atualização explícita e rollback por workspace. Ainda faltam pausa, saúde, uso por instalação, checkout, assinatura, compra, locação, billing e marketplace de terceiros. Essas funções comerciais não devem ser simuladas antes de existir entitlement persistido e contrato de billing. O contrato comercial está documentado em `MODELO-PRECIFICACAO-NEXO-CLOUD.md`, inspirado em plano base, consumo medido, franquias, budgets, commitments e ofertas Marketplace.
+As instalações agora possuem lista geral em `/marketplace/installed`, revisão persistida de configuração, detecção de versão disponível, plano de impacto, preservação de customizações editáveis, atualização explícita em staging e rollback determinístico por workspace. A publicação do agente sincroniza a instalação para `active`. Ainda faltam pausa, saúde, uso por instalação, checkout, assinatura, compra, locação, billing e marketplace de terceiros. Essas funções comerciais não devem ser simuladas antes de existir entitlement persistido e contrato de billing. O contrato comercial está documentado em `MODELO-PRECIFICACAO-NEXO-CLOUD.md`, inspirado em plano base, consumo medido, franquias, budgets, commitments e ofertas Marketplace.
 
 ### 5.8 Nexo Learning RAG e Improvement Lab
 

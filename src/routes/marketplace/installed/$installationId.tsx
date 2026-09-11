@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, CheckCircle2, History, RefreshCw, RotateCcw, Save, ShieldAlert } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -8,35 +8,62 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getWorkspaceMarketplaceInstallation, updateWorkspaceMarketplaceCustomization } from "@/lib/multitenancy/api";
+import { getWorkspaceMarketplaceInstallation, getWorkspaceMarketplaceInstallationUpdatePlan, listWorkspaceMarketplaceInstallationRevisions, rollbackWorkspaceMarketplaceInstallation, updateWorkspaceMarketplaceCustomization, updateWorkspaceMarketplaceInstallation } from "@/lib/multitenancy/api";
 import { useNexo } from "@/lib/store";
 
-type Installation = Awaited<ReturnType<typeof getWorkspaceMarketplaceInstallation>>;
 export const Route = createFileRoute("/marketplace/installed/$installationId")({ component: CustomizeInstallationPage });
+
+type Installation = Awaited<ReturnType<typeof getWorkspaceMarketplaceInstallation>>;
+type UpdatePlan = Awaited<ReturnType<typeof getWorkspaceMarketplaceInstallationUpdatePlan>>;
+type Revision = Awaited<ReturnType<typeof listWorkspaceMarketplaceInstallationRevisions>>[number];
+
+const STATUS_LABELS: Record<Installation["status"], string> = { draft: "Rascunho", staging: "Staging", active: "Ativa", paused: "Pausada", uninstalled: "Desinstalada" };
+const ACTION_LABELS: Record<Revision["action"], string> = { update: "Atualização", rollback: "Rollback" };
+
+function statusTone(status: Installation["status"]): "neutral" | "live" | "warn" {
+  if (status === "active") return "live";
+  if (status === "staging") return "warn";
+  return "neutral";
+}
 
 function CustomizeInstallationPage() {
   const { installationId } = Route.useParams();
   const workspaceId = useNexo((state) => state.workspaceId);
+  const backendReady = useNexo((state) => state.backendReady);
   const [installation, setInstallation] = useState<Installation | null>(null);
+  const [plan, setPlan] = useState<UpdatePlan | null>(null);
+  const [revisions, setRevisions] = useState<Revision[]>([]);
   const [name, setName] = useState("");
   const [persona, setPersona] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!workspaceId) return;
-    void getWorkspaceMarketplaceInstallation({ data: { workspaceId, installationId } })
-      .then((result) => {
-        setInstallation(result);
-        const values = result.customizations;
-        setName(typeof values.name === "string" ? values.name : result.agentName);
-        setPersona(typeof values.persona === "string" ? values.persona : "");
-        setWelcomeMessage(typeof values.welcomeMessage === "string" ? values.welcomeMessage : "");
-      })
-      .catch(() => toast("Não foi possível carregar a instalação."))
-      .finally(() => setLoading(false));
-  }, [installationId, workspaceId]);
+  const load = useCallback(async () => {
+    if (!workspaceId || !backendReady) return;
+    setLoading(true);
+    try {
+      const [result, nextPlan, nextRevisions] = await Promise.all([
+        getWorkspaceMarketplaceInstallation({ data: { workspaceId, installationId } }),
+        getWorkspaceMarketplaceInstallationUpdatePlan({ data: { workspaceId, installationId } }),
+        listWorkspaceMarketplaceInstallationRevisions({ data: { workspaceId, installationId } }),
+      ]);
+      setInstallation(result);
+      setPlan(nextPlan);
+      setRevisions(nextRevisions);
+      const values = result.customizations;
+      setName(typeof values.name === "string" ? values.name : result.agentName);
+      setPersona(typeof values.persona === "string" ? values.persona : "");
+      setWelcomeMessage(typeof values.welcomeMessage === "string" ? values.welcomeMessage : "");
+    } catch {
+      toast("Não foi possível carregar a instalação.");
+    } finally {
+      setLoading(false);
+    }
+  }, [backendReady, installationId, workspaceId]);
+
+  useEffect(() => { void load(); }, [load]);
 
   async function save() {
     if (!workspaceId || !installation) return;
@@ -44,20 +71,41 @@ function CustomizeInstallationPage() {
     setSaving(true);
     try {
       await updateWorkspaceMarketplaceCustomization({ data: { workspaceId, installationId, customizations: { name: name.trim(), persona: persona.trim(), welcomeMessage: welcomeMessage.trim() } } });
-      setInstallation((current) => current ? { ...current, agentName: name.trim(), customizations: { ...current.customizations, name: name.trim(), persona: persona.trim(), welcomeMessage: welcomeMessage.trim() } } : current);
-      toast("Customização salva.");
+      toast("Customização salva no workspace.");
+      await load();
     } catch { toast("Não foi possível salvar a customização."); }
     finally { setSaving(false); }
   }
 
-  return <AppShell title="Customizar instalação">
-    <Link to="/marketplace" className="mb-6 inline-flex items-center gap-2 text-sm text-muted hover:text-foreground"><ArrowLeft className="size-4" /> Voltar ao Marketplace</Link>
-    {loading ? <Card className="p-6 text-sm text-muted">Carregando instalação...</Card> : !installation ? <Card className="p-6 text-sm text-muted">Instalação não encontrada.</Card> : <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <Card className="p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><Badge tone="neutral">Rascunho</Badge><h1 className="mt-3 font-display text-2xl font-semibold tracking-tight">{installation.productName}</h1><p className="mt-2 text-sm text-muted">Personalize os campos permitidos pelo produto. O manifesto e os componentes protegidos permanecem sob controle do Nexo.</p></div><Badge>v{installation.versionNumber}</Badge></div>
-        <div className="mt-7 space-y-5"><label className="block"><span className="mb-2 block text-sm font-medium">Nome do agente</span><Input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Atendimento da ACME" /></label><label className="block"><span className="mb-2 block text-sm font-medium">Persona</span><Textarea value={persona} maxLength={500} onChange={(event) => setPersona(event.target.value)} placeholder="Descreva como o agente deve se comportar, seu tom e sua postura." /><span className="mt-1 block text-xs text-muted">Até 500 caracteres.</span></label><label className="block"><span className="mb-2 block text-sm font-medium">Mensagem inicial</span><Textarea value={welcomeMessage} maxLength={1000} onChange={(event) => setWelcomeMessage(event.target.value)} placeholder="Olá! Como posso ajudar?" /><span className="mt-1 block text-xs text-muted">Até 1.000 caracteres.</span></label></div>
-        <div className="mt-7 flex justify-end"><Button onClick={() => void save()} disabled={saving}><Save className="size-4" /> {saving ? "Salvando..." : "Salvar customização"}</Button></div>
-      </Card>
-      <aside><Card className="p-5"><p className="font-display font-semibold">Próximo passo</p><p className="mt-2 text-sm leading-relaxed text-muted">Depois de salvar, conecte um canal, teste o agente e publique a primeira versão operacional.</p><Link to="/agents/$id" params={{ id: installation.agentId }} search={{ tab: "test" }} className="mt-4 inline-flex text-sm font-medium text-accent hover:underline">Testar agente</Link></Card></aside>
-    </div>}
-  </AppShell>;
+  async function prepareUpdate() {
+    if (!workspaceId || !plan?.available || busy) return;
+    setBusy(true);
+    try {
+      await updateWorkspaceMarketplaceInstallation({ data: { workspaceId, installationId } });
+      toast("Atualização preparada em staging. Teste o agente antes de publicar.");
+      await load();
+    } catch { toast("Não foi possível preparar a atualização."); }
+    finally { setBusy(false); }
+  }
+
+  async function prepareRollback() {
+    if (!workspaceId || !installation?.rollbackAvailable || busy) return;
+    setBusy(true);
+    try {
+      await rollbackWorkspaceMarketplaceInstallation({ data: { workspaceId, installationId } });
+      toast("Rollback preparado em staging. Publique o agente para efetivar.");
+      await load();
+    } catch { toast("Não há rollback disponível para esta instalação."); }
+    finally { setBusy(false); }
+  }
+
+  return <AppShell title="Customizar instalação"><Link to="/marketplace/installed" className="mb-6 inline-flex items-center gap-2 text-sm text-muted hover:text-fg"><ArrowLeft className="size-4" /> Minhas Instalações</Link>{!backendReady || loading ? <Card className="p-6 text-sm text-muted">{backendReady ? "Carregando instalação…" : "Aguardando o workspace e o backend…"}</Card> : !installation ? <Card className="p-6 text-sm text-muted">Instalação não encontrada.</Card> : <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="space-y-5"><Card className="p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><Badge tone={statusTone(installation.status)}>{STATUS_LABELS[installation.status]}</Badge><Badge tone="neutral">v{installation.versionNumber}</Badge>{installation.updateAvailable && <Badge tone="accent">v{installation.latestVersionNumber} disponível</Badge>}</div><h1 className="mt-3 font-display text-2xl font-semibold tracking-tight">{installation.productName}</h1><p className="mt-2 text-sm text-muted">Instalação isolada no workspace atual. As customizações abaixo afetam somente este agente.</p></div></div><div className="mt-7 space-y-5"><label className="block"><span className="mb-2 block text-sm font-medium">Nome do agente</span><Input value={name} maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Atendimento da ACME" /></label><label className="block"><span className="mb-2 block text-sm font-medium">Persona</span><Textarea value={persona} maxLength={500} onChange={(event) => setPersona(event.target.value)} placeholder="Descreva como o agente deve se comportar, seu tom e sua postura." /><span className="mt-1 block text-xs text-muted">Até 500 caracteres.</span></label><label className="block"><span className="mb-2 block text-sm font-medium">Mensagem inicial</span><Textarea value={welcomeMessage} maxLength={1000} onChange={(event) => setWelcomeMessage(event.target.value)} placeholder="Olá! Como posso ajudar?" /><span className="mt-1 block text-xs text-muted">Até 1.000 caracteres.</span></label></div><div className="mt-7 flex justify-end"><Button onClick={() => void save()} disabled={saving}><Save className="size-4" /> {saving ? "Salvando…" : "Salvar customização"}</Button></div></Card>
+      {plan?.available && <Card className="border-accent/30 p-5"><div className="flex items-start gap-3"><ArrowUpIcon /><div className="min-w-0 flex-1"><h2 className="font-display font-semibold">Atualização disponível: v{plan.targetVersionNumber}</h2><p className="mt-1 text-sm text-muted">A atualização será preparada em staging e preservará suas customizações declaradas.</p>{plan.changelog && <p className="mt-3 rounded-md bg-bg p-3 text-sm text-muted">{plan.changelog}</p>}<div className="mt-4 grid gap-3 sm:grid-cols-2"><div><p className="text-xs font-medium text-muted">Campos alterados</p><p className="mt-1 text-sm">{plan.changedFields.length > 0 ? plan.changedFields.join(", ") : "Nenhum campo estrutural"}</p></div><div><p className="text-xs font-medium text-muted">Customizações preservadas</p><p className="mt-1 text-sm">{plan.preservedCustomizations.length > 0 ? plan.preservedCustomizations.join(", ") : "Nenhuma"}</p></div></div>{plan.protectedChanges.length > 0 && <p className="mt-3 flex items-start gap-2 text-xs text-amber-300"><ShieldAlert className="mt-0.5 size-3.5 shrink-0" />Componentes protegidos alterados: {plan.protectedChanges.join(", ")}. Revise o comportamento antes da publicação.</p>}<Button className="mt-4" size="sm" onClick={() => void prepareUpdate()} disabled={busy}><RefreshCw className="size-3.5" /> {busy ? "Preparando…" : "Preparar atualização em staging"}</Button></div></div></Card>}
+      {revisions.length > 0 && <Card className="p-5"><div className="flex items-center gap-2"><History className="size-4 text-accent" /><h2 className="font-display font-semibold">Histórico da instalação</h2></div><div className="mt-4 divide-y divide-border">{revisions.map((revision) => <div key={revision.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><div><p className="text-sm font-medium">{ACTION_LABELS[revision.action]} · v{revision.fromVersionNumber} → v{revision.toVersionNumber}</p><p className="mt-1 text-xs text-muted">{new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(revision.createdAt))}</p></div><Badge tone={revision.action === "rollback" ? "warn" : "neutral"}>{revision.action === "rollback" ? "Revertido" : "Atualizado"}</Badge></div>)}</div></Card>}</div>
+    <aside className="space-y-5"><Card className="p-5"><p className="font-display font-semibold">Ciclo operacional</p><div className="mt-4 space-y-3 text-sm"><Step done={installation.status !== "draft"} label="Instalação criada" /><Step done={installation.status === "staging" || installation.status === "active"} label="Configuração preparada" /><Step done={installation.status === "active"} label="Versão publicada" /></div><div className="mt-5 flex flex-wrap gap-2"><Link to="/agents/$id" params={{ id: installation.agentId }} search={{ tab: "test" }} className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"><CheckCircle2 className="size-3.5" /> Testar agente</Link><Link to="/agents/$id" params={{ id: installation.agentId }} search={{ tab: "create" }} className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">Configuração completa</Link></div></Card><Card className="p-5"><p className="font-display font-semibold">Rollback controlado</p><p className="mt-2 text-sm leading-relaxed text-muted">O rollback não apaga histórico. Ele prepara o snapshot anterior em staging para revisão e nova publicação.</p><Button className="mt-4 w-full" variant="secondary" size="sm" onClick={() => void prepareRollback()} disabled={!installation.rollbackAvailable || busy}><RotateCcw className="size-3.5" /> {installation.rollbackAvailable ? "Preparar rollback" : "Nenhum rollback disponível"}</Button></Card></aside>
+  </div>}</AppShell>;
 }
+
+function ArrowUpIcon() { return <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent"><RefreshCw className="size-4" /></span>; }
+function Step({ done, label }: { done: boolean; label: string }) { return <div className="flex items-center gap-2"><span className={`flex size-5 items-center justify-center rounded-full ${done ? "bg-live/15 text-live" : "bg-elevated text-subtle"}`}>{done ? <CheckCircle2 className="size-3.5" /> : <span className="size-1.5 rounded-full bg-current" />}</span><span className={done ? "text-fg" : "text-subtle"}>{label}</span></div>; }

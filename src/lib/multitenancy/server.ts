@@ -619,6 +619,12 @@ export async function publishAgent(
       where id = $1 and workspace_id = $3 and deleted_at is null`,
     [input.agentId, userId, input.workspaceId],
   );
+  await sql.query(
+    `update agent_installations
+        set status = 'active', updated_at = current_timestamp
+      where agent_id = $1 and workspace_id = $2 and status in ('draft', 'staging')`,
+    [input.agentId, input.workspaceId],
+  );
 
   const result = await sql.query<AgentVersionRecord>(
     `${agentVersionSelect()} where av.id = $1 and av.agent_id = $2`,
@@ -696,6 +702,12 @@ async function publishAgentFromConfig(
     `update agents set status = 'active', updated_by = $2, updated_at = current_timestamp
       where id = $1 and workspace_id = $3 and deleted_at is null`,
     [input.agentId, userId, input.workspaceId],
+  );
+  await sql.query(
+    `update agent_installations
+        set status = 'active', updated_at = current_timestamp
+      where agent_id = $1 and workspace_id = $2 and status in ('draft', 'staging')`,
+    [input.agentId, input.workspaceId],
   );
   const result = await sql.query<AgentVersionRecord>(
     `${agentVersionSelect()} where av.id = $1 and av.agent_id = $2`,

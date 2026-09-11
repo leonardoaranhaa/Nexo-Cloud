@@ -19,6 +19,8 @@ async function fixture() {
     "0005_webhook_security.sql",
     "0006_webhook_delivery_states.sql",
     "0007_agent_runtime_jobs.sql",
+    "0018_agent_marketplace.sql",
+    "0037_marketplace_installation_revisions.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";

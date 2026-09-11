@@ -508,6 +508,24 @@ export const rollbackWorkspaceMarketplaceInstallation = createServerFn({ method:
     const { rollbackMarketplaceInstallation } = await import("@/lib/marketplace/server");
     return rollbackMarketplaceInstallation(await getSql(), context.userId, data);
   });
+
+export const getWorkspaceMarketplaceInstallationUpdatePlan = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; installationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getMarketplaceInstallationUpdatePlan } = await import("@/lib/marketplace/server");
+    return getMarketplaceInstallationUpdatePlan(await getSql(), context.userId, data);
+  });
+
+export const listWorkspaceMarketplaceInstallationRevisions = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; installationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listMarketplaceInstallationRevisions } = await import("@/lib/marketplace/server");
+    return listMarketplaceInstallationRevisions(await getSql(), context.userId, data);
+  });
 export const listWorkspaceIntegrations = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string }) => input)
