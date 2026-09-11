@@ -2,7 +2,7 @@
 
 **Status do documento:** fonte de verdade operacional do repositório.
 
-**Última consolidação:** 2026-09-10.
+**Última consolidação:** 2026-09-11.
 
 **Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar.
 
@@ -149,7 +149,7 @@ Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, 
 
 Existem catálogo, schemas, risco, permissões por versão publicada, congelamento, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência, auditoria e integração de tool calling no runtime.
 
-A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo: resultados sanitizados retornam ao modelo para gerar a resposta final. CRM, handoff e follow-up possuem registros nativos no Tool Registry e adapters conversacionais autorizáveis, com isolamento por workspace, idempotência e auditoria. Ainda faltam agenda, disponibilidade, adapters externos, validação de `output_schema` de todos os adapters, circuit breaker, quota/rate limit e tracing completo.
+A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo com protocolo estruturado: o primeiro round recebe as ferramentas publicadas, o servidor executa chamadas autorizadas, e o segundo round recebe a mensagem assistant com `tool_calls` e resultados `tool`, sem novas ferramentas disponíveis. Cada resultado retorna estado sanitizado de sucesso, aprovação, falha ou bloqueio; retries reutilizam a execução idempotente; falhas do segundo round preservam a resposta inicial segura. CRM, handoff, follow-up e agenda possuem registros nativos no Tool Registry e adapters conversacionais autorizáveis, com isolamento por workspace, idempotência e auditoria. Ainda faltam adapters externos, validação de `output_schema` de todos os adapters, circuit breaker, quota/rate limit de tokens/custo e tracing completo.
 
 ### 5.6 Workflows e automação
 

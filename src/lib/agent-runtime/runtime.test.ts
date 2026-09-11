@@ -189,6 +189,10 @@ test("Agent Runtime follows a second model pass after executing a tool call", as
           };
         }
         assert.ok(input.history.some((entry) => entry.content.includes("Qual o horário?") || entry.content.includes("availability_question")));
+        assert.equal(input.tools, undefined);
+        assert.equal(input.toolRound?.calls[0]?.id, "call-2");
+        assert.equal(input.toolRound?.results[0]?.status, "succeeded");
+        assert.equal(input.toolRound?.results[0]?.output.stage, "qualifying");
         return { text: "Confirmado: a sua solicitação foi registrada e já foi encaminhada para continuidade.", usedAi: true };
       },
     }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));

@@ -24,6 +24,9 @@ import { getWorkspaceCrmConfig, type WorkspaceCrmConfig } from "../integrations/
 
 type JsonRecord = Record<string, unknown>;
 
+type RuntimeToolCall = { id: string; name: string; arguments: JsonRecord };
+type RuntimeToolResult = { id: string; name: string; status: "succeeded" | "approval_required" | "failed" | "denied"; output: JsonRecord };
+
 type RuntimeModel = {
   generate(input: {
     systemPrompt: string;
@@ -31,7 +34,8 @@ type RuntimeModel = {
     maxTokens: number;
     temperature: number;
     tools?: { type: "function"; function: { name: string; description: string; parameters: JsonRecord } }[];
-  }): Promise<{ text?: string; usedAi: boolean; toolCalls?: { id: string; name: string; arguments: JsonRecord }[] }>;
+    toolRound?: { calls: RuntimeToolCall[]; results: RuntimeToolResult[] };
+  }): Promise<{ text?: string; usedAi: boolean; toolCalls?: RuntimeToolCall[] }>;
 };
 
 type RuntimeContext = {
@@ -210,13 +214,35 @@ function xaiModel(): RuntimeModel {
     async generate(input) {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) return { usedAi: false };
+      const messages: Record<string, unknown>[] = [
+        { role: "system", content: input.systemPrompt },
+        ...input.history,
+      ];
+      if (input.toolRound) {
+        messages.push({
+          role: "assistant",
+          content: null,
+          tool_calls: input.toolRound.calls.map((call) => ({
+            id: call.id,
+            type: "function",
+            function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+          })),
+        });
+        for (const result of input.toolRound.results) {
+          messages.push({
+            role: "tool",
+            tool_call_id: result.id,
+            content: JSON.stringify({ status: result.status, ...result.output }),
+          });
+        }
+      }
       const response = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({
           model: process.env.NEXO_AGENT_MODEL || "grok-4.5",
-          messages: [{ role: "system", content: input.systemPrompt }, ...input.history],
-          ...(input.tools?.length ? { tools: input.tools, tool_choice: "auto" } : {}),
+          messages,
+          ...(input.tools?.length && !input.toolRound ? { tools: input.tools, tool_choice: "auto" } : {}),
           max_tokens: input.maxTokens,
           temperature: input.temperature,
         }),
@@ -239,7 +265,7 @@ function xaiModel(): RuntimeModel {
 export async function executeAgentRuntime(
   context: RuntimeContext,
   model: RuntimeModel = xaiModel(),
-): Promise<{ reply?: string; usedAi: boolean; reason: string; decision: AgentDecision; toolCalls?: { id: string; name: string; arguments: JsonRecord }[] }> {
+): Promise<{ reply?: string; usedAi: boolean; reason: string; decision: AgentDecision; toolCalls?: RuntimeToolCall[] }> {
   const { agent, inboundText } = context;
   const decision = decideAgentTurn(agent, { text: inboundText, currentState: context.commercialState, ragEvidence: context.ragEvidence });
   if (!inboundText) return { usedAi: false, reason: "empty_inbound", decision };
@@ -277,28 +303,33 @@ export async function executeAgentRuntime(
 async function executeAuthorizedRuntimeTools(
   sql: Sql,
   context: RuntimeContext,
-  calls: { id: string; name: string; arguments: JsonRecord }[],
-): Promise<{ executed: number; approvalRequired: number; results: { id: string; name: string; output: JsonRecord }[] }> {
+  calls: RuntimeToolCall[],
+): Promise<{ executed: number; approvalRequired: number; results: RuntimeToolResult[] }> {
   let executed = 0;
   let approvalRequired = 0;
-  const results: { id: string; name: string; output: JsonRecord }[] = [];
+  const results: RuntimeToolResult[] = [];
   for (const call of calls.slice(0, 3)) {
     const tool = context.authorizedTools.find((item) => item.key === call.name);
-    if (!tool) throw new Error("RUNTIME_TOOL_NOT_AUTHORIZED");
-    const executionId = randomUUID();
-    const idempotencyKey = `runtime:${context.job.id}:tool:${call.id}`;
-    const input = { ...call.arguments, externalContactId: context.recipient, conversationId: context.job.conversation_id, idempotencyKey };
-    const existingExecution = await sql.query<{ id: string; status: string }>(`select id, status from tool_executions where workspace_id = $1 and idempotency_key = $2 limit 1`, [context.job.workspace_id, idempotencyKey]);
-    if (existingExecution[0]?.status === "succeeded") {
-      executed += 1;
+    if (!tool) {
+      results.push({ id: call.id, name: call.name, status: "denied", output: { code: "RUNTIME_TOOL_NOT_AUTHORIZED", message: "A ferramenta não está autorizada nesta versão publicada." } });
       continue;
     }
+    const idempotencyKey = `runtime:${context.job.id}:tool:${call.id}`;
+    const input = { ...call.arguments, externalContactId: context.recipient, conversationId: context.job.conversation_id, idempotencyKey };
+    const existingExecution = await sql.query<{ id: string; status: string; output_redacted: JsonRecord | null }>(`select id, status, output_redacted from tool_executions where workspace_id = $1 and idempotency_key = $2 limit 1`, [context.job.workspace_id, idempotencyKey]);
+    if (existingExecution[0]?.status === "succeeded") {
+      executed += 1;
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: existingExecution[0].output_redacted ?? { idempotent: true } });
+      continue;
+    }
+    const executionId = existingExecution[0]?.id ?? randomUUID();
     if (!existingExecution[0]) {
       await sql.query(`insert into tool_executions (id, workspace_id, tool_id, requested_by, status, input_hash, input_redacted, trace_id, idempotency_key, started_at) values ($1,$2,$3,'model',$4,$5,$6::jsonb,$7,$8,current_timestamp)`, [executionId, context.job.workspace_id, tool.id, tool.requireApproval ? "requested" : "running", call.name, JSON.stringify(input), context.job.trace_id, idempotencyKey]);
     }
     if (tool.requireApproval) {
       await sql.query(`insert into tool_execution_approvals (id, workspace_id, tool_execution_id, requested_by, reason, expires_at) values ($1,$2,$3,'model',$4,current_timestamp + interval '30 minutes') on conflict (tool_execution_id) do nothing`, [randomUUID(), context.job.workspace_id, executionId, `Aprovação requerida pelo agente para ${tool.key}`]);
       approvalRequired += 1;
+      results.push({ id: call.id, name: call.name, status: "approval_required", output: { code: "APPROVAL_REQUIRED", message: "A ação aguarda aprovação humana antes de ser executada." } });
       continue;
     }
     if (tool.key === "lead.create_or_update") {
@@ -316,8 +347,8 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify({ status: "succeeded", tool: tool.key }), executionId, context.job.workspace_id]);
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
+      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify({ status: "succeeded", tool: tool.key, ...object(output) }), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
     }
@@ -335,7 +366,7 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, output: object(output) });
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
@@ -351,7 +382,7 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, output: object(output) });
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
@@ -371,7 +402,7 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, output: object(output) });
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
@@ -385,7 +416,7 @@ async function executeAuthorizedRuntimeTools(
         action,
         reason: text(call.arguments.reason),
       });
-      results.push({ id: call.id, name: call.name, output: object(output) });
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
@@ -397,7 +428,7 @@ async function executeAuthorizedRuntimeTools(
         durationMinutes: number(call.arguments.durationMinutes, 30, 5, 480),
         limit: number(call.arguments.limit, 20, 1, 50),
       }));
-      results.push({ id: call.id, name: call.name, output: object(output) });
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(output), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
@@ -412,14 +443,14 @@ async function executeAuthorizedRuntimeTools(
         notes: text(call.arguments.notes) || undefined,
         idempotencyKey,
       });
-      results.push({ id: call.id, name: call.name, output: object(output) });
+      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
       await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(output), executionId, context.job.workspace_id]);
       executed += 1;
       continue;
     }
-    results.push({ id: call.id, name: call.name, output: { status: "unsupported" } });
+    results.push({ id: call.id, name: call.name, status: "failed", output: { code: "RUNTIME_TOOL_ADAPTER_UNAVAILABLE", status: "unsupported" } });
     await sql.query(`update tool_executions set status = 'failed', error_code = 'RUNTIME_TOOL_ADAPTER_UNAVAILABLE', error_message = $1, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [tool.key, executionId, context.job.workspace_id]);
-    throw new Error("RUNTIME_TOOL_ADAPTER_UNAVAILABLE");
+    continue;
   }
   return { executed, approvalRequired, results };
 }
@@ -430,22 +461,23 @@ async function recomposeToolCallResponse(
   agent: Agent,
   prompt: string,
   inboundText: string,
-  toolResultText: string,
+  calls: RuntimeToolCall[],
+  results: RuntimeToolResult[],
   modelReply: string | undefined,
 ): Promise<string | undefined> {
-  if (!toolResultText.trim()) return modelReply;
-  const history = context.history.slice(-(agent.memoryWindow * 2 + 1)).concat(
-    { role: "user", content: inboundText },
-    { role: "assistant", content: modelReply && modelReply.trim() ? modelReply : "Vou usar a ferramenta para confirmar isso." },
-  );
-  const followUp = await model.generate({
-    systemPrompt: `${prompt}\n\nResultado das ferramentas executadas:\n${toolResultText}`,
-    history,
-    maxTokens: agent.maxTokens,
-    temperature: agent.temperature,
-    tools: [],
-  });
-  return followUp.text || modelReply;
+  if (!results.length) return modelReply;
+  try {
+    const followUp = await model.generate({
+      systemPrompt: `${prompt}\n\nVocê está no encerramento desta rodada. Use os resultados estruturados das ferramentas para responder ao contato. Não solicite outra ferramenta nesta rodada.`,
+      history: context.history.slice(-(agent.memoryWindow * 2 + 1)).concat({ role: "user", content: inboundText }),
+      maxTokens: agent.maxTokens,
+      temperature: agent.temperature,
+      toolRound: { calls, results },
+    });
+    return followUp.text || modelReply;
+  } catch {
+    return modelReply;
+  }
 }
 
 export async function runNextAgentRuntimeJob(
@@ -490,8 +522,7 @@ export async function runNextAgentRuntimeJob(
     if (result.toolCalls?.length) {
       const toolResult = await executeAuthorizedRuntimeTools(sql, context, result.toolCalls);
       steps.push({ name: "authorized_tool_calls", status: "ok", durationMs: toolResult.executed + toolResult.approvalRequired });
-      const toolResultSummary = toolResult.results.map((item) => `[${item.name}] ${JSON.stringify(item.output)}`).join("\n");
-      if (toolResultSummary) {
+      if (toolResult.results.length) {
         const followUpText = await recomposeToolCallResponse(runtimeModel, context, context.agent, [
           context.agent.systemPrompt,
           context.agent.persona ? `Persona: ${context.agent.persona}` : "",
@@ -499,10 +530,11 @@ export async function runNextAgentRuntimeJob(
           context.ragEvidence.length ? `Evidências publicadas:\n${context.ragEvidence.map((item) => `[${item.sourceId}] ${item.title}: ${item.excerpt}`).join("\n")}` : "",
           `Decisão do runtime: intenção=${result.decision.intent}; confiança=${result.decision.confidence}; risco=${result.decision.risk}; próxima ação=${result.decision.nextAction}.`,
           "Responda em texto curto, adequado para WhatsApp. Não invente políticas, preços ou dados ausentes.",
-        ].filter(Boolean).join("\n\n").slice(0, 12000), context.inboundText, toolResultSummary, result.reply);
+        ].filter(Boolean).join("\n\n").slice(0, 12000), context.inboundText, result.toolCalls, toolResult.results, result.reply);
         if (followUpText) {
           result = { ...result, reply: followUpText, usedAi: true, reason: "tool_call" };
         }
+        steps.push({ name: "tool_call_round", status: "ok" });
       }
     }
     if ((result.decision.intent === "pricing_question" || result.decision.intent === "availability_question") && result.decision.nextAction !== "ask" && result.decision.nextAction !== "handoff") {
