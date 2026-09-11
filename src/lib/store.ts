@@ -42,6 +42,9 @@ export type WorkspaceContext = {
   slug: string;
   environment: "development" | "staging" | "production";
   role: string;
+  onboardingCompleted: boolean;
+  onboardingGoal: string | null;
+  onboardingTeamSize: string | null;
 };
 
 type NexoState = {

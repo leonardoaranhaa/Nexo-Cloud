@@ -24,6 +24,9 @@ export type WorkspaceRecord = {
   slug: string;
   environment: "development" | "staging" | "production";
   role: WorkspaceRole;
+  onboardingCompleted: boolean;
+  onboardingGoal: string | null;
+  onboardingTeamSize: string | null;
 };
 
 export type AgentRecord = {
@@ -231,6 +234,9 @@ export async function ensureDefaultWorkspace(sql: Sql, userId: string): Promise<
        w.name,
        w.slug,
        w.environment,
+       w.onboarding_completed as "onboardingCompleted",
+       w.onboarding_goal as "onboardingGoal",
+       w.onboarding_team_size as "onboardingTeamSize",
        'workspace_admin' as role
      from workspaces w
      join organizations o on o.id = w.organization_id
@@ -259,6 +265,9 @@ export async function listWorkspaces(sql: Sql, userId: string): Promise<Workspac
       w.name,
       w.slug,
       w.environment,
+      w.onboarding_completed as "onboardingCompleted",
+      w.onboarding_goal as "onboardingGoal",
+      w.onboarding_team_size as "onboardingTeamSize",
       case
         when om.role in ('owner', 'admin') then om.role
         else wm.role
@@ -275,6 +284,28 @@ export async function listWorkspaces(sql: Sql, userId: string): Promise<Workspac
       and w.deleted_at is null
     order by o.created_at asc, w.created_at asc
   `;
+}
+
+export async function completeWorkspaceOnboarding(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; name: string; goal: string; teamSize: string },
+): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "manage");
+  const name = input.name.trim().slice(0, 120);
+  if (!name) throw new Error("workspace name is required");
+  await sql.query(
+    `update workspaces
+        set name = $1,
+            onboarding_completed = true,
+            onboarding_goal = $2,
+            onboarding_team_size = $3,
+            updated_at = current_timestamp
+      where id = $4
+        and status = 'active'
+        and deleted_at is null`,
+    [name, input.goal, input.teamSize, input.workspaceId],
+  );
 }
 
 export async function listAgents(sql: Sql, userId: string, workspaceId: string): Promise<AgentRecord[]> {

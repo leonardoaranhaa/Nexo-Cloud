@@ -10,9 +10,19 @@ export const getWorkspaceContext = createServerFn({ method: "GET" })
     const { ensureDefaultWorkspace, listWorkspaces } = await import("./server");
     const sql = await getSql();
     const workspaces = await listWorkspaces(sql, context.userId);
-    if (workspaces.length > 0) return { workspaces, activeWorkspace: workspaces[0] };
+    if (workspaces.length > 0) return { workspaces, activeWorkspace: workspaces[0], isFirstWorkspace: false };
     const activeWorkspace = await ensureDefaultWorkspace(sql, context.userId);
-    return { workspaces: [activeWorkspace], activeWorkspace };
+    return { workspaces: [activeWorkspace], activeWorkspace, isFirstWorkspace: true };
+  });
+
+export const completeWorkspaceOnboarding = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; name: string; goal: string; teamSize: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { completeWorkspaceOnboarding: saveOnboarding } = await import("./server");
+    await saveOnboarding(await getSql(), context.userId, data);
+    return { ok: true as const };
   });
 
 export const listWorkspaceAgents = createServerFn({ method: "GET" })
