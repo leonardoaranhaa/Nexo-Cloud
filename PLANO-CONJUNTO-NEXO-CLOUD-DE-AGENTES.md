@@ -103,6 +103,8 @@ A área **Publicação** deve funcionar como uma superfície de readiness operac
 
 O fluxo ponta a ponta deve possuir um único gate de publicação: ações globais do agente levam à área **Publicação** para revisão contextual, e somente o comando de publicação dessa área executa a criação da versão. Nenhum atalho deve contornar os requisitos ou criar uma publicação silenciosamente.
 
+O contexto de workspace deve ser orientado ao usuário: quando houver um único workspace, ele deve ser selecionado automaticamente; quando houver múltiplos, o seletor deve explicar que se trata do projeto ou operação onde vivem agentes, conexões, testes e publicações. A ausência de contexto deve orientar a escolha sem exibir recursos de outro workspace.
+
 ## 5. Estado real consolidado
 
 ### 5.1 Fundamento multi-tenant e Control Plane
