@@ -349,3 +349,10 @@ auth/db: OFF by default — sign-in, @/lib/db or migrations ONLY on an accounts 
 never:   build an app for a greeting/number/question; invent imagine_* calls;
          ask the user to run commands; delete or abandon /workspace/startup.sh
 ```
+
+
+## Contrato específico do Nexo Cloud — Agent Engineering Plane
+
+Para este repositório, o plano operacional especializado do produto é `PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md`. Antes de qualquer planejamento, edição, migration ou declaração de conclusão relacionada ao Nexo Cloud, leia integralmente `PLANO-CONJUNTO-NEXO-CLOUD-DE-AGENTES.md`, `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md` e o plano especializado. Verifique também `git status`, o último commit, as migrations existentes e o estado real do código.
+
+O plano especializado é vinculante para a evolução do Agent Engineering Plane. A ordem de execução começa pela Fase 0 e pelo próximo ponto de partida obrigatório do plano mestre; nenhuma fase posterior deve ser iniciada enquanto os pré-requisitos não estiverem concluídos ou explicitamente liberados. Cada fatia deve ser vertical, reversível, multi-tenant, autorizada server-side, validada com typecheck, testes relevantes, build e revisão de diff, e deve atualizar o plano mestre e o plano especializado.

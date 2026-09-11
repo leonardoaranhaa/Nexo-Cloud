@@ -6,6 +6,8 @@
 
 **Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar.
 
+**Plano especializado vinculante:** `PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md` detalha a evolução do Agent Engineering Plane. Após ler este plano mestre e o comando interno, toda sessão que atuar nessa frente deve ler o plano especializado integralmente, respeitar a ordem da Fase 0 e atualizar ambos os documentos ao concluir cada fatia.
+
 ## 1. Visão do produto
 
 O Nexo Cloud é a **AWS dos agentes**: uma plataforma multi-tenant que fornece a infraestrutura, o ambiente de desenvolvimento, o runtime, as ferramentas, o conhecimento, as integrações, a governança e o catálogo necessários para criar, testar, indexar, publicar, operar, alugar, vender e evoluir agentes de inteligência artificial.
