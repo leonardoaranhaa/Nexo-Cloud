@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executionIdempotencyKey, validateToolInput } from "./tool-registry.ts";
+import { executionIdempotencyKey, validateToolInput, validateToolOutput } from "./tool-registry.ts";
 
 test("tool input validation enforces required fields, types and unknown-field policy", () => {
   const schema = {
@@ -31,4 +31,18 @@ test("execution idempotency key is stable for the same operation and scoped by w
   assert.equal(first, executionIdempotencyKey("ws-a", "execution-1", "lead.create_or_update"));
   assert.notEqual(first, executionIdempotencyKey("ws-b", "execution-1", "lead.create_or_update"));
   assert.notEqual(first, executionIdempotencyKey("ws-a", "execution-1", "calendar.book"));
+});
+
+test("tool output validation enforces the native commercial result contract", () => {
+  const schema = {
+    type: "object",
+    required: ["leadId", "status"],
+    properties: {
+      leadId: { type: "string" },
+      status: { type: "string", enum: ["succeeded", "failed"] },
+    },
+  };
+  validateToolOutput({ leadId: "lead-1", status: "succeeded" }, schema);
+  assert.throws(() => validateToolOutput({ status: "succeeded" }, schema), /INVALID_ARGUMENTS:.*leadId:REQUIRED/);
+  assert.throws(() => validateToolOutput({ leadId: "lead-1", status: "pending" }, schema), /INVALID_ARGUMENTS:.*status:ENUM/);
 });

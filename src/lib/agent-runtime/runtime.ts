@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "../db";
+import type { JsonObject } from "../multitenancy/server.ts";
 import { localFallbackReply, isWithinHours } from "../pipeline.ts";
 import type { Agent } from "../types.ts";
 import { dispatchTextMessageAsRuntime } from "../messaging/router.ts";
@@ -18,6 +19,7 @@ import { recordLearningEvent } from "../learning/server.ts";
 import { persistLearningEvaluation } from "../learning/evaluation.ts";
 import { indexLearningEvent } from "../learning/cases.ts";
 import { listPublishedAgentTools, type RuntimeAuthorizedTool } from "../connectors/tools-server.ts";
+import { validateToolInput, validateToolOutput } from "../connectors/tool-registry.ts";
 import { availabilityToolOutput, listAvailability } from "../calendar/availability.ts";
 import { bookAvailabilitySlot } from "../calendar/server.ts";
 import { getWorkspaceCrmConfig, type WorkspaceCrmConfig } from "../integrations/server.ts";
@@ -54,6 +56,26 @@ type RuntimeContext = {
 
 function object(value: unknown): JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+async function finalizeNativeToolOutput(
+  sql: Sql,
+  tool: RuntimeAuthorizedTool,
+  executionId: string,
+  call: RuntimeToolCall,
+  output: unknown,
+  workspaceId: string,
+): Promise<RuntimeToolResult> {
+  const normalized = object(output);
+  try {
+    validateToolOutput(normalized as unknown as JsonObject, tool.outputSchema);
+    await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(normalized), executionId, workspaceId]);
+    return { id: call.id, name: call.name, status: "succeeded", output: normalized };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 240) : "TOOL_OUTPUT_INVALID";
+    await sql.query(`update tool_executions set status = 'failed', error_code = 'TOOL_OUTPUT_INVALID', error_message = $1, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [message, executionId, workspaceId]);
+    return { id: call.id, name: call.name, status: "failed", output: { code: "TOOL_OUTPUT_INVALID", message } };
+  }
 }
 
 function text(value: unknown, fallback = ""): string {
@@ -323,6 +345,18 @@ async function executeAuthorizedRuntimeTools(
       continue;
     }
     const executionId = existingExecution[0]?.id ?? randomUUID();
+    try {
+      validateToolInput(input as unknown as JsonObject, tool.inputSchema);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.slice(0, 240) : "INVALID_ARGUMENTS";
+      if (existingExecution[0]) {
+        await sql.query(`update tool_executions set status = 'failed', error_code = 'INVALID_ARGUMENTS', error_message = $1, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [message, executionId, context.job.workspace_id]);
+      } else {
+        await sql.query(`insert into tool_executions (id, workspace_id, tool_id, requested_by, status, input_hash, input_redacted, error_code, error_message, trace_id, idempotency_key, finished_at) values ($1,$2,$3,'model','failed',$4,$5::jsonb,'INVALID_ARGUMENTS',$6,$7,$8,current_timestamp)`, [executionId, context.job.workspace_id, tool.id, call.name, JSON.stringify(input), message, context.job.trace_id, idempotencyKey]);
+      }
+      results.push({ id: call.id, name: call.name, status: "failed", output: { code: "INVALID_ARGUMENTS", message } });
+      continue;
+    }
     if (!existingExecution[0]) {
       await sql.query(`insert into tool_executions (id, workspace_id, tool_id, requested_by, status, input_hash, input_redacted, trace_id, idempotency_key, started_at) values ($1,$2,$3,'model',$4,$5,$6::jsonb,$7,$8,current_timestamp)`, [executionId, context.job.workspace_id, tool.id, tool.requireApproval ? "requested" : "running", call.name, JSON.stringify(input), context.job.trace_id, idempotencyKey]);
     }
@@ -347,9 +381,9 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify({ status: "succeeded", tool: tool.key, ...object(output) }), executionId, context.job.workspace_id]);
-      executed += 1;
+      const toolResult = await finalizeNativeToolOutput(sql, tool, executionId, call, { status: "succeeded", tool: tool.key, ...object(output) }, context.job.workspace_id);
+      results.push(toolResult);
+      if (toolResult.status === "succeeded") executed += 1;
       continue;
     }
     if (tool.key === "lead.update_qualification") {
@@ -366,9 +400,9 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
-      executed += 1;
+      const toolResult = await finalizeNativeToolOutput(sql, tool, executionId, call, output, context.job.workspace_id);
+      results.push(toolResult);
+      if (toolResult.status === "succeeded") executed += 1;
       continue;
     }
     if (tool.key === "lead.assign_owner") {
@@ -382,9 +416,9 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
-      executed += 1;
+      const toolResult = await finalizeNativeToolOutput(sql, tool, executionId, call, output, context.job.workspace_id);
+      results.push(toolResult);
+      if (toolResult.status === "succeeded") executed += 1;
       continue;
     }
     if (tool.key === "lead.create_follow_up") {
@@ -402,9 +436,9 @@ async function executeAuthorizedRuntimeTools(
         traceId: context.job.trace_id,
         requestedBy: "model",
       });
-      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
-      executed += 1;
+      const toolResult = await finalizeNativeToolOutput(sql, tool, executionId, call, output, context.job.workspace_id);
+      results.push(toolResult);
+      if (toolResult.status === "succeeded") executed += 1;
       continue;
     }
     if (tool.key === "conversation.handoff") {
@@ -416,9 +450,9 @@ async function executeAuthorizedRuntimeTools(
         action,
         reason: text(call.arguments.reason),
       });
-      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(object(output)), executionId, context.job.workspace_id]);
-      executed += 1;
+      const toolResult = await finalizeNativeToolOutput(sql, tool, executionId, call, output, context.job.workspace_id);
+      results.push(toolResult);
+      if (toolResult.status === "succeeded") executed += 1;
       continue;
     }
     if (tool.key === "calendar.list_availability") {
@@ -428,9 +462,9 @@ async function executeAuthorizedRuntimeTools(
         durationMinutes: number(call.arguments.durationMinutes, 30, 5, 480),
         limit: number(call.arguments.limit, 20, 1, 50),
       }));
-      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(output), executionId, context.job.workspace_id]);
-      executed += 1;
+      const toolResult = await finalizeNativeToolOutput(sql, tool, executionId, call, output, context.job.workspace_id);
+      results.push(toolResult);
+      if (toolResult.status === "succeeded") executed += 1;
       continue;
     }
     if (tool.key === "calendar.book_slot") {
@@ -443,9 +477,9 @@ async function executeAuthorizedRuntimeTools(
         notes: text(call.arguments.notes) || undefined,
         idempotencyKey,
       });
-      results.push({ id: call.id, name: call.name, status: "succeeded", output: object(output) });
-      await sql.query(`update tool_executions set status = 'succeeded', output_redacted = $1::jsonb, finished_at = current_timestamp where id = $2 and workspace_id = $3`, [JSON.stringify(output), executionId, context.job.workspace_id]);
-      executed += 1;
+      const toolResult = await finalizeNativeToolOutput(sql, tool, executionId, call, output, context.job.workspace_id);
+      results.push(toolResult);
+      if (toolResult.status === "succeeded") executed += 1;
       continue;
     }
     results.push({ id: call.id, name: call.name, status: "failed", output: { code: "RUNTIME_TOOL_ADAPTER_UNAVAILABLE", status: "unsupported" } });

@@ -67,6 +67,10 @@ export function validateToolInput(value: unknown, schema: JsonObject, path = "$"
   if (Array.isArray(schema.enum) && !schema.enum.some((item) => Object.is(item, value))) fail(path, "ENUM");
 }
 
+export function validateToolOutput(value: unknown, schema: JsonObject, path = "$", depth = 0): void {
+  validateToolInput(value, schema, path, depth);
+}
+
 export async function resolveTool(sql: Sql, workspaceId: string, key: string): Promise<RegisteredTool> {
   const rows = await sql.query<{
     id: string; workspace_id: string | null; connector_definition_id: string | null; key: string; name: string;

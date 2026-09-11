@@ -133,7 +133,7 @@ Ainda faltam validações com credenciais reais em produção, operação perman
 
 Estão implementados `lead.create_or_update`, `lead.update_qualification`, política de qualificação por produto, `lead.assign_owner`, distribuição round-robin, `lead.create_follow_up`, cancelamento, proteção de campos, estados comerciais e painel de métricas.
 
- A agenda foi iniciada como fatia parcial: existe a migration `0033_calendar_availability.sql` e a ferramenta nativa read-only `calendar.list_availability`, com isolamento por workspace e dispatch no Agent Runtime. Ainda faltam provisionamento/ingestão de slots, busca e reserva de horários, aprovação para escritas, CRM externo, catálogo/disponibilidade conectado e ferramentas conversacionais completas para todas as operações comerciais.
+ A agenda possui provisionamento de slots, consulta nativa `calendar.list_availability` e reserva idempotente `calendar.book_slot`, com isolamento por workspace e dispatch no Agent Runtime. Ainda faltam ingestão automática de disponibilidade externa, aprovação configurável para escritas, CRM externo e catálogo/disponibilidade conectado.
 
 ### 5.4 RAG operacional
 
@@ -149,7 +149,7 @@ Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, 
 
 Existem catálogo, schemas, risco, permissões por versão publicada, congelamento, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência, auditoria e integração de tool calling no runtime.
 
-A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo com protocolo estruturado: o primeiro round recebe as ferramentas publicadas, o servidor executa chamadas autorizadas, e o segundo round recebe a mensagem assistant com `tool_calls` e resultados `tool`, sem novas ferramentas disponíveis. Cada resultado retorna estado sanitizado de sucesso, aprovação, falha ou bloqueio; retries reutilizam a execução idempotente; falhas do segundo round preservam a resposta inicial segura. CRM, handoff, follow-up e agenda possuem registros nativos no Tool Registry e adapters conversacionais autorizáveis, com isolamento por workspace, idempotência e auditoria. Ainda faltam adapters externos, validação de `output_schema` de todos os adapters, circuit breaker, quota/rate limit de tokens/custo e tracing completo.
+A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo com protocolo estruturado: o primeiro round recebe as ferramentas publicadas, o servidor executa chamadas autorizadas, e o segundo round recebe a mensagem assistant com `tool_calls` e resultados `tool`, sem novas ferramentas disponíveis. Cada resultado retorna estado sanitizado de sucesso, aprovação, falha ou bloqueio; retries reutilizam a execução idempotente; falhas do segundo round preservam a resposta inicial segura. CRM, handoff, follow-up e agenda possuem registros nativos no Tool Registry, incluindo `calendar.book_slot`, contratos de entrada/saída versionados e validação dos resultados antes do retorno ao modelo. Ainda faltam adapters externos, circuit breaker, quota/rate limit de tokens/custo e tracing completo.
 
 ### 5.6 Workflows e automação
 
@@ -201,7 +201,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0038_agent_runtime_quotas.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, disponibilidade de agenda, revisões de instalação e quotas diárias do runtime.
+O repositório possui migrations até `0039_native_commercial_tool_contracts.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação e quotas diárias do runtime.
 
 As rotas principais são:
 

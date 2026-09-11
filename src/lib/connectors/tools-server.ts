@@ -104,10 +104,11 @@ export type RuntimeAuthorizedTool = {
   name: string;
   description: string;
   inputSchema: JsonObject;
+  outputSchema: JsonObject;
   riskLevel: "read" | "write" | "destructive";
   requireApproval: boolean;
 };
 
 export async function listPublishedAgentTools(sql: Sql, workspaceId: string, agentId: string): Promise<RuntimeAuthorizedTool[]> {
-  return sql.query<RuntimeAuthorizedTool>(`select t.id, t.key, t.name, t.description, t.input_schema as "inputSchema", t.risk_level as "riskLevel", p.require_approval as "requireApproval" from agent_versions v join agents a on a.id = v.agent_id and a.workspace_id = $1 join agent_tool_permissions p on p.agent_version_id = v.id and p.workspace_id = $1 and p.enabled = true join tools t on t.id = p.tool_id and (t.workspace_id = $1 or t.workspace_id is null) and t.status = 'active' where v.agent_id = $2 and v.status = 'published' order by t.key`, [workspaceId, agentId]);
+  return sql.query<RuntimeAuthorizedTool>(`select t.id, t.key, t.name, t.description, t.input_schema as "inputSchema", t.output_schema as "outputSchema", t.risk_level as "riskLevel", p.require_approval as "requireApproval" from agent_versions v join agents a on a.id = v.agent_id and a.workspace_id = $1 join agent_tool_permissions p on p.agent_version_id = v.id and p.workspace_id = $1 and p.enabled = true join tools t on t.id = p.tool_id and (t.workspace_id = $1 or t.workspace_id is null) and t.status = 'active' where v.agent_id = $2 and v.status = 'published' order by t.key`, [workspaceId, agentId]);
 }
