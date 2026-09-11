@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { Sql } from "@/lib/db";
-import { requireWorkspaceAccess, type JsonObject } from "@/lib/multitenancy/server";
+import type { Sql } from "../db.ts";
+import { requireWorkspaceAccess, type JsonObject } from "../multitenancy/server.ts";
 
 export type WorkspaceIntegration = {
   id: string;
@@ -11,6 +11,32 @@ export type WorkspaceIntegration = {
   config: JsonObject;
   lastTestedAt: string | null;
 };
+
+export type WorkspaceCrmConfig = {
+  pipelineName: string;
+  defaultStage: string;
+  captureFields: string[];
+};
+
+export const DEFAULT_CRM_CAPTURE_FIELDS = ["name", "email", "phone", "need", "budget", "timeline", "company", "role", "location", "productInterest", "decisionMaker", "consent"];
+const CRM_STAGES = new Set(["new", "engaged", "qualifying", "qualified", "nurture", "handoff_pending", "human_active", "converted", "lost"]);
+
+export async function getWorkspaceCrmConfig(sql: Sql, workspaceId: string): Promise<WorkspaceCrmConfig | null> {
+  const rows = await sql<{ status: WorkspaceIntegration["status"]; config: JsonObject }>`
+    select status, config from workspace_integrations
+     where workspace_id = ${workspaceId} and integration_key = 'crm.qualificacao'
+     limit 1
+  `;
+  const row = rows[0];
+  if (!row || row.status !== "connected") return null;
+  const configured = Array.isArray(row.config.captureFields) ? row.config.captureFields.filter((field): field is string => typeof field === "string" && DEFAULT_CRM_CAPTURE_FIELDS.includes(field)).slice(0, 20) : [];
+  const configuredStage = typeof row.config.defaultStage === "string" && CRM_STAGES.has(row.config.defaultStage) ? row.config.defaultStage : "qualifying";
+  return {
+    pipelineName: typeof row.config.pipelineName === "string" ? row.config.pipelineName : "Vendas",
+    defaultStage: configuredStage,
+    captureFields: configured.length ? configured : DEFAULT_CRM_CAPTURE_FIELDS,
+  };
+}
 
 export async function listWorkspaceIntegrations(sql: Sql, userId: string, workspaceId: string): Promise<WorkspaceIntegration[]> {
   await requireWorkspaceAccess(sql, userId, workspaceId, "read");

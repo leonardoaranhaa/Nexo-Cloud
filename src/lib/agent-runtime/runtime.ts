@@ -18,6 +18,7 @@ import { persistLearningEvaluation } from "../learning/evaluation.ts";
 import { indexLearningEvent } from "../learning/cases.ts";
 import { listPublishedAgentTools, type RuntimeAuthorizedTool } from "../connectors/tools-server.ts";
 import { availabilityToolOutput, listAvailability } from "../calendar/availability.ts";
+import { getWorkspaceCrmConfig, type WorkspaceCrmConfig } from "../integrations/server.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -42,6 +43,7 @@ type RuntimeContext = {
   ragEvidence: KnowledgeEvidence[];
   productId?: string;
   authorizedTools: RuntimeAuthorizedTool[];
+  crmConfig: WorkspaceCrmConfig | null;
 };
 
 function object(value: unknown): JsonRecord {
@@ -119,6 +121,23 @@ function contentText(value: unknown): string {
   return text(content.text) || text(content.body);
 }
 
+function configuredCrmData(value: unknown, config: WorkspaceCrmConfig | null): import("../multitenancy/server.ts").JsonObject {
+  const source = object(value);
+  if (!config) return source as import("../multitenancy/server.ts").JsonObject;
+  const allowed = new Set(config.captureFields);
+  return Object.fromEntries(Object.entries(source).filter(([key]) => allowed.has(key))) as import("../multitenancy/server.ts").JsonObject;
+}
+
+function configuredCrmScalarArguments(argumentsValue: JsonRecord, config: WorkspaceCrmConfig | null) {
+  const allowed = new Set(config?.captureFields ?? ["name", "email", "phone", "intent"]);
+  return {
+    name: allowed.has("name") ? text(argumentsValue.name) || undefined : undefined,
+    email: allowed.has("email") ? text(argumentsValue.email) || undefined : undefined,
+    phone: allowed.has("phone") ? text(argumentsValue.phone) || undefined : undefined,
+    intent: allowed.has("intent") ? text(argumentsValue.intent, "general_inquiry") : "general_inquiry",
+  };
+}
+
 async function loadContext(sql: Sql, job: AgentRuntimeJob): Promise<RuntimeContext> {
   const rows = await sql.query<{
     id: string;
@@ -180,7 +199,8 @@ async function loadContext(sql: Sql, job: AgentRuntimeJob): Promise<RuntimeConte
   let ragEvidence: KnowledgeEvidence[] = [];
   try { ragEvidence = await retrieveKnowledge(sql, { workspaceId: job.workspace_id, query: text(row.inbound_text), limit: 5 }); } catch { ragEvidence = []; }
   const authorizedTools = await listPublishedAgentTools(sql, job.workspace_id, job.agent_id);
-  return { job, agent, connectionId: row.connection_id, recipient: row.recipient, inboundText: text(row.inbound_text), history, commercialState: row.commercial_state ?? "new", ragEvidence, productId: row.product_id ?? undefined, authorizedTools };
+  const crmConfig = await getWorkspaceCrmConfig(sql, job.workspace_id);
+  return { job, agent, connectionId: row.connection_id, recipient: row.recipient, inboundText: text(row.inbound_text), history, commercialState: row.commercial_state ?? "new", ragEvidence, productId: row.product_id ?? undefined, authorizedTools, crmConfig };
 }
 
 function xaiModel(): RuntimeModel {
@@ -280,15 +300,16 @@ async function executeAuthorizedRuntimeTools(
       continue;
     }
     if (tool.key === "lead.create_or_update") {
+      const scalarArguments = configuredCrmScalarArguments(call.arguments, context.crmConfig);
       const output = await executeLeadCreateOrUpdate(sql, null, {
         workspaceId: context.job.workspace_id,
         externalContactId: context.recipient,
         conversationId: context.job.conversation_id,
-        stage: text(call.arguments.stage, context.commercialState) as CommercialState,
+        ...scalarArguments,
+        stage: text(call.arguments.stage, context.crmConfig?.defaultStage ?? context.commercialState) as CommercialState,
         score: number(call.arguments.score, 0, 0, 100),
-        intent: text(call.arguments.intent, "general_inquiry"),
         source: "agent_runtime_tool",
-        qualificationData: object(call.arguments.qualificationData) as import("../multitenancy/server.ts").JsonObject,
+        qualificationData: configuredCrmData(call.arguments.qualificationData, context.crmConfig),
         idempotencyKey,
         traceId: context.job.trace_id,
         requestedBy: "model",
@@ -299,13 +320,14 @@ async function executeAuthorizedRuntimeTools(
       continue;
     }
     if (tool.key === "lead.update_qualification") {
+      const qualificationData = configuredCrmData(call.arguments.qualificationData, context.crmConfig);
       const output = await executeLeadUpdateQualification(sql, null, {
         workspaceId: context.job.workspace_id,
         externalContactId: context.recipient,
         conversationId: context.job.conversation_id,
-        qualificationData: object(call.arguments.qualificationData) as import("../multitenancy/server.ts").JsonObject,
-        confirmedFields: Array.isArray(call.arguments.confirmedFields) ? call.arguments.confirmedFields.filter((value): value is string => typeof value === "string") : [],
-        stage: text(call.arguments.stage, context.commercialState) as CommercialState,
+        qualificationData,
+        confirmedFields: Array.isArray(call.arguments.confirmedFields) ? call.arguments.confirmedFields.filter((value): value is string => typeof value === "string" && (!context.crmConfig || context.crmConfig.captureFields.includes(value))) : [],
+        stage: text(call.arguments.stage, context.crmConfig?.defaultStage ?? context.commercialState) as CommercialState,
         score: number(call.arguments.score, 0, 0, 100),
         idempotencyKey,
         traceId: context.job.trace_id,

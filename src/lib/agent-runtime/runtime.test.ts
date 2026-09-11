@@ -47,6 +47,7 @@ async function fixture(baseUrl: string) {
     "0030_tool_execution_domain.sql",
     "0031_agent_development_blueprints.sql",
     "0032_native_conversation_tools.sql",
+    "0035_workspace_integrations.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";
@@ -137,17 +138,23 @@ test("Agent Runtime executes only tools authorized by the published version", as
   try {
     await pg.query("insert into agent_versions (id,agent_id,version_number,status,config,created_by) values ('published-tool-version','agent',1,'published',$1::jsonb,'user')", [JSON.stringify({ name: "Agent", systemPrompt: "Seja objetivo." })]);
     await pg.query("insert into agent_tool_permissions (id,workspace_id,agent_version_id,tool_id,enabled,require_approval,allowed_scopes) values ('permission-runtime','ws','published-tool-version','tool_crm_lead_create_or_update',true,false,'{}')");
+    await pg.query("insert into workspace_integrations (id,workspace_id,integration_key,name,status,config) values ('crm-runtime','ws','crm.qualificacao','CRM + Qualificação','connected',$1::jsonb)", [JSON.stringify({ pipelineName: "Vendas", defaultStage: "qualifying", captureFields: ["email", "need"] })]);
     const queued = await enqueueAgentRuntimeJob(sql, { workspaceId: "ws", agentId: "agent", conversationId: "conversation", inboundMessageId: "inbound", traceId: "trace-tool-runtime" });
     const result = await runNextAgentRuntimeJob(sql, "worker-tool-test", {
       async generate() {
-        return { text: "Registrei seu interesse.", usedAi: true, toolCalls: [{ id: "call-1", name: "lead.create_or_update", arguments: { stage: "qualifying", score: 84, intent: "availability_question" } }] };
+        return { text: "Registrei seu interesse.", usedAi: true, toolCalls: [{ id: "call-1", name: "lead.create_or_update", arguments: { stage: "new", score: 84, name: "Não deve ser capturado", email: "lead@example.com", intent: "availability_question", qualificationData: { need: "automação", company: "Não permitido" } } }] };
       },
     }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));
     assert.equal(result.status, "succeeded");
     const executions = await pg.query<{ status: string; idempotency_key: string }>("select status, idempotency_key from tool_executions where workspace_id = 'ws' order by created_at");
     assert.equal(executions.rows.some((row) => row.status === "succeeded" && row.idempotency_key === `runtime:${queued.id}:tool:call-1`), true);
-    const leads = await pg.query<{ score: number }>("select score from crm_leads where workspace_id = 'ws' order by updated_at desc");
+    const leads = await pg.query<{ score: number; stage: string; name: string | null; email: string | null; qualification_data: { need?: string; company?: string } }>("select score, stage, name, email, qualification_data from crm_leads where workspace_id = 'ws' order by updated_at desc");
     assert.equal(leads.rows.some((row) => Number(row.score) === 84), true);
+    assert.equal(leads.rows[0]?.stage, "qualifying");
+    assert.equal(leads.rows[0]?.name, null);
+    assert.equal(leads.rows[0]?.email, "lead@example.com");
+    assert.equal(leads.rows[0]?.qualification_data.need, "automação");
+    assert.equal(leads.rows[0]?.qualification_data.company, undefined);
   } finally {
     await pg.close();
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
