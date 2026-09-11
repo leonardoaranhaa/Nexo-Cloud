@@ -165,7 +165,7 @@ Ainda faltam executor universal de nós `agent` e `tool`, editor visual completo
 
 Existem produtos, versões, ofertas, entitlements, instalações, manifestos, catálogo, detalhe, instalação, agente draft, customização, publicação e vínculo por workspace. O produto inicial é **Nexo Atendimento + Qualificação**.
 
-As instalações agora possuem lista geral em `/marketplace/installed`, revisão persistida de configuração, atualização explícita e rollback por workspace. Ainda faltam pausa, saúde, uso por instalação, checkout, assinatura, compra, locação, billing e marketplace de terceiros. Essas funções comerciais não devem ser simuladas antes de existir entitlement persistido e contrato de billing.
+As instalações agora possuem lista geral em `/marketplace/installed`, revisão persistida de configuração, atualização explícita e rollback por workspace. Ainda faltam pausa, saúde, uso por instalação, checkout, assinatura, compra, locação, billing e marketplace de terceiros. Essas funções comerciais não devem ser simuladas antes de existir entitlement persistido e contrato de billing. O contrato comercial está documentado em `MODELO-PRECIFICACAO-NEXO-CLOUD.md`, inspirado em plano base, consumo medido, franquias, budgets, commitments e ofertas Marketplace.
 
 ### 5.8 Nexo Learning RAG e Improvement Lab
 
@@ -193,15 +193,15 @@ Ainda faltam execução dos cenários de teste, indexação de documentos e sist
 
 ### 5.11 AWS, billing e produção
 
-**Estado: postergado.**
+**Estado: billing conceitualmente modelado; infraestrutura AWS e cobrança automática postergadas.**
 
-A documentação IaC e AWS existe, mas a implantação permanente não está ativa. O preview local utiliza PGlite e assets empacotados. Não existe ainda infraestrutura permanente com banco gerenciado, workers, filas, storage, secrets, alertas, quotas, custo por uso e billing.
+A documentação IaC e AWS existe, mas a implantação permanente não está ativa. O preview local utiliza PGlite e assets empacotados. Não existe ainda infraestrutura permanente com banco gerenciado, workers, filas, storage, secrets, alertas, custo por uso e billing. O modelo de precificação v1 separa plano base, consumo medido, capacidades provisionadas, quotas operacionais, budgets, entitlements, custos de terceiros e ofertas de compromisso; nenhum preço provisório foi codificado como preço de produção.
 
 A postergação é temporária e não remove AWS do roadmap. Ela não deve bloquear o fechamento do núcleo funcional local. Como primeira fatia de readiness operacional, o Agent Runtime agora aplica quotas diárias server-side por workspace e por agente, com consumo persistido e isolamento por workspace.
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0037_marketplace_installation_revisions.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, disponibilidade de agenda e revisões de instalação.
+O repositório possui migrations até `0038_agent_runtime_quotas.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, disponibilidade de agenda, revisões de instalação e quotas diárias do runtime.
 
 As rotas principais são:
 
