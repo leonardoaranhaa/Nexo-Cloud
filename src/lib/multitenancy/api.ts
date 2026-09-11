@@ -492,6 +492,34 @@ export const getWorkspaceMarketplaceInstallation = createServerFn({ method: "GET
     return getMarketplaceInstallation(await getSql(), context.userId, data);
   });
 
+export const listWorkspaceIntegrations = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listWorkspaceIntegrations: list } = await import("@/lib/integrations/server");
+    return list(await getSql(), context.userId, data.workspaceId);
+  });
+
+export const configureWorkspaceCrm = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; pipelineName: string; defaultStage: string; captureFields: string[] }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { configureWorkspaceCrm: configure } = await import("@/lib/integrations/server");
+    return configure(await getSql(), context.userId, data);
+  });
+
+export const disconnectWorkspaceCrm = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { disconnectWorkspaceCrm: disconnect } = await import("@/lib/integrations/server");
+    await disconnect(await getSql(), context.userId, data.workspaceId);
+    return { ok: true as const };
+  });
+
 
 export const createWorkspaceKnowledgeDocument = createServerFn({ method: "POST" })
   .middleware([authMiddleware])

@@ -1,11 +1,11 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Play, Plus, Trash2 } from "lucide-react";
 import type { Agent, FlowNodeId } from "@/lib/types";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { LANGUAGE_LABEL } from "@/lib/labels";
 import { useNexo } from "@/lib/store";
-import { updateWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
+import { listWorkspaceIntegrations, updateWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
 import { bindWorkspaceAgentConnection } from "@/lib/multitenancy/api";
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { createId } from "@/lib/utils";
@@ -37,6 +37,12 @@ export function AgentEditor({
   const workspaceGoal = useNexo((s) => s.workspaces.find((workspace) => workspace.id === s.workspaceId)?.onboardingGoal ?? null);
   const workspaceGuidance = guidanceForWorkspaceGoal(workspaceGoal as WorkspaceGoal);
   const navigate = useNavigate();
+  const [crmConnected, setCrmConnected] = useState(false);
+
+  useEffect(() => {
+    if (!backendReady || !workspaceId) return;
+    void listWorkspaceIntegrations({ data: { workspaceId } }).then((items) => setCrmConnected(items.some((item) => item.integrationKey === "crm.qualificacao" && item.status === "connected")));
+  }, [backendReady, workspaceId]);
 
   useEffect(() => {
     if (!backendReady || !workspaceId) return;
@@ -247,7 +253,7 @@ export function AgentEditor({
           <div className="font-display text-sm font-semibold">Capacidades do agente</div>
           <p className="mt-1 text-xs leading-relaxed text-muted">Cada capacidade possui escopo, dependências e risco próprios. Ative somente o que faz sentido para este agente e workspace.</p>
         </div>
-        {workspaceGuidance && <div className="rounded-lg border border-accent/30 bg-elevated/40 p-3"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Sugestões para {workspaceGuidance.title}</div><p className="mt-1 text-xs leading-relaxed text-muted">Estas recomendações são baseadas no objetivo do workspace. Nada é ativado sem sua confirmação.</p><div className="mt-3 grid gap-2">{workspaceGuidance.toolRecommendations.map((recommendation) => <div key={recommendation.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-bg p-3"><div className="min-w-0 flex-1"><div className="text-sm font-medium">{recommendation.title}</div><div className="mt-0.5 text-xs text-muted">{recommendation.description}</div></div><Button size="sm" variant="secondary" onClick={() => applyToolRecommendation(recommendation.action)}>{recommendation.action === "marketplace" ? "Explorar" : recommendation.action === "enable-catalog" ? "Ativar" : recommendation.action === "configure-handoff" ? "Ativar" : "Configurar"}</Button></div>)}</div></div>}
+        {workspaceGuidance && <div className="rounded-lg border border-accent/30 bg-elevated/40 p-3"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Sugestões para {workspaceGuidance.title}</div><p className="mt-1 text-xs leading-relaxed text-muted">Estas recomendações são baseadas no objetivo do workspace. Nada é ativado sem sua confirmação.</p><div className="mt-3 grid gap-2">{workspaceGuidance.toolRecommendations.map((recommendation) => <div key={recommendation.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-bg p-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2 text-sm font-medium">{recommendation.title}{recommendation.id === "crm" && <Badge tone={crmConnected ? "live" : "warn"}>{crmConnected ? "Conectado" : "Configuração necessária"}</Badge>}</div><div className="mt-0.5 text-xs text-muted">{recommendation.description}</div></div><Button size="sm" variant="secondary" onClick={() => applyToolRecommendation(recommendation.action)} disabled={recommendation.id === "crm" && crmConnected}>{recommendation.id === "crm" && crmConnected ? "Configurado" : recommendation.action === "marketplace" ? "Configurar" : recommendation.action === "enable-catalog" ? "Ativar" : recommendation.action === "configure-handoff" ? "Ativar" : "Configurar"}</Button></div>)}</div></div>}
         <div className="grid gap-3">
           <ContextualToolCard
             title="Horário de atendimento"

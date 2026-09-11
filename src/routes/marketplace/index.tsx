@@ -1,10 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Bot, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { listMarketplaceProducts } from "@/lib/multitenancy/api";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { configureWorkspaceCrm, listMarketplaceProducts, listWorkspaceIntegrations } from "@/lib/multitenancy/api";
+import { useNexo } from "@/lib/store";
 
 type Product = Awaited<ReturnType<typeof listMarketplaceProducts>>[number];
 export const Route = createFileRoute("/marketplace/")({ component: MarketplacePage });
@@ -12,9 +17,24 @@ export const Route = createFileRoute("/marketplace/")({ component: MarketplacePa
 function MarketplacePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [crmStatus, setCrmStatus] = useState<"pending" | "connected" | "disconnected" | "error" | null>(null);
+  const [pipelineName, setPipelineName] = useState("Vendas");
+  const [defaultStage, setDefaultStage] = useState("qualifying");
+  const [savingCrm, setSavingCrm] = useState(false);
+  const workspaceId = useNexo((s) => s.workspaceId);
+  const backendReady = useNexo((s) => s.backendReady);
   useEffect(() => { void listMarketplaceProducts({}).then(setProducts).finally(() => setLoading(false)); }, []);
+  useEffect(() => { if (!workspaceId || !backendReady) return; void listWorkspaceIntegrations({ data: { workspaceId } }).then((items) => { const crm = items.find((item) => item.integrationKey === "crm.qualificacao"); setCrmStatus(crm?.status ?? null); if (typeof crm?.config.pipelineName === "string") setPipelineName(crm.config.pipelineName); if (typeof crm?.config.defaultStage === "string") setDefaultStage(crm.config.defaultStage); }); }, [backendReady, workspaceId]);
+  async function saveCrm() {
+    if (!workspaceId) return toast("Selecione um workspace antes de configurar o CRM.");
+    setSavingCrm(true);
+    try { const result = await configureWorkspaceCrm({ data: { workspaceId, pipelineName, defaultStage, captureFields: ["name", "email", "phone", "need", "budget", "timeline"] } }); setCrmStatus(result.status); toast("CRM e qualificação conectados ao workspace."); }
+    catch { toast("Não foi possível configurar o CRM."); } finally { setSavingCrm(false); }
+  }
   return <AppShell title="Marketplace">
-    <div className="mb-7 max-w-3xl"><p className="font-display text-2xl font-semibold tracking-tight">Agentes prontos para o seu workspace</p><p className="mt-2 text-sm leading-relaxed text-muted">Instale agentes operacionais do Nexo, personalize o comportamento permitido e publique quando estiver pronto.</p></div>
+    <div className="mb-7 max-w-3xl"><p className="font-display text-2xl font-semibold tracking-tight">Marketplace do workspace</p><p className="mt-2 text-sm leading-relaxed text-muted">Instale agentes operacionais e conecte capacidades nativas ao contexto selecionado. Cada instalação fica isolada neste workspace.</p></div>
+    <Card className="mb-6 border-accent/30 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2"><p className="font-display text-lg font-semibold">CRM + Qualificação</p><Badge tone={crmStatus === "connected" ? "live" : crmStatus === "error" ? "danger" : "warn"}>{crmStatus === "connected" ? "Conectado" : crmStatus === "disconnected" ? "Desconectado" : "Não configurado"}</Badge></div><p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">Integra a capacidade nativa de criar e qualificar leads, registrar estágio, score e campos confirmados no workspace.</p></div><Badge>Integração Nexo · risco médio</Badge></div><div className="mt-5 grid gap-3 md:grid-cols-[1.2fr_1fr_auto] md:items-end"><div><Label htmlFor="crm-pipeline">Pipeline</Label><Input id="crm-pipeline" className="mt-1" value={pipelineName} onChange={(event) => setPipelineName(event.target.value)} placeholder="Vendas" /></div><div><Label htmlFor="crm-stage">Estágio inicial</Label><select id="crm-stage" className="mt-1 flex h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-fg" value={defaultStage} onChange={(event) => setDefaultStage(event.target.value)}><option value="new">Novo</option><option value="qualifying">Qualificando</option><option value="qualified">Qualificado</option></select></div><Button onClick={() => void saveCrm()} disabled={savingCrm}>{savingCrm ? "Salvando…" : crmStatus === "connected" ? "Atualizar configuração" : "Conectar ao workspace"}</Button></div><div className="mt-4 grid gap-2 border-t border-border pt-4 text-xs text-muted sm:grid-cols-3"><span>Escopo: CRM nativo por workspace</span><span>Campos: nome, contato, necessidade, orçamento e prazo</span><span>Uso: ferramenta de qualificação do Agent Runtime</span></div></Card>
+    <div className="mb-3 font-display text-lg font-semibold">Agentes prontos</div>
     {loading ? <Card className="p-6 text-sm text-muted">Carregando catálogo...</Card> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{products.map((product) => <Card key={product.id} className="flex flex-col p-5">
       <div className="flex items-start justify-between gap-3"><div className="flex size-10 items-center justify-center rounded-lg bg-accent/15 text-accent"><Bot className="size-5" /></div><Badge tone="live">Disponível</Badge></div>
       <p className="mt-5 font-display text-lg font-semibold">{product.name}</p><p className="mt-2 min-h-12 text-sm leading-relaxed text-muted">{product.description}</p>
