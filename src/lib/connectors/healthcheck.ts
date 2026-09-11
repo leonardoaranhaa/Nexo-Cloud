@@ -1,9 +1,8 @@
 import type { Sql } from "../db";
 import { requireWorkspaceAccess, type ConnectionProvider } from "../multitenancy/server.ts";
 import {
-  awsSecretsManagerProvider,
+  configuredSecretProvider,
   createSecretResolver,
-  unavailableSecretProvider,
   type SecretProvider,
 } from "./secrets.ts";
 import { HttpHealthcheckAdapter, type ConnectorConfig, type HealthcheckResult } from "./runtime.ts";
@@ -28,13 +27,6 @@ function adapterForProvider(provider: ConnectionProvider) {
   if (provider === "meta") return new MetaCloudApiAdapter();
   // Provider-specific adapters will be added after their exact contracts are verified.
   return new HttpHealthcheckAdapter();
-}
-
-function configuredSecretProvider(): SecretProvider {
-  if (process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION) {
-    return awsSecretsManagerProvider({ region: process.env.AWS_REGION });
-  }
-  return unavailableSecretProvider();
 }
 
 export async function runConnectionHealthcheck(

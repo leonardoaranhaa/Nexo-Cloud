@@ -573,6 +573,29 @@ export async function publishAgent(
   );
   if (!agent[0]) throw new Error("AGENT_NOT_FOUND");
 
+  const readiness = await sql.query<{
+    connection_status: string | null;
+    health_status: string | null;
+    test_scenarios: unknown;
+  }>(
+    `select c.status as connection_status,
+            c.health_status,
+            coalesce(adb.test_scenarios, '[]'::jsonb) as test_scenarios
+       from agents a
+       left join agent_connections ac on ac.agent_id = a.id and ac.is_primary = true
+       left join connections c on c.id = ac.connection_id and c.workspace_id = a.workspace_id and c.deleted_at is null
+       left join agent_development_blueprints adb on adb.agent_id = a.id and adb.workspace_id = a.workspace_id
+      where a.id = $1 and a.workspace_id = $2 and a.deleted_at is null
+      limit 1`,
+    [input.agentId, input.workspaceId],
+  );
+  const gate = readiness[0];
+  const scenarios = Array.isArray(gate?.test_scenarios) ? gate.test_scenarios.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+  if (gate?.connection_status !== "connected" || gate.health_status !== "healthy") {
+    throw new Error("PUBLISH_READINESS_CHANNEL_BLOCKED");
+  }
+  if (scenarios.length === 0) throw new Error("PUBLISH_READINESS_TESTS_REQUIRED");
+
   const next = await sql.query<{ version_number: number }>(
     `select coalesce(max(version_number), 0) + 1 as version_number
        from agent_versions where agent_id = $1`,

@@ -4,7 +4,7 @@ import test from "node:test";
 import { HttpHealthcheckAdapter } from "./runtime.ts";
 import { EvolutionApiAdapter } from "./evolution.ts";
 import { EvolutionTextDispatcher } from "./evolution-messaging.ts";
-import { createSecretResolver, memorySecretProvider, SecretResolverError } from "./secrets.ts";
+import { createSecretResolver, localDevelopmentSecretProvider, memorySecretProvider, SecretResolverError } from "./secrets.ts";
 
 test("secret resolver resolves inside scope without exposing the value in errors", async () => {
   const resolver = createSecretResolver(memorySecretProvider(new Map([["secret-1", "fixture-secret-value"]])));
@@ -113,5 +113,40 @@ test("Evolution dispatcher sends the documented text payload", async () => {
     assert.doesNotMatch(result.message, /test-key|provider-id/);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+
+test("local development provider resolves Meta credentials from process.env", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousBackend = process.env.NEXO_SECRETS_BACKEND;
+  const previousToken = process.env.META_ACCESS_TOKEN;
+  process.env.NODE_ENV = "development";
+  process.env.NEXO_SECRETS_BACKEND = "local";
+  process.env.META_ACCESS_TOKEN = "local-fixture-token";
+  try {
+    const provider = localDevelopmentSecretProvider();
+    assert.equal(
+      await provider.resolve("nexo/ws-1/conn-1/api_key", { workspaceId: "ws-1", connectionId: "conn-1" }),
+      "local-fixture-token",
+    );
+    await assert.rejects(
+      () => provider.resolve("nexo/ws-other/conn-1/api_key", { workspaceId: "ws-1", connectionId: "conn-1" }),
+      (error: unknown) => error instanceof SecretResolverError && error.code === "SECRET_SCOPE_INVALID",
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
+    if (previousBackend === undefined) delete process.env.NEXO_SECRETS_BACKEND; else process.env.NEXO_SECRETS_BACKEND = previousBackend;
+    if (previousToken === undefined) delete process.env.META_ACCESS_TOKEN; else process.env.META_ACCESS_TOKEN = previousToken;
+  }
+});
+
+test("local development provider cannot be created outside development", () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  try {
+    assert.throws(() => localDevelopmentSecretProvider(), /development/);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
   }
 });

@@ -15,6 +15,17 @@ export const getWorkspaceContext = createServerFn({ method: "GET" })
     return { workspaces: [activeWorkspace], activeWorkspace, isFirstWorkspace: true };
   });
 
+export const getWorkspaceReadiness = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const workspaceId = data.workspaceId.trim();
+    if (!workspaceId) throw new Error("workspaceId is required");
+    const { getSql } = await import("@/lib/db");
+    const { getWorkspaceReadinessReport } = await import("@/lib/observability/readiness-report");
+    return getWorkspaceReadinessReport(await getSql(), context.userId, workspaceId);
+  });
+
 export const completeWorkspaceOnboarding = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string; name: string; goal: string; teamSize: string }) => input)
@@ -254,11 +265,9 @@ export const dispatchWorkspaceTextMessage = createServerFn({ method: "POST" })
   }) => input)
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
-    const { awsSecretsManagerProvider, unavailableSecretProvider } = await import("@/lib/connectors/secrets");
+    const { configuredSecretProvider } = await import("@/lib/connectors/secrets");
     const { dispatchTextMessage } = await import("@/lib/messaging/router");
-    const provider = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-      ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
-      : unavailableSecretProvider();
+    const provider = configuredSecretProvider();
     return dispatchTextMessage(await getSql(), context.userId, data, provider);
   });
 
@@ -333,14 +342,12 @@ export const sendWorkspaceConversationMessage = createServerFn({ method: "POST" 
   .validator((input: { workspaceId: string; conversationId: string; text: string; idempotencyKey: string; traceId: string }) => input)
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
-    const { awsSecretsManagerProvider, unavailableSecretProvider } = await import("@/lib/connectors/secrets");
+    const { configuredSecretProvider } = await import("@/lib/connectors/secrets");
     const { assertConversationAccess } = await import("./server");
     const { dispatchTextMessage } = await import("@/lib/messaging/router");
     const sql = await getSql();
     const target = await assertConversationAccess(sql, context.userId, data);
-    const provider = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-      ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
-      : unavailableSecretProvider();
+    const provider = configuredSecretProvider();
     return dispatchTextMessage(sql, context.userId, {
       workspaceId: data.workspaceId,
       agentId: target.agentId,

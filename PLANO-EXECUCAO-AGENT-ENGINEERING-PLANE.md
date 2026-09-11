@@ -66,8 +66,8 @@ Estas etapas pertencem ao “Próximo ponto de partida obrigatório” do plano 
 2. Fechar atualização e rollback de instalações do Marketplace — concluído com migration `0037`
 3. Criar rota e operação de `/marketplace/installed` (Minhas Instalações) — concluído
 4. Criar e validar templates prontos de Atendimento e Vendas — concluído com persistência multi-tenant e testes contratuais
-5. Executar validação ponta a ponta com conexão real Meta ou Evolution — próximo bloqueio
-6. Revisar observabilidade, quotas e readiness de produção — readiness de conexão e quotas diárias do runtime implementadas; observabilidade externa, quotas de tokens/custo e alertas seguem pendentes após E2E real
+5. Executar validação ponta a ponta com conexão real Meta ou Evolution — handshake, POST assinado e execução do agente validados; envio real bloqueado pela lista de destinatários da Meta
+6. Revisar observabilidade, quotas e readiness de produção — relatório server-side, painel visual em `/metrics`, checklist de aprovação e gate server-side de publicação implementados; observabilidade externa, quotas de tokens/custo e alertas seguem pendentes
 
 **Critério de saída da Fase 0:**  
 O núcleo de Atendimento + Vendas + Marketplace interno está estável, testado com canal real e documentado no plano mestre como concluído. No estado atual, a saída permanece pendente pela ausência da validação real de Meta/Evolution e da revisão de readiness.

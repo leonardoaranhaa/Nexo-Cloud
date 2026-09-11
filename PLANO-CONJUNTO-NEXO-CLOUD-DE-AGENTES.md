@@ -312,7 +312,7 @@ A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketpl
 5. criar `marketplace/installed` e a operação de Minhas Instalações;
 6. criar e validar templates prontos de Atendimento e Vendas;
 7. executar validação com conexão Meta ou Evolution real;
-8. revisar observabilidade, quotas e readiness de produção;
+8. revisar observabilidade, quotas e readiness de produção; **relatório server-side, painel visual em `/metrics` e checklist explícita de aprovação para produção implementados no preview, agregando conexões, jobs, quotas, logs e critérios manuais; observabilidade externa e alertas seguem pendentes**;
 9. retomar AWS somente após o núcleo demonstrável passar pelos critérios de aceite.
 
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
@@ -357,3 +357,7 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | Data | Consolidação |
 |---|---|
 | 2026-09-10 | Estado confrontado com código, migrations, rotas, testes e documentos compartilhados. Registrados os módulos implementados, as lacunas e a ordem obrigatória de continuidade. |
+| 2026-09-11 | Validação Meta executada no preview: handshake e POST assinado processados pelo agente; envio real permaneceu bloqueado pela lista de destinatários da Meta. Implementada a primeira fatia de readiness server-side (`getWorkspaceReadiness`) com teste, typecheck e build aprovados. |
+| 2026-09-11 | Painel visual de readiness operacional integrado à página `/metrics`, com status, conexões, fila, quota diária, execuções e blockers; typecheck, testes e build aprovados. |
+| 2026-09-11 | Checklist de publicação em produção adicionada ao painel, separando critérios automáticos aprovados/bloqueados e validações manuais de cenários, handoff, permissões e rollback. |
+| 2026-09-11 | Gate de publicação efetivo: botão desabilitado para canal sem healthcheck saudável, cenários ausentes ou backend indisponível; `publishAgent` também bloqueia server-side e possui teste de isolamento. |

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
 import type { JsonObject } from "../multitenancy/server.ts";
-import { awsSecretsManagerProvider, unavailableSecretProvider, type SecretProvider } from "./secrets.ts";
+import { configuredSecretProvider, type SecretProvider } from "./secrets.ts";
 import { EvolutionTextDispatcher } from "./evolution-messaging.ts";
 import type { ConnectorContext } from "./runtime.ts";
 import type { ClaimedWorkflowRun } from "../workflows/queue.ts";
@@ -15,9 +15,7 @@ function redacted(value: unknown): JsonObject { const input = object(value); ret
 function hash(value: unknown): string { return createHash("sha256").update(JSON.stringify(redacted(value))).digest("hex"); }
 
 export function defaultSecretProvider(): SecretProvider {
-  return process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-    ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
-    : unavailableSecretProvider();
+  return configuredSecretProvider();
 }
 
 export async function executeWorkflowTool(

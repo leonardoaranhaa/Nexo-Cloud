@@ -74,6 +74,51 @@ export function unavailableSecretProvisioner(): SecretProvisioner {
   };
 }
 
+const localSecretEnvironment: Readonly<Record<string, string>> = {
+  api_key: "META_ACCESS_TOKEN",
+  meta_app_secret: "META_APP_SECRET",
+  meta_verify_token: "META_VERIFY_TOKEN",
+  webhook_jwt: "EVOLUTION_WEBHOOK_JWT",
+};
+
+/**
+ * Development-only provider backed by process.env. It deliberately supports
+ * reads only: local credentials must be edited in .env and are never written
+ * by an application request or returned to the browser.
+ */
+export function localDevelopmentSecretProvider(): SecretProvider {
+  if (process.env.NODE_ENV !== "development") {
+    throw new SecretResolverError(
+      "SECRET_PROVIDER_UNAVAILABLE",
+      "Local secret provider is available only in development",
+    );
+  }
+  return {
+    async resolve(secretRef: string, scope: SecretScope): Promise<string> {
+      const expectedPrefix = `nexo/${scope.workspaceId}/${scope.connectionId}/`;
+      if (!secretRef.startsWith(expectedPrefix)) {
+        throw new SecretResolverError("SECRET_SCOPE_INVALID", "Secret reference is outside the connection scope");
+      }
+      const envName = localSecretEnvironment[secretRef.slice(expectedPrefix.length)];
+      const value = envName ? process.env[envName]?.trim() : undefined;
+      if (!value) {
+        throw new SecretResolverError("SECRET_NOT_FOUND", "Local development secret was not configured");
+      }
+      return value;
+    },
+  };
+}
+
+export function configuredSecretProvider(): SecretProvider {
+  if (process.env.NEXO_SECRETS_BACKEND === "local") {
+    return localDevelopmentSecretProvider();
+  }
+  if (process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION) {
+    return awsSecretsManagerProvider({ region: process.env.AWS_REGION });
+  }
+  return unavailableSecretProvider();
+}
+
 export function awsSecretsManagerProvider(options: {
   region: string;
   namespace?: string;

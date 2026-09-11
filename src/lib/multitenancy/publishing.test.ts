@@ -19,6 +19,7 @@ async function fixture() {
     "0005_webhook_security.sql",
     "0006_webhook_delivery_states.sql",
     "0007_agent_runtime_jobs.sql",
+    "0031_agent_development_blueprints.sql",
     "0018_agent_marketplace.sql",
     "0037_marketplace_installation_revisions.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
@@ -32,6 +33,9 @@ async function fixture() {
   await pg.query("insert into workspaces (id,organization_id,name,slug,created_by) values ('ws','org','Ws','ws','user')");
   await pg.query("insert into workspace_memberships (workspace_id,user_id,role) values ('ws','user','workspace_admin')");
   await pg.query("insert into agents (id,workspace_id,name,slug,status,language,system_prompt,knowledge,tools,created_by,updated_by) values ('agent','ws','Agent','agent','active','pt','Primeiro prompt.','{}','{}','user','user')");
+  await pg.query("insert into connections (id,workspace_id,name,provider,status,health_status,created_by) values ('connection','ws','Canal de teste','meta','connected','healthy','user')");
+  await pg.query("insert into agent_connections (agent_id,connection_id,is_primary) values ('agent','connection',true)");
+  await pg.query("insert into agent_development_blueprints (id,workspace_id,agent_id,agent_type,test_scenarios,created_by,updated_by) values ('blueprint','ws','agent','support','[\"Responda ao cliente\"]','user','user')");
   return { pg, sql };
 }
 
@@ -66,6 +70,19 @@ test("rejects publishing an agent from another workspace", async () => {
     await assert.rejects(
       publishAgent(sql, "user", { workspaceId: "other-workspace", agentId: "agent" }),
       /WORKSPACE|permission/i,
+    );
+  } finally {
+    await pg.close();
+  }
+});
+
+test("blocks publishing when the primary channel is not healthy", async () => {
+  const { pg, sql } = await fixture();
+  try {
+    await pg.query("update connections set health_status = 'degraded' where id = 'connection'");
+    await assert.rejects(
+      publishAgent(sql, "user", { workspaceId: "ws", agentId: "agent" }),
+      /PUBLISH_READINESS_CHANNEL_BLOCKED/,
     );
   } finally {
     await pg.close();

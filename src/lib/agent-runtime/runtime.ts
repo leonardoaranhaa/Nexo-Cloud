@@ -4,7 +4,7 @@ import type { JsonObject } from "../multitenancy/server.ts";
 import { localFallbackReply, isWithinHours } from "../pipeline.ts";
 import type { Agent } from "../types.ts";
 import { dispatchTextMessageAsRuntime } from "../messaging/router.ts";
-import { awsSecretsManagerProvider, unavailableSecretProvider, type SecretProvider } from "../connectors/secrets.ts";
+import { configuredSecretProvider, type SecretProvider } from "../connectors/secrets.ts";
 import { claimAgentRuntimeJob, completeAgentRuntimeJob, failAgentRuntimeJob, type AgentRuntimeJob } from "./queue.ts";
 import { reserveRuntimeQuota, RuntimeQuotaExceededError } from "./quota.ts";
 import { finishRuntimeExecution, startRuntimeExecution, type ExecutionStep } from "./execution.ts";
@@ -626,9 +626,7 @@ export async function runNextAgentRuntimeJob(
     }
     steps.push({ name: result.reason, status: result.reason === "handoff" || result.reason === "outside_hours" ? "skip" : "ok" });
     if (result.reply) {
-      const provider = secretProvider ?? (process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-        ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
-        : unavailableSecretProvider());
+      const provider = secretProvider ?? configuredSecretProvider();
       await dispatchTextMessageAsRuntime(sql, {
         workspaceId: job.workspace_id,
         agentId: context.agent.id,

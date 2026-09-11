@@ -23,9 +23,19 @@ import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { dirname, join } from "node:path";
+import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 
 export const APP_ENV_REL_PATH = ".grok/app-env.json";
+
+// Node reads ignored local secrets for the server process only. Explicit
+// process environment values remain authoritative, and VITE filtering below
+// prevents this wrapper from forwarding arbitrary app-env values to the client.
+try {
+  loadEnvFile(join(dirname(dirname(fileURLToPath(import.meta.url))), ".env"));
+} catch {
+  // The .env file is optional in CI, preview and deployed environments.
+}
 
 const VITE_PREFIX = "VITE_";
 
