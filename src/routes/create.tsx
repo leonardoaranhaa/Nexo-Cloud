@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusDot } from "@/components/status-dot";
 import { generateAgent } from "@/lib/ai";
-import { createWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
+import { createWorkspaceAgent, updateWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
 import { AGENT_TEMPLATES, type AgentTemplateId } from "@/lib/templates";
 import { useAgentChat } from "@/lib/use-agent-chat";
 import { useNexo } from "@/lib/store";
@@ -81,10 +81,30 @@ function CreateWizard() {
     guardrails: string[];
     testScenarios: string[];
     sourceBrief: string;
+    config?: typeof AGENT_TEMPLATES[number]["draft"];
   }) {
     if (!workspaceId || !backendReady) return;
     try {
       const created = await createWorkspaceAgent({ data: { workspaceId, name: input.name, persona: input.persona, welcomeMessage: input.welcomeMessage, systemPrompt: input.systemPrompt, agentType: input.agentType } });
+      if (input.config) {
+        await updateWorkspaceAgent({
+          data: {
+            workspaceId,
+            id: created.id,
+            name: input.name,
+            persona: input.config.persona,
+            welcomeMessage: input.config.welcomeMessage,
+            systemPrompt: input.config.systemPrompt,
+            language: input.config.language,
+            status: "draft",
+            temperature: input.config.temperature,
+            maxTokens: input.config.maxTokens,
+            memoryWindow: input.config.memoryWindow,
+            knowledge: input.config.knowledge,
+            tools: input.config.tools,
+          },
+        });
+      }
       if (input.localAgentId) {
         updateAgent(input.localAgentId, { id: created.id });
         setAgentId(created.id);
@@ -228,6 +248,7 @@ function CreateWizard() {
       guardrails: ["Não inventar informações ausentes", "Transferir casos sensíveis para uma pessoa"],
       testScenarios: ["Pergunta frequente com resposta publicada", "Solicitação fora do escopo com handoff"],
       sourceBrief: "Modelo inicial do catálogo",
+      config: t.draft,
     });
     setStep(3);
   }

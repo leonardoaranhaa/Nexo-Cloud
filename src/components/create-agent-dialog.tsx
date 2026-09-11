@@ -13,7 +13,7 @@ import { createId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { PROVIDER_LABEL } from "@/lib/types";
-import { bindWorkspaceAgentConnection, createWorkspaceAgent } from "@/lib/multitenancy/api";
+import { bindWorkspaceAgentConnection, createWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 import { guidanceForWorkspaceGoal, type WorkspaceGoal } from "@/lib/workspace-goal";
 
@@ -48,6 +48,23 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
           welcomeMessage: draft.welcomeMessage,
           systemPrompt: draft.systemPrompt,
           agentType: template,
+        },
+      });
+      await updateWorkspaceAgent({
+        data: {
+          workspaceId,
+          id: created.id,
+          name: nextName,
+          persona: draft.persona,
+          welcomeMessage: draft.welcomeMessage,
+          systemPrompt: draft.systemPrompt,
+          language: draft.language,
+          status: "draft",
+          temperature: draft.temperature,
+          maxTokens: draft.maxTokens,
+          memoryWindow: draft.memoryWindow,
+          knowledge: draft.knowledge,
+          tools: draft.tools,
         },
       });
       if (connectionId) {
