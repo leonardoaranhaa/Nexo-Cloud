@@ -8,6 +8,12 @@ export type WorkspaceGoalGuidance = {
   recommendedTemplate: AgentTemplateId;
   nextSteps: string[];
   briefs: string[];
+  toolRecommendations: {
+    id: "faq" | "handoff" | "catalog" | "crm" | "notes";
+    title: string;
+    description: string;
+    action: "configure-faq" | "enable-catalog" | "marketplace" | "configure-notes" | "configure-handoff";
+  }[];
 };
 
 const GUIDANCE: Record<Exclude<WorkspaceGoal, null>, WorkspaceGoalGuidance> = {
@@ -16,6 +22,10 @@ const GUIDANCE: Record<Exclude<WorkspaceGoal, null>, WorkspaceGoalGuidance> = {
     description: "Comece com um agente que responde dúvidas, consulta a base e encaminha casos sensíveis.",
     recommendedTemplate: "support",
     nextSteps: ["Adicionar FAQs e políticas", "Configurar handoff para humano", "Criar um cenário de atendimento"],
+    toolRecommendations: [
+      { id: "faq", title: "FAQ publicada", description: "Responda com base aprovada e reduza respostas inventadas.", action: "configure-faq" },
+      { id: "handoff", title: "Handoff para humano", description: "Encaminhe reclamações e situações sensíveis para a equipe.", action: "configure-handoff" },
+    ],
     briefs: [
       "Atendimento de clientes de uma loja. Responda dúvidas sobre produtos, trocas e prazo de entrega e encaminhe reclamações para um humano.",
       "Suporte para uma clínica. Explique serviços e horários, responda dúvidas frequentes e passe casos delicados para a recepção.",
@@ -26,6 +36,10 @@ const GUIDANCE: Record<Exclude<WorkspaceGoal, null>, WorkspaceGoalGuidance> = {
     description: "Comece com um agente que entende a necessidade, coleta contexto e encaminha oportunidades.",
     recommendedTemplate: "sales",
     nextSteps: ["Configurar catálogo ou CRM", "Definir critérios de qualificação", "Criar um cenário de lead"],
+    toolRecommendations: [
+      { id: "crm", title: "CRM e qualificação", description: "Registre intenção, orçamento e estágio do lead em uma integração contextual.", action: "marketplace" },
+      { id: "catalog", title: "Catálogo", description: "Consulte itens aprovados sem inventar oferta ou disponibilidade.", action: "enable-catalog" },
+    ],
     briefs: [
       "Agente comercial para uma empresa de software. Entenda o perfil do cliente, orçamento e prazo e encaminhe oportunidades qualificadas para vendas.",
       "Atendimento de vendas de uma imobiliária. Pergunte região, tipo de imóvel e faixa de valor e passe o lead para um corretor.",
@@ -36,6 +50,10 @@ const GUIDANCE: Record<Exclude<WorkspaceGoal, null>, WorkspaceGoalGuidance> = {
     description: "Comece com um agente flexível para apoiar rotinas, políticas e fluxos internos da equipe.",
     recommendedTemplate: "blank",
     nextSteps: ["Documentar o processo na base", "Definir limites e aprovações", "Testar uma rotina frequente"],
+    toolRecommendations: [
+      { id: "notes", title: "Notas internas", description: "Mantenha procedimentos aprovados disponíveis ao agente.", action: "configure-notes" },
+      { id: "faq", title: "FAQ publicada", description: "Transforme políticas recorrentes em respostas verificáveis.", action: "configure-faq" },
+    ],
     briefs: [
       "Assistente interno para uma equipe de operações. Consulte procedimentos, organize solicitações e peça aprovação humana quando houver risco.",
       "Agente para apoiar o time financeiro com políticas internas, checklist de tarefas e encaminhamento de exceções para um responsável.",
@@ -46,6 +64,9 @@ const GUIDANCE: Record<Exclude<WorkspaceGoal, null>, WorkspaceGoalGuidance> = {
     description: "Comece por um template de atendimento e ajuste o blueprint conforme você descobrir o melhor caso de uso.",
     recommendedTemplate: "support",
     nextSteps: ["Criar um primeiro agente", "Adicionar uma pequena base", "Executar um cenário simples"],
+    toolRecommendations: [
+      { id: "faq", title: "FAQ publicada", description: "Um ponto de partida seguro para explorar o comportamento do agente.", action: "configure-faq" },
+    ],
     briefs: [
       "Quero explorar um agente para responder perguntas sobre meu negócio e encaminhar para uma pessoa quando não souber responder.",
     ],
