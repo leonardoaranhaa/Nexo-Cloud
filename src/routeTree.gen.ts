@@ -22,6 +22,7 @@ import { Route as AgentsIndexRouteImport } from './routes/agents/index'
 import { Route as AgentsIdRouteImport } from './routes/agents/$id'
 import { Route as MarketplaceIndexRouteImport } from './routes/marketplace/index'
 import { Route as MarketplaceAgentsProductIdRouteImport } from './routes/marketplace/agents/$productId'
+import { Route as MarketplaceInstalledIndexRouteImport } from './routes/marketplace/installed/index'
 import { Route as MarketplaceInstalledInstallationIdRouteImport } from './routes/marketplace/installed/$installationId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -90,6 +91,12 @@ const MarketplaceAgentsProductIdRoute =
     path: '/marketplace/agents/$productId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const MarketplaceInstalledIndexRoute =
+  MarketplaceInstalledIndexRouteImport.update({
+    id: '/marketplace/installed/',
+    path: '/marketplace/installed/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const MarketplaceInstalledInstallationIdRoute =
   MarketplaceInstalledInstallationIdRouteImport.update({
     id: '/marketplace/installed/$installationId',
@@ -112,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/marketplace/': typeof MarketplaceIndexRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
   '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
+  '/marketplace/installed/': typeof MarketplaceInstalledIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -128,6 +136,7 @@ export interface FileRoutesByTo {
   '/marketplace': typeof MarketplaceIndexRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
   '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
+  '/marketplace/installed': typeof MarketplaceInstalledIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -145,6 +154,7 @@ export interface FileRoutesById {
   '/marketplace/': typeof MarketplaceIndexRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
   '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
+  '/marketplace/installed/': typeof MarketplaceInstalledIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/marketplace/'
     | '/marketplace/agents/$productId'
     | '/marketplace/installed/$installationId'
+    | '/marketplace/installed/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/marketplace'
     | '/marketplace/agents/$productId'
     | '/marketplace/installed/$installationId'
+    | '/marketplace/installed'
   id:
     | '__root__'
     | '/'
@@ -195,6 +207,7 @@ export interface FileRouteTypes {
     | '/marketplace/'
     | '/marketplace/agents/$productId'
     | '/marketplace/installed/$installationId'
+    | '/marketplace/installed/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -212,6 +225,7 @@ export interface RootRouteChildren {
   MarketplaceIndexRoute: typeof MarketplaceIndexRoute
   MarketplaceAgentsProductIdRoute: typeof MarketplaceAgentsProductIdRoute
   MarketplaceInstalledInstallationIdRoute: typeof MarketplaceInstalledInstallationIdRoute
+  MarketplaceInstalledIndexRoute: typeof MarketplaceInstalledIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -307,6 +321,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MarketplaceAgentsProductIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/marketplace/installed/': {
+      id: '/marketplace/installed/'
+      path: '/marketplace/installed'
+      fullPath: '/marketplace/installed/'
+      preLoaderRoute: typeof MarketplaceInstalledIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/marketplace/installed/$installationId': {
       id: '/marketplace/installed/$installationId'
       path: '/marketplace/installed/$installationId'
@@ -333,6 +354,7 @@ const rootRouteChildren: RootRouteChildren = {
   MarketplaceAgentsProductIdRoute: MarketplaceAgentsProductIdRoute,
   MarketplaceInstalledInstallationIdRoute:
     MarketplaceInstalledInstallationIdRoute,
+  MarketplaceInstalledIndexRoute: MarketplaceInstalledIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

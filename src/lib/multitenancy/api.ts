@@ -492,6 +492,22 @@ export const getWorkspaceMarketplaceInstallation = createServerFn({ method: "GET
     return getMarketplaceInstallation(await getSql(), context.userId, data);
   });
 
+export const updateWorkspaceMarketplaceInstallation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; installationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { updateMarketplaceInstallation } = await import("@/lib/marketplace/server");
+    return updateMarketplaceInstallation(await getSql(), context.userId, data);
+  });
+export const rollbackWorkspaceMarketplaceInstallation = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; installationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { rollbackMarketplaceInstallation } = await import("@/lib/marketplace/server");
+    return rollbackMarketplaceInstallation(await getSql(), context.userId, data);
+  });
 export const listWorkspaceIntegrations = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string }) => input)

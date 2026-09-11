@@ -28,6 +28,7 @@ export type MarketplaceInstallation = {
   productName: string;
   agentId: string;
   agentName: string;
+  versionId: string;
   versionNumber: number;
   status: "draft" | "staging" | "active" | "paused" | "uninstalled";
   customizations: JsonObject;
@@ -58,7 +59,7 @@ export async function listMarketplaceInstallations(sql: Sql, userId: string, wor
   await requireWorkspaceAccess(sql, userId, workspaceId, "read");
   return sql<MarketplaceInstallation>`
     select i.id, i.workspace_id as "workspaceId", i.product_id as "productId",
-           p.name as "productName", i.agent_id as "agentId", a.name as "agentName",
+           p.name as "productName", i.agent_id as "agentId", a.name as "agentName", i.version_id as "versionId",
            v.version_number as "versionNumber", i.status, i.customizations
       from agent_installations i
       join agent_products p on p.id = i.product_id
@@ -74,7 +75,7 @@ export async function getMarketplaceInstallation(sql: Sql, userId: string, input
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
   const rows = await sql<MarketplaceInstallation>`
     select i.id, i.workspace_id as "workspaceId", i.product_id as "productId",
-           p.name as "productName", i.agent_id as "agentId", a.name as "agentName",
+           p.name as "productName", i.agent_id as "agentId", a.name as "agentName", i.version_id as "versionId",
            v.version_number as "versionNumber", i.status, i.customizations
       from agent_installations i
       join agent_products p on p.id = i.product_id
@@ -92,7 +93,7 @@ export async function installMarketplaceProduct(sql: Sql, userId: string, input:
   const product = await getMarketplaceProduct(sql, input.productId);
   const existing = await sql<MarketplaceInstallation>`
     select i.id, i.workspace_id as "workspaceId", i.product_id as "productId",
-           p.name as "productName", i.agent_id as "agentId", a.name as "agentName",
+           p.name as "productName", i.agent_id as "agentId", a.name as "agentName", i.version_id as "versionId",
            v.version_number as "versionNumber", i.status, i.customizations
       from agent_installations i join agent_products p on p.id = i.product_id
       join agents a on a.id = i.agent_id join agent_product_versions v on v.id = i.version_id
@@ -146,4 +147,30 @@ export async function updateMarketplaceCustomization(sql: Sql, userId: string, i
       [typeof safe.name === "string" ? safe.name.slice(0, 120) : null, typeof safe.persona === "string" ? safe.persona.slice(0, 500) : null, typeof safe.welcomeMessage === "string" ? safe.welcomeMessage.slice(0, 1000) : null, userId, agent[0].agent_id, input.workspaceId],
     );
   }
+}
+
+export async function updateMarketplaceInstallation(sql: Sql, userId: string, input: { workspaceId: string; installationId: string }): Promise<MarketplaceInstallation> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const current = await getMarketplaceInstallation(sql, userId, input);
+  const product = await getMarketplaceProduct(sql, current.productId);
+  if (product.versionNumber <= current.versionNumber) return current;
+  const currentConfigRows = await sql<{ config: JsonObject }>`select config from agent_versions where agent_id = ${current.agentId} and status = 'draft' limit 1`;
+  const fromConfig = currentConfigRows[0]?.config ?? {};
+  const toConfig = { ...(product.manifest as JsonObject), marketplaceProductId: product.id, marketplaceVersionId: product.versionId };
+  await sql.query(`insert into agent_installation_revisions (id,installation_id,workspace_id,from_version_id,to_version_id,from_config,to_config,action,created_by) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,'update',$8)`, [randomUUID(), current.id, input.workspaceId, current.versionId, product.versionId, JSON.stringify(fromConfig), JSON.stringify(toConfig), userId]);
+  await sql.query(`update agent_versions set config = $1::jsonb where agent_id = $2 and status = 'draft'`, [JSON.stringify(toConfig), current.agentId]);
+  await sql.query(`update agent_installations set version_id = $1, status = 'staging', updated_at = current_timestamp where id = $2 and workspace_id = $3`, [product.versionId, current.id, input.workspaceId]);
+  return getMarketplaceInstallation(sql, userId, input);
+}
+
+export async function rollbackMarketplaceInstallation(sql: Sql, userId: string, input: { workspaceId: string; installationId: string }): Promise<MarketplaceInstallation> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  const current = await getMarketplaceInstallation(sql, userId, input);
+  const revisions = await sql<{ from_version_id: string; to_version_id: string; from_config: JsonObject; to_config: JsonObject }>`select from_version_id, to_version_id, from_config, to_config from agent_installation_revisions where installation_id = ${current.id} and workspace_id = ${input.workspaceId} order by created_at desc limit 1`;
+  const revision = revisions[0];
+  if (!revision) throw new Error("MARKETPLACE_ROLLBACK_NOT_AVAILABLE");
+  await sql.query(`insert into agent_installation_revisions (id,installation_id,workspace_id,from_version_id,to_version_id,from_config,to_config,action,created_by) values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,'rollback',$8)`, [randomUUID(), current.id, input.workspaceId, current.versionId, revision.from_version_id, JSON.stringify(revision.to_config), JSON.stringify(revision.from_config), userId]);
+  await sql.query(`update agent_versions set config = $1::jsonb where agent_id = $2 and status = 'draft'`, [JSON.stringify(revision.from_config), current.agentId]);
+  await sql.query(`update agent_installations set version_id = $1, status = 'draft', updated_at = current_timestamp where id = $2 and workspace_id = $3`, [revision.from_version_id, current.id, input.workspaceId]);
+  return getMarketplaceInstallation(sql, userId, input);
 }
