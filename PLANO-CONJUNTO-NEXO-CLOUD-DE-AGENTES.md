@@ -161,11 +161,11 @@ Ainda faltam executor universal de nós `agent` e `tool`, editor visual completo
 
 ### 5.7 Marketplace interno
 
-**Estado: primeira fatia vertical implementada.**
+**Estado: ciclo de instalação, atualização e rollback implementado para MVP local/preview.**
 
 Existem produtos, versões, ofertas, entitlements, instalações, manifestos, catálogo, detalhe, instalação, agente draft, customização, publicação e vínculo por workspace. O produto inicial é **Nexo Atendimento + Qualificação**.
 
-Ainda faltam lista geral de instalações, atualização com comparação de manifesto, staging de atualização, rollback de instalação, pausa, saúde, uso por instalação, checkout, assinatura, compra, locação, billing e marketplace de terceiros. Essas funções comerciais não devem ser simuladas antes de existir entitlement persistido e contrato de billing.
+As instalações agora possuem lista geral em `/marketplace/installed`, revisão persistida de configuração, atualização explícita e rollback por workspace. Ainda faltam pausa, saúde, uso por instalação, checkout, assinatura, compra, locação, billing e marketplace de terceiros. Essas funções comerciais não devem ser simuladas antes de existir entitlement persistido e contrato de billing.
 
 ### 5.8 Nexo Learning RAG e Improvement Lab
 
@@ -179,7 +179,7 @@ Ainda faltam avaliação offline contra regressões, gate formal de promoção, 
 
 **Estado: funcional.**
 
-A Home, a busca global, o contexto de workspace, a navegação de serviços, o Marketplace, Inbox, Metrics e `/settings` estão implementados e validados no preview local e público. A linguagem antiga do estúdio foi reduzida.
+A Home, a busca global, o contexto de workspace, a navegação de serviços, o Marketplace, Minhas Instalações, Inbox, Metrics e `/settings` estão implementados. A linguagem antiga do estúdio foi reduzida.
 
 Ainda faltam configurações server-side completas, governança por papel, configuração por ambiente, onboarding guiado e refinamento operacional de estados vazios e saúde da plataforma.
 
@@ -201,7 +201,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0033_calendar_availability.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos e disponibilidade de agenda.
+O repositório possui migrations até `0037_marketplace_installation_revisions.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, disponibilidade de agenda e revisões de instalação.
 
 As rotas principais são:
 
@@ -216,6 +216,7 @@ As rotas principais são:
 /metrics
 /settings
 /marketplace
+/marketplace/installed
 /marketplace/agents/:productId
 /marketplace/installed/:installationId
 ```

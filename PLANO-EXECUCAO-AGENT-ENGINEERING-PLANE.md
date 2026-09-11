@@ -62,15 +62,15 @@ Estas etapas pertencem ao “Próximo ponto de partida obrigatório” do plano 
 
 ### 3.1 Ordem obrigatória de conclusão
 
-1. Completar agenda e disponibilidade como ferramenta/conector controlado
-2. Fechar atualização e rollback de instalações do Marketplace
-3. Criar rota e operação de `/marketplace/installed` (Minhas Instalações)
-4. Criar e validar templates prontos de Atendimento e Vendas
-5. Executar validação ponta a ponta com conexão real Meta ou Evolution
-6. Revisar observabilidade, quotas e readiness de produção
+1. Completar agenda e disponibilidade como ferramenta/conector controlado — concluído no núcleo local/preview
+2. Fechar atualização e rollback de instalações do Marketplace — concluído com migration `0037`
+3. Criar rota e operação de `/marketplace/installed` (Minhas Instalações) — concluído
+4. Criar e validar templates prontos de Atendimento e Vendas — concluído com persistência multi-tenant e testes contratuais
+5. Executar validação ponta a ponta com conexão real Meta ou Evolution — próximo bloqueio
+6. Revisar observabilidade, quotas e readiness de produção — pendente após E2E real
 
 **Critério de saída da Fase 0:**  
-O núcleo de Atendimento + Vendas + Marketplace interno está estável, testado com canal real e documentado no plano mestre como concluído.
+O núcleo de Atendimento + Vendas + Marketplace interno está estável, testado com canal real e documentado no plano mestre como concluído. No estado atual, a saída permanece pendente pela ausência da validação real de Meta/Evolution e da revisão de readiness.
 
 Somente após essa saída a IA pode iniciar a Fase B.
 
