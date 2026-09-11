@@ -191,7 +191,15 @@ O wizard `/create` agora transforma o briefing do usuário em um blueprint inici
 
 Ainda faltam execução dos cenários de teste, indexação de documentos e sistemas, geração assistida de workflows e ferramentas, comparação de versões e testes automatizados de qualidade antes da publicação.
 
-### 5.11 AWS, billing e produção
+### 5.11 Nexo Bot
+
+**Estado: primeira integração LLM e protocolo de ações implementados.**
+
+O Nexo Bot está disponível na Home como assistente contextual. Ele consulta o Claude server-side com contexto mínimo do workspace, responde em linguagem natural e pode propor navegação, criação de agente ou provisionamento de horário. Escritas exigem confirmação explícita e passam por nova autorização server-side antes da execução.
+
+Ainda faltam memória persistente do assistente, streaming, observabilidade específica, quotas próprias, mais ações com políticas de aprovação e integração com o Learning RAG. Publicação, exclusão, credenciais, permissões, billing e chamadas externas permanecem bloqueados nesta fase.
+
+### 5.12 AWS, billing e produção
 
 **Estado: billing conceitualmente modelado; infraestrutura AWS e cobrança automática postergadas.**
 

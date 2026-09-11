@@ -798,3 +798,22 @@ export const listWorkspaceToolExecutionApprovals = createServerFn({ method: "GET
     const { listToolExecutionApprovals } = await import("@/lib/connectors/tools-server");
     return listToolExecutionApprovals(await getSql(), context.userId, data);
   });
+
+
+export const chatNexoBot = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; messages: { role: "user" | "assistant"; content: string }[] }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { chatNexoBot: runChat } = await import("@/lib/nexo-bot/server");
+    return runChat(await getSql(), context.userId, data);
+  });
+
+export const executeNexoBotAction = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; action: import("@/lib/nexo-bot/server").NexoBotAction }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { executeNexoBotAction: runAction } = await import("@/lib/nexo-bot/server");
+    return runAction(await getSql(), context.userId, data);
+  });
