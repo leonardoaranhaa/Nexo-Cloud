@@ -659,6 +659,34 @@ export const getWorkspaceLeadMetrics = createServerFn({ method: "GET" })
     return getLeadMetrics(await getSql(), context.userId, data);
   });
 
+export const provisionWorkspaceAvailabilitySlots = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; slots: { startAt: string; endAt: string; resourceLabel?: string }[] }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { provisionAvailabilitySlots } = await import("@/lib/calendar/server");
+    return { created: await provisionAvailabilitySlots(await getSql(), context.userId, data) };
+  });
+
+export const blockWorkspaceAvailabilitySlot = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; slotId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { blockAvailabilitySlot } = await import("@/lib/calendar/server");
+    await blockAvailabilitySlot(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
+export const bookWorkspaceAvailabilitySlot = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; slotId: string; externalContactId: string; conversationId?: string; customerName?: string; notes?: string; idempotencyKey: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { bookAvailabilitySlot } = await import("@/lib/calendar/server");
+    return bookAvailabilitySlot(await getSql(), context.userId, data);
+  });
+
 
 export const createWorkspaceImprovementCandidate = createServerFn({ method: "POST" })
   .middleware([authMiddleware])

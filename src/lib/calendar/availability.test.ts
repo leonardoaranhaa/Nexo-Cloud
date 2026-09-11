@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { availabilityToolOutput, listAvailability } from "./availability.ts";
+import { bookAvailabilitySlot } from "./server.ts";
 
 function fakeSql(rows: unknown[], onQuery: (params: unknown[]) => void) {
   return {
@@ -38,4 +39,21 @@ test("availability rejects an inverted date range", async () => {
     }),
     /CALENDAR_RANGE_INVALID/,
   );
+});
+
+test("booking claims an available slot and preserves workspace scope", async () => {
+  const queryCalls: unknown[][] = [];
+  const sql = Object.assign(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const statement = strings.join(" ");
+    if (statement.includes("from calendar_bookings") && statement.includes("idempotency_key")) return [];
+    if (statement.includes("from calendar_availability_slots")) return [{ id: "slot-a" }];
+    if (statement.includes("from calendar_bookings where id")) return [{ id: "booking-a", workspaceId: "ws-a", slotId: "slot-a", conversationId: null, externalContactId: "contact-a", customerName: "Ana", notes: null, status: "confirmed" }];
+    return [];
+  }, {
+    async query<T>(_query: string, params: unknown[]) { queryCalls.push(params); return [{ id: "claimed" }] as T[]; },
+  }) as never;
+  const booking = await bookAvailabilitySlot(sql, null, { workspaceId: "ws-a", slotId: "slot-a", externalContactId: "contact-a", customerName: "Ana", idempotencyKey: "book-1" });
+  assert.equal(booking.workspaceId, "ws-a");
+  assert.equal(booking.slotId, "slot-a");
+  assert.equal(queryCalls.some((params) => params.includes("ws-a") && params.includes("slot-a")), true);
 });
