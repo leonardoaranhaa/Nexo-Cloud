@@ -526,6 +526,24 @@ export const listWorkspaceMarketplaceInstallationRevisions = createServerFn({ me
     const { listMarketplaceInstallationRevisions } = await import("@/lib/marketplace/server");
     return listMarketplaceInstallationRevisions(await getSql(), context.userId, data);
   });
+
+export const listWorkspaceMarketplaceInstallationOperationalSummaries = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listMarketplaceInstallationOperationalSummaries } = await import("@/lib/marketplace/server");
+    return listMarketplaceInstallationOperationalSummaries(await getSql(), context.userId, data.workspaceId);
+  });
+
+export const getWorkspaceMarketplaceInstallationOperationalSummary = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; installationId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getMarketplaceInstallationOperationalSummary } = await import("@/lib/marketplace/server");
+    return getMarketplaceInstallationOperationalSummary(await getSql(), context.userId, data);
+  });
 export const listWorkspaceIntegrations = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string }) => input)

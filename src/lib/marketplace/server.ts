@@ -391,3 +391,230 @@ export async function rollbackMarketplaceInstallation(sql: Sql, userId: string, 
   await sql.query(`update agent_installations set version_id = $1, status = 'staging', updated_at = current_timestamp where id = $2 and workspace_id = $3`, [revision.from_version_id, current.id, input.workspaceId]);
   return getMarketplaceInstallation(sql, userId, input);
 }
+
+
+export type InstallationHealthStatus = "healthy" | "attention" | "degraded" | "no_activity" | "unavailable";
+
+export type MarketplaceInstallationOperationalSummary = {
+  installationId: string;
+  workspaceId: string;
+  health: {
+    status: InstallationHealthStatus;
+    reason: string;
+    checkedAt: string | null;
+    connectionCount: number;
+    connectedConnectionCount: number;
+    failedEventsLast24h: number;
+  };
+  usage: {
+    periodDays: 7;
+    since: string;
+    conversations: number;
+    inboundMessages: number;
+    outboundMessages: number;
+    jobs: number;
+    succeededJobs: number;
+    failedJobs: number;
+    successRate: number;
+    averageDurationMs: number;
+    lastActivityAt: string | null;
+    lastFailureAt: string | null;
+  };
+};
+
+type OperationalSummaryRow = {
+  installationId: string;
+  workspaceId: string;
+  since: string | Date;
+  connectionCount: number;
+  connectedConnectionCount: number;
+  unhealthyConnectionCount: number;
+  unknownConnectionCount: number;
+  checkedAt: string | Date | null;
+  conversations: number;
+  inboundMessages: number;
+  outboundMessages: number;
+  jobs: number;
+  succeededJobs: number;
+  failedJobs: number;
+  failedDeliveries: number;
+  averageDurationMs: number;
+  lastActivityAt: string | Date | null;
+  lastFailureAt: string | Date | null;
+};
+
+function timestampValue(value: string | Date | null): string | null {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function operationalHealth(row: OperationalSummaryRow): MarketplaceInstallationOperationalSummary["health"] {
+  const failedEventsLast24h = row.failedJobs + row.failedDeliveries;
+  let status: InstallationHealthStatus;
+  let reason: string;
+  if (row.connectionCount === 0) {
+    status = "unavailable";
+    reason = "Nenhum canal está vinculado a esta instalação.";
+  } else if (row.unhealthyConnectionCount > 0 || failedEventsLast24h >= 3) {
+    status = "degraded";
+    reason = row.unhealthyConnectionCount > 0
+      ? "Um ou mais canais vinculados estão degradados ou indisponíveis."
+      : "Foram registradas falhas recentes no runtime ou no envio de mensagens.";
+  } else if (row.connectedConnectionCount < row.connectionCount || row.unknownConnectionCount > 0) {
+    status = "attention";
+    reason = "A configuração de saúde dos canais ainda precisa ser verificada.";
+  } else if (!row.lastActivityAt) {
+    status = "no_activity";
+    reason = "A instalação ainda não possui atividade na janela analisada.";
+  } else if (failedEventsLast24h > 0) {
+    status = "attention";
+    reason = "Há falhas recentes, mas o runtime continua processando eventos.";
+  } else {
+    status = "healthy";
+    reason = "Canais e execuções recentes estão operacionais.";
+  }
+  return {
+    status,
+    reason,
+    checkedAt: timestampValue(row.checkedAt),
+    connectionCount: row.connectionCount,
+    connectedConnectionCount: row.connectedConnectionCount,
+    failedEventsLast24h,
+  };
+}
+
+function toOperationalSummary(row: OperationalSummaryRow): MarketplaceInstallationOperationalSummary {
+  const jobs = Number(row.jobs ?? 0);
+  const succeededJobs = Number(row.succeededJobs ?? 0);
+  return {
+    installationId: row.installationId,
+    workspaceId: row.workspaceId,
+    health: operationalHealth(row),
+    usage: {
+      periodDays: 7,
+      since: timestampValue(row.since) ?? new Date(0).toISOString(),
+      conversations: Number(row.conversations ?? 0),
+      inboundMessages: Number(row.inboundMessages ?? 0),
+      outboundMessages: Number(row.outboundMessages ?? 0),
+      jobs,
+      succeededJobs,
+      failedJobs: Number(row.failedJobs ?? 0),
+      successRate: jobs === 0 ? 0 : Math.round((succeededJobs / jobs) * 1000) / 10,
+      averageDurationMs: Number(row.averageDurationMs ?? 0),
+      lastActivityAt: timestampValue(row.lastActivityAt),
+      lastFailureAt: timestampValue(row.lastFailureAt),
+    },
+  };
+}
+
+const operationalSummarySelect = `
+  select i.id as "installationId", i.workspace_id as "workspaceId",
+         current_timestamp - interval '7 days' as since,
+         coalesce(connections.connection_count, 0)::int as "connectionCount",
+         coalesce(connections.connected_connection_count, 0)::int as "connectedConnectionCount",
+         coalesce(connections.unhealthy_connection_count, 0)::int as "unhealthyConnectionCount",
+         coalesce(connections.unknown_connection_count, 0)::int as "unknownConnectionCount",
+         connections.checked_at as "checkedAt",
+         coalesce(conversations.conversation_count, 0)::int as conversations,
+         coalesce(messages.inbound_messages, 0)::int as "inboundMessages",
+         coalesce(messages.outbound_messages, 0)::int as "outboundMessages",
+         coalesce(jobs.job_count, 0)::int as jobs,
+         coalesce(jobs.succeeded_jobs, 0)::int as "succeededJobs",
+         coalesce(jobs.failed_jobs, 0)::int as "failedJobs",
+         coalesce(deliveries.failed_deliveries, 0)::int as "failedDeliveries",
+         coalesce(executions.average_duration_ms, 0)::int as "averageDurationMs",
+         greatest(
+           conversations.last_activity_at,
+           messages.last_activity_at,
+           jobs.last_activity_at,
+           executions.last_activity_at,
+           deliveries.last_activity_at
+         ) as "lastActivityAt",
+         greatest(
+           jobs.last_failure_at,
+           executions.last_failure_at,
+           deliveries.last_failure_at
+         ) as "lastFailureAt"
+    from agent_installations i
+    left join lateral (
+      select count(*)::int as connection_count,
+             count(*) filter (where c.status = 'connected')::int as connected_connection_count,
+             count(*) filter (where c.health_status in ('degraded', 'unhealthy') or c.status in ('error', 'revoked'))::int as unhealthy_connection_count,
+             count(*) filter (where c.health_status = 'unknown' or c.last_healthcheck_at is null)::int as unknown_connection_count,
+             max(c.last_healthcheck_at) as checked_at
+        from agent_connections ac
+        join connections c on c.id = ac.connection_id
+         and c.workspace_id = i.workspace_id
+         and c.deleted_at is null
+       where ac.agent_id = i.agent_id
+    ) connections on true
+    left join lateral (
+      select count(*)::int as conversation_count,
+             max(c.updated_at) as last_activity_at
+        from conversations c
+       where c.agent_id = i.agent_id
+         and c.workspace_id = i.workspace_id
+         and c.updated_at >= current_timestamp - interval '7 days'
+    ) conversations on true
+    left join lateral (
+      select count(*) filter (where m.direction = 'inbound')::int as inbound_messages,
+             count(*) filter (where m.direction = 'outbound')::int as outbound_messages,
+             max(m.created_at) as last_activity_at
+        from messages m
+        join conversations c on c.id = m.conversation_id
+         and c.agent_id = i.agent_id
+         and c.workspace_id = i.workspace_id
+       where m.workspace_id = i.workspace_id
+         and m.created_at >= current_timestamp - interval '7 days'
+    ) messages on true
+    left join lateral (
+      select count(*)::int as job_count,
+             count(*) filter (where j.status = 'succeeded')::int as succeeded_jobs,
+             count(*) filter (where j.status in ('failed', 'dead'))::int as failed_jobs,
+             max(j.updated_at) as last_activity_at,
+             max(j.updated_at) filter (where j.status in ('failed', 'dead')) as last_failure_at
+        from agent_runtime_jobs j
+       where j.agent_id = i.agent_id
+         and j.workspace_id = i.workspace_id
+         and j.created_at >= current_timestamp - interval '7 days'
+    ) jobs on true
+    left join lateral (
+      select round(avg(e.duration_ms))::int as average_duration_ms,
+             max(e.created_at) as last_activity_at,
+             max(e.created_at) filter (where e.status = 'failed') as last_failure_at
+        from agent_runtime_execution_logs e
+       where e.agent_id = i.agent_id
+         and e.workspace_id = i.workspace_id
+         and e.created_at >= current_timestamp - interval '7 days'
+    ) executions on true
+    left join lateral (
+      select count(*) filter (where d.status = 'failed')::int as failed_deliveries,
+             max(d.updated_at) as last_activity_at,
+             max(d.updated_at) filter (where d.status = 'failed') as last_failure_at
+        from message_deliveries d
+        join messages m on m.id = d.message_id
+        join conversations c on c.id = m.conversation_id
+         and c.agent_id = i.agent_id
+         and c.workspace_id = i.workspace_id
+       where d.workspace_id = i.workspace_id
+         and d.updated_at >= current_timestamp - interval '7 days'
+    ) deliveries on true
+`;
+
+export async function listMarketplaceInstallationOperationalSummaries(sql: Sql, userId: string, workspaceId: string): Promise<MarketplaceInstallationOperationalSummary[]> {
+  await requireWorkspaceAccess(sql, userId, workspaceId, "read");
+  const rows = await sql.query<OperationalSummaryRow>(
+    `${operationalSummarySelect} where i.workspace_id = $1 and i.status <> 'uninstalled' order by i.updated_at desc`,
+    [workspaceId],
+  );
+  return rows.map(toOperationalSummary);
+}
+
+export async function getMarketplaceInstallationOperationalSummary(sql: Sql, userId: string, input: { workspaceId: string; installationId: string }): Promise<MarketplaceInstallationOperationalSummary> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const rows = await sql.query<OperationalSummaryRow>(
+    `${operationalSummarySelect} where i.id = $1 and i.workspace_id = $2 and i.status <> 'uninstalled' limit 1`,
+    [input.installationId, input.workspaceId],
+  );
+  if (!rows[0]) throw new Error("MARKETPLACE_INSTALLATION_NOT_FOUND");
+  return toOperationalSummary(rows[0]);
+}
