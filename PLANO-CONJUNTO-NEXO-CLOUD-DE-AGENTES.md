@@ -133,7 +133,7 @@ Ainda faltam validações com credenciais reais em produção, operação perman
 
 Estão implementados `lead.create_or_update`, `lead.update_qualification`, política de qualificação por produto, `lead.assign_owner`, distribuição round-robin, `lead.create_follow_up`, cancelamento, proteção de campos, estados comerciais e painel de métricas.
 
- A agenda possui provisionamento de slots, consulta nativa `calendar.list_availability` e reserva idempotente `calendar.book_slot`, com isolamento por workspace e dispatch no Agent Runtime. Ainda faltam ingestão automática de disponibilidade externa, aprovação configurável para escritas, CRM externo e catálogo/disponibilidade conectado.
+ A agenda possui provisionamento de slots, consulta nativa `calendar.list_availability`, reserva idempotente `calendar.book_slot` e console operacional em `/calendar`, com isolamento por workspace, filtros por status, bloqueio manual e operação de reservas. Ainda faltam ingestão automática de disponibilidade externa, aprovação configurável para escritas, CRM externo e catálogo/disponibilidade conectado.
 
 ### 5.4 RAG operacional
 

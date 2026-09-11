@@ -684,6 +684,15 @@ export const provisionWorkspaceAvailabilitySlots = createServerFn({ method: "POS
     return { created: await provisionAvailabilitySlots(await getSql(), context.userId, data) };
   });
 
+export const listWorkspaceAvailabilitySlots = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; from?: string; to?: string; status?: "available" | "booked" | "blocked"; limit?: number }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listWorkspaceAvailabilitySlots: listSlots } = await import("@/lib/calendar/server");
+    return listSlots(await getSql(), context.userId, data);
+  });
+
 export const blockWorkspaceAvailabilitySlot = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string; slotId: string }) => input)

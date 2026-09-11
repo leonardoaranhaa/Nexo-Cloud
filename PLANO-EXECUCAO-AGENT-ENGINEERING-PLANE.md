@@ -62,7 +62,7 @@ Estas etapas pertencem ao “Próximo ponto de partida obrigatório” do plano 
 
 ### 3.1 Ordem obrigatória de conclusão
 
-1. Completar agenda e disponibilidade como ferramenta/conector controlado — concluído no núcleo local/preview
+1. Completar agenda e disponibilidade como ferramenta/conector controlado — concluído no núcleo local/preview, com console operacional `/calendar`
 2. Fechar atualização e rollback de instalações do Marketplace — concluído com migration `0037`
 3. Criar rota e operação de `/marketplace/installed` (Minhas Instalações) — concluído
 4. Criar e validar templates prontos de Atendimento e Vendas — concluído com persistência multi-tenant e testes contratuais

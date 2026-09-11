@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Activity, AlertCircle, BarChart3, Bot, CheckCircle2, ChevronDown, GitBranch, Inbox, LayoutGrid, LoaderCircle, Menu, Plug2, Search, Settings2, X, Store } from "lucide-react";
+import { Activity, AlertCircle, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, GitBranch, Inbox, LayoutGrid, LoaderCircle, Menu, Plug2, Search, Settings2, X, Store } from "lucide-react";
 import { NexoWordmark } from "./brand";
 import { cn } from "@/lib/utils";
 import { useNexo } from "@/lib/store";
@@ -9,7 +9,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { WorkspaceOnboardingDialog } from "./workspace-onboarding-dialog";
 
-type RoutePath = "/" | "/connections" | "/agents" | "/inbox" | "/runs" | "/workflows" | "/metrics" | "/guide" | "/marketplace" | "/settings";
+type RoutePath = "/" | "/connections" | "/agents" | "/inbox" | "/runs" | "/workflows" | "/metrics" | "/calendar" | "/guide" | "/marketplace" | "/settings";
 type NavItem = { to: RoutePath; label: string; icon: typeof Bot };
 type NavGroup = { label: string; items: NavItem[] };
 
@@ -27,6 +27,7 @@ const GROUPS: NavGroup[] = [
   ] },
   { label: "Operate", items: [
     { to: "/inbox", label: "Inbox", icon: Inbox },
+    { to: "/calendar", label: "Agenda", icon: CalendarDays },
     { to: "/runs", label: "Execuções", icon: Activity },
     { to: "/metrics", label: "Métricas de conversão", icon: BarChart3 },
   ] },

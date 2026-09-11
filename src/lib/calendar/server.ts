@@ -13,10 +13,42 @@ export type CalendarBooking = {
   status: "confirmed" | "cancelled";
 };
 
+export type WorkspaceCalendarSlot = {
+  id: string;
+  workspaceId: string;
+  startAt: string;
+  endAt: string;
+  status: "available" | "booked" | "blocked";
+  resourceLabel: string | null;
+  metadata: JsonObject;
+};
+
 function date(value: string, field: string): string {
   const parsed = new Date(value);
   if (!value || Number.isNaN(parsed.getTime())) throw new Error(`CALENDAR_${field.toUpperCase()}_INVALID`);
   return parsed.toISOString();
+}
+
+export async function listWorkspaceAvailabilitySlots(sql: Sql, userId: string, input: { workspaceId: string; from?: string; to?: string; status?: "available" | "booked" | "blocked"; limit?: number }): Promise<WorkspaceCalendarSlot[]> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const from = input.from ? date(input.from, "from") : new Date().toISOString();
+  const to = input.to ? date(input.to, "to") : new Date(Date.now() + 14 * 86400000).toISOString();
+  if (new Date(to) <= new Date(from)) throw new Error("CALENDAR_RANGE_INVALID");
+  const params: unknown[] = [input.workspaceId, from, to];
+  const filters = ["workspace_id = $1", "start_at >= $2::timestamptz", "start_at < $3::timestamptz"];
+  if (input.status) {
+    params.push(input.status);
+    filters.push(`status = $${params.length}`);
+  }
+  params.push(Math.min(Math.max(Math.round(input.limit ?? 200), 1), 500));
+  return sql.query<WorkspaceCalendarSlot>(
+    `select id, workspace_id as "workspaceId", start_at as "startAt", end_at as "endAt", status, resource_label as "resourceLabel", metadata
+       from calendar_availability_slots
+      where ${filters.join(" and ")}
+      order by start_at asc
+      limit $${params.length}`,
+    params,
+  );
 }
 
 export async function provisionAvailabilitySlots(sql: Sql, userId: string, input: { workspaceId: string; slots: { startAt: string; endAt: string; resourceLabel?: string }[] }): Promise<number> {

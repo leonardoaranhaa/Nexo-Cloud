@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { availabilityToolOutput, listAvailability } from "./availability.ts";
-import { bookAvailabilitySlot } from "./server.ts";
+import { bookAvailabilitySlot, listWorkspaceAvailabilitySlots } from "./server.ts";
 
 function fakeSql(rows: unknown[], onQuery: (params: unknown[]) => void) {
   return {
@@ -39,6 +39,30 @@ test("availability rejects an inverted date range", async () => {
     }),
     /CALENDAR_RANGE_INVALID/,
   );
+});
+
+test("workspace calendar listing is scoped, bounded and filterable", async () => {
+  const calls: unknown[][] = [];
+  const sql = Object.assign(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    calls.push(values);
+    return strings.join(" ").includes("from workspaces")
+      ? [{ organization_id: "org-a", workspace_role: "workspace_admin", organization_role: null }]
+      : [{ id: "slot-1", workspaceId: "ws-a", startAt: "2026-09-11T10:00:00.000Z", endAt: "2026-09-11T10:30:00.000Z", status: "booked", resourceLabel: "Consultor 1", metadata: {} }];
+  }, {
+    async query<T>(_query: string, params: unknown[]) { calls.push(params); return [{ id: "slot-1", workspaceId: "ws-a", startAt: "2026-09-11T10:00:00.000Z", endAt: "2026-09-11T10:30:00.000Z", status: "booked", resourceLabel: "Consultor 1", metadata: {} }] as T[]; },
+  }) as never;
+  const slots = await listWorkspaceAvailabilitySlots(sql, "user-a", {
+    workspaceId: "ws-a",
+    from: "2026-09-11T00:00:00.000Z",
+    to: "2026-09-12T00:00:00.000Z",
+    status: "booked",
+    limit: 20,
+  });
+  const listingCall = calls.at(-1) ?? [];
+  assert.equal(listingCall[0], "ws-a");
+  assert.equal(listingCall[3], "booked");
+  assert.equal(listingCall[4], 20);
+  assert.equal(slots[0]?.status, "booked");
 });
 
 test("booking claims an available slot and preserves workspace scope", async () => {
