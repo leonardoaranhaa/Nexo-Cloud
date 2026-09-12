@@ -307,6 +307,8 @@ Z-API não é prioridade desta sequência, porque acrescenta principalmente outr
 
 Retomar depois do fechamento do núcleo de vendas, ferramentas e Marketplace interno.
 
+O Evaluation Harness não deve iniciar antes do hardening pré-B4 identificado na auditoria de 2026-09-12: Tool Gateway único com autorização da versão publicada, idempotência estável, tool/version congelada, output schema e redaction recursiva; validação runtime de entradas; snapshots coerentes de B1; e gates de lint, testes e Playwright verdes.
+
 ### AWS e infraestrutura permanente
 
 **Status: postergada.**
@@ -338,6 +340,16 @@ A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketpl
 Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas em modo offline/evaluation; a próxima frente interna é o Evaluation Harness comparável (`B4`). A próxima sessão que iniciar B4 deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar a implementação. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
 
 A validação real de Meta/Evolution permanece registrada como pendência operacional e deverá ser retomada quando o host estiver preparado. Nenhuma sessão deve tentar contornar essa dependência criando credenciais no repositório, simulando healthcheck saudável ou tratando o preview como canal de produção.
+
+### 8.2 Gate de refatoração identificado pela auditoria
+
+**Status: obrigatório antes da B4; ainda não implementado.**
+
+A varredura completa com as fontes recomendadas confirmou necessidade de hardening compartilhado antes do Evaluation Harness. O Tool Gateway de workflows ainda aceita `node.config.approved` sem revalidar a permissão congelada da versão publicada, deriva idempotência externa de UUID novo por tentativa e resolve a tool ativa mais recente em vez de congelar tool/version no snapshot do workflow. O caminho externo ainda não aplica output schema/redaction recursiva de forma uniforme, e conexões `pending` podem alcançar execução. O runtime conversacional mantém um dispatcher nativo separado do Gateway.
+
+Também foram confirmados: B1 avalia configuração draft/publicada com tools publicadas sem snapshot imutável conjunto; validators server-side ainda são identidade TypeScript sem validação runtime uniforme; o store frontend persiste inbox/events sem escopo de workspace; o wizard não persiste o `connectionId` selecionado no vínculo backend; o lint falha em duas regex do Evolution; e a matriz Playwright mostrou overflow mobile em `/agents`, `/connections` e `/create`.
+
+Antes de iniciar B4, a próxima fatia deve criar testes de falha e corrigir, nesta ordem: (1) autorização, versionamento, output, redaction e idempotência do Tool Gateway; (2) readiness e bloqueio de conexões não saudáveis; (3) lint e inventário completo da suíte; (4) snapshots coerentes de B1; (5) isolamento/ações local-only do frontend e smoke Playwright integrado. O documento `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` contém a matriz completa de evidências e prioridades. Nenhuma dessas correções foi implementada nesta auditoria.
 
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
 
@@ -376,6 +388,7 @@ A plataforma não deve inventar endpoints externos, payloads, credenciais, tabel
 - `B2-GERACAO-GOVERNADA-DE-TOOLS.md`
 - `B3-GERACAO-ASSISTIDA-DE-WORKFLOWS.md`
 - `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`
+- `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md`
 - `README.md`
 
 Os documentos especializados complementam este plano. Em caso de conflito, este plano define a prioridade de produto e o comando interno define o método obrigatório de execução.
@@ -394,3 +407,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Fatia B2 concluída em local/preview: propostas determinísticas de tools nativas, schemas validados, risco/aprovação server-side, tools em `review`, propostas `draft`, isolamento, idempotência e endpoints autenticados. Suíte passou com 155 testes, typecheck e build aprovados. Próxima prioridade interna: B3. |
 | 2026-09-12 | Fatia B3 concluída em local/preview: workflow draft compilável por blueprint, vínculo idempotente, tools condicionadas a aprovação/permissão/adapter, preservação de snapshot publicado, nenhum run automático e isolamento. Suíte passou com 158 testes, typecheck, build e preview aprovados. Próxima prioridade interna: B4. |
 | 2026-09-12 | Descoberta de fontes externas de engenharia documentada em `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`. O comando raiz `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` passa a ser obrigatório a partir da próxima execução da B4, sem substituir os contratos internos de segurança, workspace e Tool Gateway. |
+| 2026-09-12 | Varredura completa aplicada às fontes recomendadas em cinco domínios. Typecheck, testes declarados e build passaram; lint falhou em duas regex Evolution; Playwright smoke validou 10 rotas sem erros de console/page, mas encontrou overflow mobile em `/agents`, `/connections` e `/create`. Confirmadas refatorações obrigatórias antes da B4 no Tool Gateway, idempotência, snapshots, validação runtime, estado contextual do frontend e gate de qualidade. Nenhum código de produto foi alterado. |
