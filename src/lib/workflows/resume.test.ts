@@ -6,10 +6,12 @@ import type { Sql } from "../db.ts";
 import { runNextWorkflowRun } from "./executor.ts";
 import { expireWorkflowApprovals, requestWorkflowWaitResume } from "./resume.ts";
 
+const migrationsDir = new URL("../../../migrations/", import.meta.url);
+
 async function setup() {
   const pg = new PGlite(); await pg.waitReady;
   const names = ["multi_tenant_core", "connector_registry", "messaging_dispatch", "webhook_security", "webhook_delivery_states", "agent_runtime_jobs", "conversation_handoff", "agent_runtime_execution_logs", "workflow_core", "workflow_triggers_events", "workflow_queue_leases", "tool_gateway", "workflow_scheduler", "internal_events", "workflow_wait_resume"];
-  for (let i = 0; i < names.length; i += 1) await pg.exec(await readFile(`/home/ubuntu/work/grok-workspace/migrations/${String(i + 2).padStart(4, "0")}_${names[i]}.sql`, "utf8"));
+  for (let i = 0; i < names.length; i += 1) await pg.exec(await readFile(new URL(`${String(i + 2).padStart(4, "0")}_${names[i]}.sql`, migrationsDir), "utf8"));
   await pg.query("insert into organizations (id,name,slug,created_by) values ('org','Org','org','u')"); await pg.query("insert into workspaces (id,organization_id,name,slug,created_by) values ('ws','org','Ws','ws','u')"); await pg.query("insert into workflows (id,workspace_id,name,slug,created_by,updated_by) values ('wf','ws','Wf','wf','u','u')"); await pg.query("insert into workflow_versions (id,workflow_id,version_number,status,created_by,definition) values ('v1','wf',1,'published','u',$1::jsonb)", [JSON.stringify({ nodes: [{ id: "pause", type: "wait", config: {} }], edges: [] })]); await pg.query("insert into workflow_runs (id,workspace_id,workflow_id,workflow_version_id,correlation_id,idempotency_key) values ('run','ws','wf','v1','corr','key')");
   const sql = { query: async <T>(query: string, params?: unknown[]) => (await pg.query<T>(query, params)).rows } as Sql; return { pg, sql };
 }

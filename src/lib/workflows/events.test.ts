@@ -5,10 +5,12 @@ import { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "../db.ts";
 import { publishStatusChange, publishWorkflowEvent } from "./events.ts";
 
+const migrationsDir = new URL("../../../migrations/", import.meta.url);
+
 async function setup(): Promise<{ pg: PGlite; sql: Sql }> {
   const pg = new PGlite(); await pg.waitReady;
   const names = ["multi_tenant_core", "connector_registry", "messaging_dispatch", "webhook_security", "webhook_delivery_states", "agent_runtime_jobs", "conversation_handoff", "agent_runtime_execution_logs", "workflow_core", "workflow_triggers_events", "workflow_queue_leases", "tool_gateway", "workflow_scheduler", "internal_events"];
-  for (let i = 0; i < names.length; i += 1) await pg.exec(await readFile(`/home/ubuntu/work/grok-workspace/migrations/${String(i + 2).padStart(4, "0")}_${names[i]}.sql`, "utf8"));
+  for (let i = 0; i < names.length; i += 1) await pg.exec(await readFile(new URL(`${String(i + 2).padStart(4, "0")}_${names[i]}.sql`, migrationsDir), "utf8"));
   await pg.query("insert into organizations (id,name,slug,created_by) values ('org','Org','org','u')"); await pg.query("insert into workspaces (id,organization_id,name,slug,created_by) values ('ws','org','Ws','ws','u'), ('other','org','Other','other','u')");
   await pg.query("insert into workflows (id,workspace_id,name,slug,trigger_type,status,created_by,updated_by) values ('wf','ws','Wf','wf','status_change','active','u','u')"); await pg.query("insert into workflow_versions (id,workflow_id,version_number,status,created_by,definition) values ('v1','wf',1,'published','u','{\"nodes\":[],\"edges\":[]}')");
   await pg.query("insert into workflow_triggers (id,workflow_id,type,config) values ('tr','wf','status_change',$1)", [JSON.stringify({ entityType: "conversation", toStatus: "human" })]);
