@@ -5,6 +5,31 @@ export type CompiledWorkflowDefinition = WorkflowDefinition & { order: string[] 
 
 export type WorkflowValidationIssue = { code: string; message: string; nodeId?: string };
 
+function pathValue(input: JsonObject, path: string): unknown {
+  const normalized = path.startsWith("$.") ? path.slice(2) : path;
+  return normalized.split(".").reduce<unknown>((value, key) => value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined, input);
+}
+
+export function mapWorkflowInput(config: JsonObject | undefined, input: JsonObject): JsonObject {
+  const mapping = config?.mapping;
+  if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) return input;
+  const output: JsonObject = {};
+  for (const [key, source] of Object.entries(mapping)) {
+    if (typeof source === "string" && (source.startsWith("$.") || source.includes("."))) {
+      const value = pathValue(input, source);
+      if (value !== undefined) output[key] = value as never;
+    } else output[key] = source as never;
+  }
+  return output;
+}
+
+export function applyWorkflowTransform(config: JsonObject | undefined, input: JsonObject): JsonObject {
+  const mapped = mapWorkflowInput(config, input);
+  const assign = config?.assign;
+  if (!assign || typeof assign !== "object" || Array.isArray(assign)) return mapped;
+  return { ...mapped, ...Object.fromEntries(Object.entries(assign).map(([key, value]) => [key, typeof value === "string" && value.startsWith("$." ) ? pathValue(input, value) : value])) } as JsonObject;
+}
+
 export function validateWorkflowDefinition(definition: WorkflowDefinition): WorkflowValidationIssue[] {
   const issues: WorkflowValidationIssue[] = [];
   if (definition.nodes.length === 0) return [{ code: "WORKFLOW_EMPTY", message: "Adicione pelo menos um nó ao workflow." }];
@@ -15,6 +40,7 @@ export function validateWorkflowDefinition(definition: WorkflowDefinition): Work
     if (node.type === "agent" && !node.config?.agentId) issues.push({ code: "WORKFLOW_AGENT_CONFIG_REQUIRED", message: "Selecione um agente para este nó.", nodeId: node.id });
     if (node.type === "tool" && !node.config?.toolKey) issues.push({ code: "WORKFLOW_TOOL_CONFIG_REQUIRED", message: "Selecione uma ferramenta para este nó.", nodeId: node.id });
     if (node.type === "condition" && !node.config?.field) issues.push({ code: "WORKFLOW_CONDITION_CONFIG_REQUIRED", message: "Informe o campo usado pela condição.", nodeId: node.id });
+    if (node.type === "transform" && !node.config?.mapping && !node.config?.assign) issues.push({ code: "WORKFLOW_TRANSFORM_CONFIG_REQUIRED", message: "Configure pelo menos um mapeamento ou atribuição.", nodeId: node.id });
   }
   const outgoing = new Map<string, string[]>();
   const incoming = new Map<string, number>();
@@ -46,7 +72,7 @@ export function compileWorkflowDefinition(definition: WorkflowDefinition): Compi
   for (const node of nodes) {
     if (!node.id || ids.has(node.id)) throw new Error("WORKFLOW_NODE_ID_DUPLICATE");
     ids.add(node.id);
-    if (!["agent", "condition", "wait", "approval", "tool"].includes(node.type)) throw new Error("WORKFLOW_NODE_TYPE_INVALID");
+    if (!["agent", "condition", "wait", "approval", "tool", "transform"].includes(node.type)) throw new Error("WORKFLOW_NODE_TYPE_INVALID");
     if (node.type === "agent" && !node.config?.agentId) throw new Error("WORKFLOW_AGENT_CONFIG_REQUIRED");
     if (node.type === "tool" && !node.config?.toolKey) throw new Error("WORKFLOW_TOOL_CONFIG_REQUIRED");
   }

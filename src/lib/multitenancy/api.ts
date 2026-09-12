@@ -426,6 +426,16 @@ export const runWorkspaceWorkflow = createServerFn({ method: "POST" })
     return runWorkflowManually(await getSql(), context.userId, data);
   });
 
+export const setWorkspaceWorkflowErrorHandler = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; workflowId: string; errorWorkflowId: string | null }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { setWorkflowErrorWorkflow } = await import("../workflows/server");
+    await setWorkflowErrorWorkflow(await getSql(), context.userId, data);
+    return { ok: true as const };
+  });
+
 export const listWorkspaceWorkflowRuns = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .validator((input: { workspaceId: string; workflowId?: string }) => input)
@@ -433,6 +443,24 @@ export const listWorkspaceWorkflowRuns = createServerFn({ method: "GET" })
     const { getSql } = await import("@/lib/db");
     const { listWorkflowRuns } = await import("../workflows/server");
     return listWorkflowRuns(await getSql(), context.userId, data);
+  });
+
+export const listWorkspaceWorkflowNodeRuns = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; runId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listWorkflowNodeRuns } = await import("../workflows/server");
+    return listWorkflowNodeRuns(await getSql(), context.userId, data);
+  });
+
+export const replayWorkspaceWorkflowRun = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; runId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { replayWorkflowRun } = await import("../workflows/server");
+    return replayWorkflowRun(await getSql(), context.userId, data);
   });
 
 export const decideWorkspaceWorkflowApproval = createServerFn({ method: "POST" })

@@ -5,11 +5,11 @@ import { compileWorkflowDefinition } from "./compiler.ts";
 import { runNextWorkflowRun } from "./executor.ts";
 import { createWorkflowNodeHandlers } from "./handlers.ts";
 
-export type WorkflowNode = { id: string; type: "agent" | "condition" | "wait" | "approval" | "tool"; name?: string; config?: JsonObject };
+export type WorkflowNode = { id: string; type: "agent" | "condition" | "wait" | "approval" | "tool" | "transform"; name?: string; config?: JsonObject };
 export type WorkflowDefinition = { nodes: WorkflowNode[]; edges: { from: string; to: string; condition?: string }[] };
 export type WorkflowRecord = {
   id: string; workspaceId: string; name: string; slug: string; description: string;
-  status: "draft" | "active" | "paused" | "archived"; triggerType: string; versionNumber: number | null;
+  status: "draft" | "active" | "paused" | "archived"; triggerType: string; errorWorkflowId: string | null; versionNumber: number | null;
   versionId: string | null; createdAt: string; updatedAt: string;
 };
 export type WorkflowRunRecord = {
@@ -17,6 +17,7 @@ export type WorkflowRunRecord = {
   input: JsonObject; output: JsonObject; currentNodeId: string | null; correlationId: string;
   attempts: number; errorCode: string | null; errorMessage: string | null; createdAt: string; finishedAt: string | null;
 };
+export type WorkflowNodeRunRecord = { id: string; runId: string; nodeId: string; nodeType: string; status: string; input: JsonObject; output: JsonObject; attempt: number; errorCode: string | null; errorMessage: string | null; startedAt: string | null; finishedAt: string | null };
 
 function slugify(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "workflow";
@@ -39,7 +40,7 @@ function normalizeDefinition(value: unknown): WorkflowDefinition {
   const nodes = Array.isArray(input.nodes) ? input.nodes.slice(0, 100).map((raw) => {
     const node = object(raw);
     const type = node.type;
-    if (!["agent", "condition", "wait", "approval", "tool"].includes(String(type))) throw new Error("WORKFLOW_NODE_TYPE_INVALID");
+    if (!["agent", "condition", "wait", "approval", "tool", "transform"].includes(String(type))) throw new Error("WORKFLOW_NODE_TYPE_INVALID");
     return { id: String(node.id || randomUUID()).slice(0, 100), type: type as WorkflowNode["type"], name: typeof node.name === "string" ? node.name.slice(0, 120) : undefined, config: object(safeJson(node.config)) };
   }) : [];
   const edges = Array.isArray(input.edges) ? input.edges.slice(0, 200).map((raw) => {
@@ -91,9 +92,21 @@ export async function publishWorkflow(sql: Sql, userId: string, input: { workspa
   await sql.query(`update workflows set status = 'active', updated_by = $1, updated_at = current_timestamp where id = $2 and workspace_id = $3`, [userId, input.workflowId, input.workspaceId]);
 }
 
+export async function setWorkflowErrorWorkflow(sql: Sql, userId: string, input: { workspaceId: string; workflowId: string; errorWorkflowId: string | null }): Promise<void> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
+  if (input.errorWorkflowId === input.workflowId) throw new Error("WORKFLOW_ERROR_HANDLER_SELF_REFERENCE");
+  if (input.errorWorkflowId) {
+    const target = await sql.query<{ id: string }>(`select id from workflows where id = $1 and workspace_id = $2 and deleted_at is null`, [input.errorWorkflowId, input.workspaceId]);
+    if (!target[0]) throw new Error("WORKFLOW_ERROR_HANDLER_NOT_FOUND");
+  }
+  const updated = await sql.query<{ id: string }>(`update workflows set error_workflow_id = $1, updated_by = $2, updated_at = current_timestamp where id = $3 and workspace_id = $4 and deleted_at is null returning id`, [input.errorWorkflowId, userId, input.workflowId, input.workspaceId]);
+  if (!updated[0]) throw new Error("WORKFLOW_NOT_FOUND");
+}
+
 export async function listWorkflows(sql: Sql, userId: string, input: { workspaceId: string }): Promise<WorkflowRecord[]> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
-  return sql.query<WorkflowRecord>(`select w.id, w.workspace_id as "workspaceId", w.name, w.slug, w.description, w.status, w.trigger_type as "triggerType", w.created_at as "createdAt", w.updated_at as "updatedAt", v.id as "versionId", v.version_number as "versionNumber" from workflows w left join lateral (select id, version_number from workflow_versions where workflow_id = w.id and status = 'published' order by version_number desc limit 1) v on true where w.workspace_id = $1 and w.deleted_at is null order by w.updated_at desc`, [input.workspaceId]);
+  const rows = await sql.query<Omit<WorkflowRecord, "errorWorkflowId"> & { errorWorkflowId?: string | null }>(`select w.id, w.workspace_id as "workspaceId", w.name, w.slug, w.description, w.status, w.trigger_type as "triggerType", w.created_at as "createdAt", w.updated_at as "updatedAt", v.id as "versionId", v.version_number as "versionNumber" from workflows w left join lateral (select id, version_number from workflow_versions where workflow_id = w.id and status = 'published' order by version_number desc limit 1) v on true where w.workspace_id = $1 and w.deleted_at is null order by w.updated_at desc`, [input.workspaceId]);
+  return rows.map((row) => ({ ...row, errorWorkflowId: row.errorWorkflowId ?? null }));
 }
 
 export async function runWorkflowManually(sql: Sql, userId: string, input: { workspaceId: string; workflowId: string; input?: JsonObject; idempotencyKey?: string }): Promise<WorkflowRunRecord> {
@@ -115,6 +128,19 @@ export async function listWorkflowRuns(sql: Sql, userId: string, input: { worksp
   const params: unknown[] = [input.workspaceId];
   const filter = input.workflowId ? (params.push(input.workflowId), "and r.workflow_id = $2") : "";
   return sql.query<WorkflowRunRecord>(`select r.id, r.workflow_id as "workflowId", w.name as "workflowName", r.workflow_version_id as "workflowVersionId", r.status, r.input, r.output, r.current_node_id as "currentNodeId", r.correlation_id as "correlationId", r.attempts, r.error_code as "errorCode", r.error_message as "errorMessage", r.created_at as "createdAt", r.finished_at as "finishedAt" from workflow_runs r join workflows w on w.id = r.workflow_id where r.workspace_id = $1 ${filter} order by r.created_at desc limit 100`, params);
+}
+
+export async function listWorkflowNodeRuns(sql: Sql, userId: string, input: { workspaceId: string; runId: string }): Promise<WorkflowNodeRunRecord[]> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  return sql.query<WorkflowNodeRunRecord>(`select n.id, n.run_id as "runId", n.node_id as "nodeId", n.node_type as "nodeType", n.status, n.input, n.output, n.attempt, n.error_code as "errorCode", n.error_message as "errorMessage", n.started_at as "startedAt", n.finished_at as "finishedAt" from workflow_node_runs n join workflow_runs r on r.id = n.run_id where n.run_id = $1 and r.workspace_id = $2 order by n.started_at asc nulls last`, [input.runId, input.workspaceId]);
+}
+
+export async function replayWorkflowRun(sql: Sql, userId: string, input: { workspaceId: string; runId: string }): Promise<WorkflowRunRecord> {
+  const original = await getWorkflowRun(sql, userId, input);
+  const runId = randomUUID();
+  await sql.query(`insert into workflow_runs (id, workspace_id, workflow_id, workflow_version_id, status, input, correlation_id, idempotency_key) values ($1,$2,$3,$4,'queued',$5::jsonb,$6,$7)`, [runId, input.workspaceId, original.workflowId, original.workflowVersionId, JSON.stringify(original.input), original.correlationId, `replay:${original.id}:${runId}`]);
+  await runNextWorkflowRun(sql, `replay:${userId}`, createWorkflowNodeHandlers(sql));
+  return getWorkflowRun(sql, userId, { workspaceId: input.workspaceId, runId });
 }
 
 async function getWorkflowRun(sql: Sql, userId: string, input: { workspaceId: string; runId: string }): Promise<WorkflowRunRecord> {

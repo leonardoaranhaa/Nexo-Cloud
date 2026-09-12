@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
 import type { JsonObject } from "../multitenancy/server.ts";
-import { compileWorkflowDefinition, evaluateCondition } from "./compiler.ts";
+import { applyWorkflowTransform, compileWorkflowDefinition, evaluateCondition, mapWorkflowInput } from "./compiler.ts";
 import { claimWorkflowRun, completeWorkflowRun, failOrRetryWorkflowRun, type ClaimedWorkflowRun } from "./queue.ts";
 import type { WorkflowDefinition, WorkflowNode } from "./server.ts";
 
@@ -58,7 +58,9 @@ export async function runNextWorkflowRun(sql: Sql, workerId: string, handlers: W
       const nodeRunId = randomUUID();
       await sql.query(`insert into workflow_node_runs (id, run_id, node_id, node_type, status, input, started_at) values ($1,$2,$3,$4,'running',$5::jsonb,current_timestamp)`, [nodeRunId, run.id, node.id, node.type, JSON.stringify({ ...input, ...context })]);
       let output: Json;
-      if (node.type === "condition") output = { result: evaluateCondition(node.config, { ...input, ...context } as JsonObject) };
+      const nodeInput = mapWorkflowInput(node.config, { ...input, ...context } as JsonObject);
+      if (node.type === "condition") output = { result: evaluateCondition(node.config, nodeInput) };
+      else if (node.type === "transform") output = applyWorkflowTransform(node.config, nodeInput);
       else if (node.type === "wait") {
         await sql.query(`update workflow_node_runs set status = 'waiting', output = $1::jsonb, finished_at = current_timestamp where id = $2`, [JSON.stringify({ waiting: true }), nodeRunId]);
         await sql.query(`update workflow_runs set status = 'waiting', claimed_by = null, lease_until = null where id = $1 and claimed_by = $2`, [run.id, workerId]);
@@ -68,8 +70,8 @@ export async function runNextWorkflowRun(sql: Sql, workerId: string, handlers: W
         await sql.query(`update workflow_node_runs set status = 'waiting', output = $1::jsonb, finished_at = current_timestamp where id = $2`, [JSON.stringify({ waiting: "approval" }), nodeRunId]);
         await sql.query(`update workflow_runs set status = 'waiting', claimed_by = null, lease_until = null where id = $1 and claimed_by = $2`, [run.id, workerId]);
         return { status: "waiting", runId: run.id };
-      } else if (node.type === "agent") output = await handlers.agent(node, { ...input, ...context }, run);
-      else output = await handlers.tool(node, { ...input, ...context }, run);
+      } else if (node.type === "agent") output = await handlers.agent(node, nodeInput, run);
+      else output = await handlers.tool(node, nodeInput, run);
       context = { ...context, [node.id]: output };
       await sql.query(`update workflow_node_runs set status = 'succeeded', output = $1::jsonb, finished_at = current_timestamp where id = $2`, [JSON.stringify(output), nodeRunId]);
       currentId = nextNode(compiled, node, output);
@@ -78,7 +80,14 @@ export async function runNextWorkflowRun(sql: Sql, workerId: string, handlers: W
     return done ? { status: "succeeded", runId: run.id } : { status: "failed", runId: run.id, reason: "WORKFLOW_LEASE_LOST" };
   } catch (error) {
     const reason = error instanceof Error ? error.message : "WORKFLOW_EXECUTION_FAILED";
+    await sql.query(`update workflow_node_runs set status = 'failed', error_code = $1, error_message = $2, finished_at = current_timestamp where id = (select id from workflow_node_runs where run_id = $3 and status = 'running' order by started_at desc limit 1)`, [reason.slice(0, 120), reason.slice(0, 1000), run.id]);
     const status = await failOrRetryWorkflowRun(sql, run.id, workerId, reason.slice(0, 120), reason);
+    if (status === "failed" && !Object.prototype.hasOwnProperty.call(run.input, "__errorDepth")) {
+      const handler = await sql.query<{ workflow_id: string; workflow_version_id: string }>(`select w.error_workflow_id as workflow_id, v.id as workflow_version_id from workflows w left join lateral (select id from workflow_versions where workflow_id = w.error_workflow_id and status = 'published' order by version_number desc limit 1) v on true where w.id = $1 and w.error_workflow_id is not null`, [run.workflow_id]);
+      if (handler[0]?.workflow_version_id) {
+        await sql.query(`insert into workflow_runs (id, workspace_id, workflow_id, workflow_version_id, status, input, correlation_id, idempotency_key, max_attempts) values ($1,$2,$3,$4,'queued',$5::jsonb,$6,$7,1) on conflict (workspace_id, idempotency_key) do nothing`, [randomUUID(), run.workspace_id, handler[0].workflow_id, handler[0].workflow_version_id, JSON.stringify({ originalRunId: run.id, originalWorkflowId: run.workflow_id, errorCode: reason.slice(0, 120), errorMessage: reason.slice(0, 1000), input: run.input, __errorDepth: 1 }), run.correlation_id, `error:${run.id}`]);
+      }
+    }
     return { status: status === "lost" ? "failed" : status, runId: run.id, reason };
   }
 }

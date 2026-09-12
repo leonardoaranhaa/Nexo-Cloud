@@ -159,7 +159,7 @@ Existem versões, compilação de grafos, condições, eventos internos, webhook
 
 O editor `/workflows` agora segue o padrão de automação visual por nós: configuração explícita de agentes, ferramentas, condições e aprovações; conexões visíveis; validação de ponto de entrada único, conectividade, duplicidades e configurações obrigatórias; e bloqueio de publicação quando a definição não é executável. Os testes de integração do motor usam caminhos portáveis e cobrem eventos, scheduler, retries, espera, retomada, publicação e isolamento multi-tenant.
 
-Ainda faltam mapeamento de dados entre nós, transformações dedicadas, workflow de erro configurável, observabilidade por nó e reprocessamento operacional avançado. A integração oficial com n8n deve permanecer opcional: o contrato nativo do Nexo é a fonte de verdade, enquanto uma ponte futura poderá importar/exportar apenas definições compatíveis e sanitizadas.
+O motor agora também suporta mapeamento por caminhos `$.campo.subcampo`, nós dedicados de transformação com atribuições, configuração server-side de workflow de erro para falhas terminais (com payload sanitizado e limite anti-loop), telemetria persistida por nó e replay preservando a versão original. A integração oficial com n8n deve permanecer opcional: o contrato nativo do Nexo é a fonte de verdade, enquanto uma ponte futura poderá importar/exportar apenas definições compatíveis e sanitizadas. Ainda faltam circuit breaker, tracing distribuído e painel avançado de comparação de reprocessamentos.
 
 ### 5.7 Marketplace interno
 
