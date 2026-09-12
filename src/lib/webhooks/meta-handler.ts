@@ -36,6 +36,10 @@ function deliveryState(value: unknown): DeliveryState | undefined {
       : undefined;
 }
 
+function deliveryRank(state: DeliveryState): number {
+  return state === "sent" ? 1 : state === "delivered" ? 2 : state === "read" ? 3 : state === "failed" ? 4 : 0;
+}
+
 export function verifyMetaSignature(body: string, appSecret: string, provided: string): boolean {
   return constantTime(provided, signature(body, appSecret));
 }
@@ -82,8 +86,9 @@ async function handleDeliveryStatuses(
               last_error_message = $3,
               updated_at = current_timestamp
         where workspace_id = $4 and connection_id = $5 and provider_message_id = $6
+          and (case status when 'sent' then 1 when 'delivered' then 2 when 'read' then 3 when 'failed' then 4 else 0 end) < $7
         returning id, message_id`,
-      [state, errorCode ?? null, errorMessage ?? null, workspaceId, connectionId, providerMessageId],
+      [state, errorCode ?? null, errorMessage ?? null, workspaceId, connectionId, providerMessageId, deliveryRank(state)],
     );
     if (!deliveries[0]) continue;
     await sql.query(

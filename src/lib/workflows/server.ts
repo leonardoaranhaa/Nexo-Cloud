@@ -4,6 +4,7 @@ import { requireWorkspaceAccess, type JsonObject, type JsonValue } from "../mult
 import { compileWorkflowDefinition } from "./compiler.ts";
 import { runNextWorkflowRun } from "./executor.ts";
 import { createWorkflowNodeHandlers } from "./handlers.ts";
+import { resolveTool } from "../connectors/tool-registry.ts";
 
 export type WorkflowNode = { id: string; type: "agent" | "condition" | "wait" | "approval" | "tool" | "transform"; name?: string; config?: JsonObject };
 export type WorkflowDefinition = { nodes: WorkflowNode[]; edges: { from: string; to: string; condition?: string }[] };
@@ -50,6 +51,36 @@ function normalizeDefinition(value: unknown): WorkflowDefinition {
   return { nodes, edges };
 }
 
+async function freezeToolSnapshots(sql: Sql, workspaceId: string, definition: WorkflowDefinition): Promise<WorkflowDefinition> {
+  const nodes = await Promise.all(definition.nodes.map(async (node) => {
+    if (node.type !== "tool") return node;
+    const toolKey = typeof node.config?.toolKey === "string" ? node.config.toolKey : "";
+    if (!toolKey) throw new Error("WORKFLOW_TOOL_CONFIG_REQUIRED");
+    const tool = await resolveTool(sql, workspaceId, toolKey);
+    return {
+      ...node,
+      config: {
+        ...node.config,
+        toolSnapshot: {
+          id: tool.id,
+          key: tool.key,
+          version: tool.version,
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          outputSchema: tool.outputSchema,
+          riskLevel: tool.riskLevel,
+          timeoutMs: tool.timeoutMs,
+          maxRetries: tool.maxRetries,
+          connectorDefinitionId: tool.connectorDefinitionId,
+          provider: tool.provider,
+        },
+      },
+    };
+  }));
+  return { ...definition, nodes };
+}
+
 export async function createWorkflow(sql: Sql, userId: string, input: { workspaceId: string; name: string; description?: string; triggerType?: string }): Promise<WorkflowRecord> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
   const id = randomUUID();
@@ -84,7 +115,7 @@ export async function publishWorkflow(sql: Sql, userId: string, input: { workspa
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "publish");
   const rows = await sql.query<{ id: string; version_number: number; definition: unknown }>(`select v.id, v.version_number, v.definition from workflow_versions v join workflows w on w.id = v.workflow_id where v.workflow_id = $1 and w.workspace_id = $2 and v.status = 'draft' order by v.version_number desc limit 1`, [input.workflowId, input.workspaceId]);
   if (!rows[0]) throw new Error("WORKFLOW_VERSION_NOT_FOUND");
-  const compiled = compileWorkflowDefinition(normalizeDefinition(rows[0].definition));
+  const compiled = compileWorkflowDefinition(await freezeToolSnapshots(sql, input.workspaceId, normalizeDefinition(rows[0].definition)));
   await sql.query(`update workflow_versions set status = 'retired' where workflow_id = $1 and status = 'published'`, [input.workflowId]);
   await sql.query(`update workflow_versions set status = 'published', definition = $1::jsonb, published_by = $2, published_at = current_timestamp where id = $3`, [JSON.stringify(compiled), userId, rows[0].id]);
   const nextId = randomUUID();

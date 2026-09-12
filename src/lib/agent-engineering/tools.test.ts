@@ -6,7 +6,7 @@ import { PGlite } from "@electric-sql/pglite";
 import test from "node:test";
 import type { Sql } from "../db.ts";
 import { resolveTool } from "../connectors/tool-registry.ts";
-import { generateToolProposalsFromBlueprint, listAgentToolProposals } from "./tools.ts";
+import { generateToolProposalsFromBlueprint, listAgentToolProposals, reviewAgentToolProposal } from "./tools.ts";
 
 const root = join(fileURLToPath(new URL("../../..", import.meta.url)));
 
@@ -36,6 +36,7 @@ async function fixture() {
     "0036_calendar_booking.sql",
     "0039_native_commercial_tool_contracts.sql",
     "0044_agent_tool_proposals.sql",
+    "0046_agent_tool_proposal_reviews.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";
@@ -88,6 +89,38 @@ test("B2 rejects cross-workspace blueprint access before generating proposals", 
     );
     const proposals = await pg.query<{ count: number }>("select count(*)::int as count from agent_tool_proposals");
     assert.equal(proposals.rows[0]?.count, 0);
+  } finally {
+    await pg.close();
+  }
+});
+
+test("B2 approval is server-side, auditable and materializes only the draft agent permission", async () => {
+  const { pg, sql } = await fixture();
+  try {
+    await pg.query("insert into agent_versions (id,agent_id,version_number,status,config,created_by) values ('draft-version','agent',1,'draft','{}','user')");
+    const generated = await generateToolProposalsFromBlueprint(sql, "user", { workspaceId: "ws", agentId: "agent", blueprintId: "blueprint" });
+    const proposal = generated.proposals.find((item) => item.toolKey === "lead.create_or_update");
+    assert.ok(proposal);
+    const approved = await reviewAgentToolProposal(sql, "user", { workspaceId: "ws", proposalId: proposal.id, decision: "approved", reason: "Tool necessária para o fluxo comercial." });
+    assert.equal(approved.status, "approved");
+    assert.equal((await pg.query<{ status: string }>("select status from tools where id = $1", [proposal.toolId])).rows[0]?.status, "active");
+    assert.equal((await pg.query<{ count: number }>("select count(*)::int as count from agent_tool_permissions where workspace_id = 'ws' and agent_version_id = 'draft-version' and tool_id = $1", [proposal.toolId])).rows[0]?.count, 1);
+    assert.equal((await pg.query<{ count: number }>("select count(*)::int as count from agent_tool_proposal_reviews where proposal_id = $1 and decision = 'approved'", [proposal.id])).rows[0]?.count, 1);
+  } finally {
+    await pg.close();
+  }
+});
+
+test("B2 rejection keeps the review tool non-executable and records the reviewer", async () => {
+  const { pg, sql } = await fixture();
+  try {
+    const generated = await generateToolProposalsFromBlueprint(sql, "user", { workspaceId: "ws", agentId: "agent", blueprintId: "blueprint" });
+    const proposal = generated.proposals.find((item) => item.toolKey === "lead.create_or_update");
+    assert.ok(proposal);
+    const rejected = await reviewAgentToolProposal(sql, "user", { workspaceId: "ws", proposalId: proposal.id, decision: "rejected", reason: "Requer revisão de escopo." });
+    assert.equal(rejected.status, "rejected");
+    assert.equal((await pg.query<{ status: string }>("select status from tools where id = $1", [proposal.toolId])).rows[0]?.status, "review");
+    assert.equal((await pg.query<{ count: number }>("select count(*)::int as count from agent_tool_permissions where workspace_id = 'ws' and tool_id = $1", [proposal.toolId])).rows[0]?.count, 0);
   } finally {
     await pg.close();
   }

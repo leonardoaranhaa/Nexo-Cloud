@@ -209,11 +209,12 @@ async function dispatchTextMessageInternal(
 
   const status: DeliveryStatus = dispatch.status;
   await sql.query(
-    `update message_deliveries
+      `update message_deliveries
         set status = $2,
             provider_message_id = $3,
             last_error_code = $4,
             last_error_message = $5,
+            next_attempt_at = case when $2 = 'unknown' then current_timestamp + interval '5 minutes' else null end,
             sent_at = case when $2 = 'sent' then current_timestamp else sent_at end,
             updated_at = current_timestamp
       where id = $1 and workspace_id = $6`,
@@ -237,6 +238,38 @@ async function dispatchTextMessageInternal(
     provider: target.provider,
     message: dispatch.message,
   };
+}
+
+export async function reconcilePendingDeliveries(sql: Sql, limit = 100): Promise<number> {
+  const rows = await sql.query<{ message_id: string; workspace_id: string }>(
+    `with due as (
+       select id from message_deliveries
+        where status = 'sending' and next_attempt_at is not null and next_attempt_at <= current_timestamp
+        order by next_attempt_at
+        limit $1
+     )
+     update message_deliveries d
+        set status = 'unknown',
+            last_error_code = coalesce(last_error_code, 'DELIVERY_RECONCILIATION_TIMEOUT'),
+            last_error_message = coalesce(last_error_message, 'Provider status was not confirmed before the retry window expired'),
+            next_attempt_at = null,
+            updated_at = current_timestamp
+      from due
+      where d.id = due.id
+      returning d.message_id, d.workspace_id`,
+    [Math.min(Math.max(Math.floor(limit), 1), 500)],
+  );
+  for (const row of rows) {
+    await sql.query(
+      `update messages
+          set status = 'unknown', error_code = coalesce(error_code, 'DELIVERY_RECONCILIATION_TIMEOUT'),
+              error_message = coalesce(error_message, 'Provider status was not confirmed before the retry window expired'),
+              updated_at = current_timestamp
+        where id = $1 and workspace_id = $2 and status in ('sending', 'unknown')`,
+      [row.message_id, row.workspace_id],
+    );
+  }
+  return rows.length;
 }
 
 export async function dispatchTextMessage(

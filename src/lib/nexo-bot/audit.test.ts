@@ -31,7 +31,7 @@ test("audit record removes sensitive metadata and bounds the payload", async () 
     outputChars: 10,
     metadata: { historyCount: 2, token: "secret-value", email: "ana@example.com" },
   });
-  const metadata = JSON.parse(String(calls[0]?.[14]));
+  const metadata = JSON.parse(String(calls[0]?.[15]));
   assert.deepEqual(metadata, { historyCount: 2 });
   assert.equal(calls[0]?.[1], "ws-a");
   assert.equal(calls[0]?.[2], "user-a");
@@ -39,7 +39,7 @@ test("audit record removes sensitive metadata and bounds the payload", async () 
 
 test("audit listing is workspace-scoped, filtered and bounded", async () => {
   const calls: unknown[][] = [];
-  const events = [{ id: "event-a", workspaceId: "ws-a", actorId: "user-a", eventType: "action_succeeded", actionId: "action-a", actionType: "create_agent", status: "succeeded", summary: "Criar agente", resourceType: "agent", resourceId: "agent-a", durationMs: 80, inputChars: 10, outputChars: 20, errorCode: null, metadata: {}, createdAt: "2026-09-11T10:00:00.000Z" }];
+  const events = [{ id: "event-a", workspaceId: "ws-a", actorId: "user-a", traceId: null, eventType: "action_succeeded", actionId: "action-a", actionType: "create_agent", status: "succeeded", summary: "Criar agente", resourceType: "agent", resourceId: "agent-a", durationMs: 80, inputChars: 10, outputChars: 20, errorCode: null, metadata: {}, createdAt: "2026-09-11T10:00:00.000Z" }];
   const result = await listNexoBotAuditEvents(authorizedSql(events, calls), "user-a", { workspaceId: "ws-a", actionType: "create_agent", status: "succeeded", from: "2026-09-11T00:00:00.000Z", limit: 500 });
   const queryParams = calls.at(-1) ?? [];
   assert.deepEqual(result, events);

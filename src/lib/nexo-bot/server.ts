@@ -162,6 +162,7 @@ export async function chatNexoBot(sql: Sql, userId: string, input: { workspaceId
   const context = await loadWorkspaceContext(sql, userId, input.workspaceId);
   const safeMessages = input.messages.filter((message) => message && (message.role === "user" || message.role === "assistant") && typeof message.content === "string").slice(-12);
   const startedAt = Date.now();
+  const traceId = randomUUID();
   const result = await callAnthropic({
     system: `Você é o Nexo Bot, assistente operacional do Nexo Cloud, uma plataforma de infraestrutura para agentes de IA. Responda em português brasileiro com clareza e concisão. Use texto simples, sem Markdown, tabelas, hashtags, emojis ou asteriscos. Ajude a pessoa a entender o produto e concluir tarefas no console. Nunca invente dados, integrações, preços ou estados. Nunca diga que executou uma ação: apenas proponha uma ação usando propose_action. Para escritas, peça confirmação por meio da proposta. Não proponha exclusão, alteração de permissões, publicação, credenciais, chamadas externas ou ações financeiras. Contexto não sensível do workspace: nome=${context.name}; ambiente=${context.environment}; agentes=${context.agents}; conexões=${context.connections}.`,
     messages: safeMessages.length > 0 ? safeMessages : [{ role: "user", content: "Apresente-se e pergunte como pode ajudar." }],
@@ -169,6 +170,7 @@ export async function chatNexoBot(sql: Sql, userId: string, input: { workspaceId
   await recordNexoBotAudit(sql, {
     workspaceId: input.workspaceId,
     actorId: userId,
+    traceId,
     eventType: result.ok ? "chat_completed" : "chat_failed",
     status: result.ok ? "succeeded" : "failed",
     durationMs: Date.now() - startedAt,
@@ -179,9 +181,10 @@ export async function chatNexoBot(sql: Sql, userId: string, input: { workspaceId
   });
   if (result.ok && result.action) {
     await recordNexoBotAudit(sql, {
-      workspaceId: input.workspaceId,
-      actorId: userId,
-      eventType: "action_proposed",
+        workspaceId: input.workspaceId,
+        actorId: userId,
+        traceId,
+        eventType: "action_proposed",
       actionId: result.action.id,
       actionType: result.action.type,
       status: "pending",
@@ -194,36 +197,37 @@ export async function chatNexoBot(sql: Sql, userId: string, input: { workspaceId
 
 export async function executeNexoBotAction(sql: Sql, userId: string, input: { workspaceId: string; action: NexoBotAction }): Promise<{ ok: true; message: string; resourceId?: string } | { ok: false; message: string }> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
+  const traceId = randomUUID();
   const action = validateConfirmedAction(input.action);
   if (!action) {
-    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, eventType: "action_failed", actionId: typeof input.action?.id === "string" ? input.action.id : null, actionType: typeof input.action?.type === "string" ? input.action.type : null, status: "failed", errorCode: "ACTION_INVALID", summary: "A ação não passou pela validação do servidor." });
+    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, traceId, eventType: "action_failed", actionId: typeof input.action?.id === "string" ? input.action.id : null, actionType: typeof input.action?.type === "string" ? input.action.type : null, status: "failed", errorCode: "ACTION_INVALID", summary: "A ação não passou pela validação do servidor." });
     return { ok: false, message: "A ação não passou pela validação do servidor." };
   }
   const startedAt = Date.now();
   if (action.requiresConfirmation) {
-    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, eventType: "action_confirmed", actionId: action.id, actionType: action.type, status: "pending", summary: action.summary });
+    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, traceId, eventType: "action_confirmed", actionId: action.id, actionType: action.type, status: "pending", summary: action.summary });
   }
   try {
     if (action.type === "navigate") {
       const result = { ok: true as const, message: `Ação pronta: ${action.route}.` };
-      await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, eventType: "action_succeeded", actionId: action.id, actionType: action.type, status: "succeeded", summary: action.summary, durationMs: Date.now() - startedAt, metadata: { route: action.route } });
+      await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, traceId, eventType: "action_succeeded", actionId: action.id, actionType: action.type, status: "succeeded", summary: action.summary, durationMs: Date.now() - startedAt, metadata: { route: action.route } });
       return result;
     }
     if (action.type === "create_agent") {
       await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
       const created = await createAgent(sql, userId, { workspaceId: input.workspaceId, name: action.name, agentType: action.agentType, persona: action.persona, welcomeMessage: action.welcomeMessage, systemPrompt: action.systemPrompt });
       const result = { ok: true as const, message: `Agente “${action.name}” criado como rascunho.`, resourceId: created.id };
-      await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, eventType: "action_succeeded", actionId: action.id, actionType: action.type, status: "succeeded", summary: action.summary, resourceType: "agent", resourceId: created.id, durationMs: Date.now() - startedAt });
+      await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, traceId, eventType: "action_succeeded", actionId: action.id, actionType: action.type, status: "succeeded", summary: action.summary, resourceType: "agent", resourceId: created.id, durationMs: Date.now() - startedAt });
       return result;
     }
     const permission: WorkspacePermission = "manage";
     await requireWorkspaceAccess(sql, userId, input.workspaceId, permission);
     const created = await provisionAvailabilitySlots(sql, userId, { workspaceId: input.workspaceId, slots: [{ startAt: action.startAt, endAt: action.endAt, resourceLabel: action.resourceLabel }] });
     const result = { ok: true as const, message: created > 0 ? "Horário adicionado à Agenda." : "Esse horário já estava cadastrado." };
-    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, eventType: "action_succeeded", actionId: action.id, actionType: action.type, status: "succeeded", summary: action.summary, resourceType: "calendar_slot", durationMs: Date.now() - startedAt, metadata: { created } });
+    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, traceId, eventType: "action_succeeded", actionId: action.id, actionType: action.type, status: "succeeded", summary: action.summary, resourceType: "calendar_slot", durationMs: Date.now() - startedAt, metadata: { created } });
     return result;
   } catch (error) {
-    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, eventType: "action_failed", actionId: action.id, actionType: action.type, status: "failed", summary: action.summary, durationMs: Date.now() - startedAt, errorCode: error instanceof Error ? error.name.slice(0, 120) : "ACTION_EXECUTION_FAILED" });
+    await recordNexoBotAudit(sql, { workspaceId: input.workspaceId, actorId: userId, traceId, eventType: "action_failed", actionId: action.id, actionType: action.type, status: "failed", summary: action.summary, durationMs: Date.now() - startedAt, errorCode: error instanceof Error ? error.name.slice(0, 120) : "ACTION_EXECUTION_FAILED" });
     throw error;
   }
 }

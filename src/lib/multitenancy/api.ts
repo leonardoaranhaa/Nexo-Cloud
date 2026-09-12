@@ -2,6 +2,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { randomUUID } from "node:crypto";
 import type { JsonObject } from "./server";
+import {
+  blueprintInput,
+  reviewToolProposalInput,
+  updateAgentInput,
+  workspaceBlueprintInput,
+  workspaceBlueprintListInput,
+  workspaceOnlyInput,
+  workspaceRunInput,
+} from "../validation/server-schemas";
 
 export const getWorkspaceContext = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -17,7 +26,7 @@ export const getWorkspaceContext = createServerFn({ method: "GET" })
 
 export const getWorkspaceReadiness = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string }) => input)
+  .validator((input) => workspaceOnlyInput.parse(input))
   .handler(async ({ context, data }) => {
     const workspaceId = data.workspaceId.trim();
     if (!workspaceId) throw new Error("workspaceId is required");
@@ -38,7 +47,7 @@ export const completeWorkspaceOnboarding = createServerFn({ method: "POST" })
 
 export const listWorkspaceAgents = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string }) => input)
+  .validator((input) => workspaceOnlyInput.parse(input))
   .handler(async ({ context, data }) => {
     const workspaceId = data.workspaceId.trim();
     if (!workspaceId) throw new Error("workspaceId is required");
@@ -67,16 +76,7 @@ export const createWorkspaceAgent = createServerFn({ method: "POST" })
 
 export const upsertWorkspaceAgentDevelopmentBlueprint = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: {
-    workspaceId: string;
-    agentId: string;
-    agentType: string;
-    objectives: string[];
-    capabilities: string[];
-    guardrails: string[];
-    testScenarios: string[];
-    sourceBrief?: string;
-  }) => input)
+  .validator((input) => blueprintInput.parse(input))
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { upsertAgentDevelopmentBlueprint } = await import("./server");
@@ -85,7 +85,7 @@ export const upsertWorkspaceAgentDevelopmentBlueprint = createServerFn({ method:
 
 export const runWorkspaceAgentBlueprintScenarios = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string; agentId: string; blueprintId: string }) => input)
+  .validator((input) => workspaceBlueprintInput.parse(input))
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { runBlueprintScenarios } = await import("@/lib/agent-engineering/scenarios");
@@ -94,7 +94,7 @@ export const runWorkspaceAgentBlueprintScenarios = createServerFn({ method: "POS
 
 export const generateWorkspaceAgentToolProposals = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string; agentId: string; blueprintId: string }) => input)
+  .validator((input) => workspaceBlueprintInput.parse(input))
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { generateToolProposalsFromBlueprint } = await import("@/lib/agent-engineering/tools");
@@ -103,16 +103,25 @@ export const generateWorkspaceAgentToolProposals = createServerFn({ method: "POS
 
 export const listWorkspaceAgentToolProposals = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string; blueprintId: string }) => input)
+  .validator((input) => workspaceBlueprintListInput.parse(input))
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { listAgentToolProposals } = await import("@/lib/agent-engineering/tools");
     return listAgentToolProposals(await getSql(), context.userId, data);
   });
 
+export const reviewWorkspaceAgentToolProposal = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input) => reviewToolProposalInput.parse(input))
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { reviewAgentToolProposal } = await import("@/lib/agent-engineering/tools");
+    return reviewAgentToolProposal(await getSql(), context.userId, data);
+  });
+
 export const generateWorkspaceAgentWorkflow = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string; agentId: string; blueprintId: string }) => input)
+  .validator((input) => workspaceBlueprintInput.parse(input))
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { generateWorkflowFromBlueprint } = await import("@/lib/agent-engineering/workflows");
@@ -121,22 +130,7 @@ export const generateWorkspaceAgentWorkflow = createServerFn({ method: "POST" })
 
 export const updateWorkspaceAgent = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: {
-    id: string;
-    workspaceId: string;
-    name: string;
-    persona: string;
-    welcomeMessage: string;
-    systemPrompt: string;
-    language: "pt" | "en" | "es";
-    status: "draft" | "live" | "paused";
-    temperature: number;
-    maxTokens: number;
-    memoryWindow: number;
-    knowledge: JsonObject;
-    tools: JsonObject;
-    metadata?: JsonObject;
-  }) => input)
+  .validator((input) => updateAgentInput.parse(input))
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { updateAgent } = await import("./server");
@@ -455,7 +449,7 @@ export const publishWorkspaceWorkflow = createServerFn({ method: "POST" })
 
 export const runWorkspaceWorkflow = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string; workflowId: string; input?: JsonObject; idempotencyKey?: string }) => input)
+  .validator((input) => workspaceRunInput.parse(input))
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { runWorkflowManually } = await import("../workflows/server");

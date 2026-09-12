@@ -252,7 +252,7 @@ async function stageAgentConfig(sql: Sql, userId: string, workspaceId: string, a
   );
 }
 
-async function copyAgentToolPermissions(sql: Sql, workspaceId: string, sourceVersionId: string, targetVersionId: string): Promise<void> {
+async function _copyAgentToolPermissions(sql: Sql, workspaceId: string, sourceVersionId: string, targetVersionId: string): Promise<void> {
   await sql.query(
     `insert into agent_tool_permissions (id, workspace_id, agent_version_id, tool_id, enabled, require_approval, allowed_scopes)
      select $1 || ':' || row_number() over (), $2, $3, tool_id, enabled, require_approval, allowed_scopes

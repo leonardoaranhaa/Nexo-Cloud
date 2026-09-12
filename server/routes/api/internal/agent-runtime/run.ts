@@ -4,6 +4,7 @@ import { defineEventHandler } from "h3";
 import { getSql } from "../../../../../src/lib/db";
 import { awsSecretsManagerProvider, unavailableSecretProvider } from "../../../../../src/lib/connectors/secrets";
 import { runNextAgentRuntimeJob } from "../../../../../src/lib/agent-runtime/runtime";
+import { reconcilePendingDeliveries } from "../../../../../src/lib/messaging/router";
 
 function authorized(request: Request, expected: string): boolean {
   const received = request.headers.get("authorization") ?? "";
@@ -35,6 +36,7 @@ export default defineEventHandler(async (event) => {
     const provider = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
       ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
       : unavailableSecretProvider();
+    const reconciledDeliveries = await reconcilePendingDeliveries(sql, 100);
     const batch = Math.min(Math.max(Number(process.env.NEXO_RUNTIME_MAX_BATCH ?? 5), 1), 10);
     const results = [];
     for (let index = 0; index < batch; index += 1) {
@@ -42,7 +44,7 @@ export default defineEventHandler(async (event) => {
       results.push(result);
       if (result.status === "idle") break;
     }
-    return json({ ok: true, results });
+    return json({ ok: true, reconciledDeliveries, results });
   } catch {
     return json({ ok: false, error: "RUNTIME_WORKER_FAILED" }, 500);
   }

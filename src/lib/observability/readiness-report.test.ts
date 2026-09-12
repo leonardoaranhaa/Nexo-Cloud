@@ -9,14 +9,14 @@ function sqlFixture(): Sql {
     if (text.includes("from workspaces w")) return [{ organization_id: "org-1", workspace_role: "workspace_admin", organization_role: "owner" }] as T[];
     if (text.includes("from connections")) return [{ provider: "meta", secret_ref: "nexo/ws-1/meta/api_key", health_status: "healthy", config: { phoneNumberId: "phone-1", graphVersion: "v26.0" } }] as T[];
     if (text.includes("from agent_runtime_jobs")) return [{ executions_today: 3, failed_today: 0, queued: 1 }] as T[];
-    if (text.includes("from agent_runtime_quota_policies")) return [{ workspace_daily_limit: 10, executions: 3 }] as T[];
+    if (text.includes("from agent_runtime_quota_policies")) return [{ workspace_daily_limit: 10, executions: 3, enabled: true }] as T[];
     if (text.includes("from agent_runtime_execution_logs")) return [{ executions_last_24h: 3, failures_last_24h: 0, last_execution_at: "2026-09-11T18:00:00.000Z" }] as T[];
     throw new Error(`Unexpected query: ${text}`);
   }) as Sql;
   sql.query = async <T = Record<string, unknown>>(text: string) => {
     if (text.includes("from connections")) return [{ provider: "meta", secret_ref: "nexo/ws-1/meta/api_key", health_status: "healthy", config: { phoneNumberId: "phone-1", graphVersion: "v26.0" } }] as T[];
     if (text.includes("from agent_runtime_jobs")) return [{ executions_today: 3, failed_today: 0, queued: 1 }] as T[];
-    if (text.includes("from agent_runtime_quota_policies")) return [{ workspace_daily_limit: 10, executions: 3 }] as T[];
+    if (text.includes("from agent_runtime_quota_policies")) return [{ workspace_daily_limit: 10, executions: 3, enabled: true }] as T[];
     if (text.includes("from agent_runtime_execution_logs")) return [{ executions_last_24h: 3, failures_last_24h: 0, last_execution_at: "2026-09-11T18:00:00.000Z" }] as T[];
     throw new Error(`Unexpected query: ${text}`);
   };

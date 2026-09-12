@@ -1,7 +1,6 @@
 import { defineEventHandler, getRouterParam, readRawBody } from "h3";
 import { getSql } from "../../../../../src/lib/db";
 import { awsSecretsManagerProvider, unavailableSecretProvider } from "../../../../../src/lib/connectors/secrets";
-import { runNextAgentRuntimeJob } from "../../../../../src/lib/agent-runtime/runtime";
 import { handleMetaWebhook, WebhookRequestError } from "../../../../../src/lib/webhooks/meta-handler";
 
 function json(body: Record<string, unknown>, status = 200): Response {
@@ -50,19 +49,13 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    let processing: { status: string; reason?: string } | undefined;
-    if (outcome.jobId) {
-      const result = await runNextAgentRuntimeJob(sql, `meta-webhook:${connectionId}`, undefined, provider);
-      processing = { status: result.status, ...(result.reason ? { reason: result.reason } : {}) };
-    }
-
     return json({
       ok: true,
       accepted: outcome.accepted,
       kind: outcome.kind,
       duplicate: outcome.duplicate ?? false,
-      ...(processing ? { processing } : {}),
-    });
+      queued: Boolean(outcome.jobId),
+    }, outcome.jobId ? 202 : 200);
   } catch (error) {
     if (error instanceof WebhookRequestError) return json({ ok: false, error: error.message }, error.status);
     return json({ ok: false, error: "WEBHOOK_PROCESSING_FAILED" }, 500);

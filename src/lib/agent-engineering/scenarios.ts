@@ -4,7 +4,7 @@ import type { Agent, Faq } from "../types.ts";
 import { requireWorkspaceAccess, type JsonObject } from "../multitenancy/server.ts";
 import { retrieveKnowledge, type KnowledgeEvidence } from "../knowledge/server.ts";
 import { evaluateAgentRuntimeTurn } from "../agent-runtime/runtime.ts";
-import { listPublishedAgentTools, type RuntimeAuthorizedTool } from "../connectors/tools-server.ts";
+import { listAgentToolsForVersion, type RuntimeAuthorizedTool } from "../connectors/tools-server.ts";
 import { indexLearningEvent } from "../learning/cases.ts";
 import { persistLearningEvaluation } from "../learning/evaluation.ts";
 import { recordLearningEvent } from "../learning/server.ts";
@@ -278,14 +278,25 @@ export async function runBlueprintScenarios(
   const blueprint = await loadBlueprint(sql, input);
   const definedScenarios = scenarios(blueprint.test_scenarios);
   const agent = evaluationAgent(blueprint);
-  const authorizedTools: RuntimeAuthorizedTool[] = await listPublishedAgentTools(sql, input.workspaceId, input.agentId);
+  const authorizedTools: RuntimeAuthorizedTool[] = blueprint.version_id
+    ? await listAgentToolsForVersion(sql, input.workspaceId, blueprint.version_id)
+    : [];
+  const agentVersionSnapshot = object(blueprint.version_config) as JsonObject;
+  const toolsSnapshot = authorizedTools.map((tool) => ({
+    id: tool.id,
+    key: tool.key,
+    riskLevel: tool.riskLevel,
+    requireApproval: tool.requireApproval,
+    inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema,
+  }));
   const runId = randomUUID();
   const startedAt = Date.now();
   await sql.query(
     `insert into agent_blueprint_evaluation_runs
-      (id, workspace_id, agent_id, blueprint_id, agent_version_id, scenario_count, created_by)
-     values ($1,$2,$3,$4,$5,$6,$7)`,
-    [runId, input.workspaceId, input.agentId, input.blueprintId, blueprint.version_id, definedScenarios.length, userId],
+      (id, workspace_id, agent_id, blueprint_id, agent_version_id, agent_version_snapshot, tools_snapshot, scenario_count, created_by)
+     values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)`,
+    [runId, input.workspaceId, input.agentId, input.blueprintId, blueprint.version_id, JSON.stringify(agentVersionSnapshot), JSON.stringify(toolsSnapshot), definedScenarios.length, userId],
   );
   const results: BlueprintScenarioResult[] = [];
   try {
@@ -303,6 +314,10 @@ export async function runBlueprintScenarios(
         history: [],
         ragEvidence,
         authorizedTools,
+        evaluationContext: {
+          ...(scenario.input.channel ? { channel: scenario.input.channel } : {}),
+          ...scenario.input.context,
+        },
       });
       const reply = execution.reply ?? "";
       const toolsCalled = (execution.toolCalls ?? []).map((call) => call.name).filter(Boolean);

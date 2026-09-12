@@ -28,7 +28,7 @@ export type WorkspaceReadinessReport = {
 
 type ConnectionRow = { health_status: string | null; secret_ref: string | null; provider: string; config: Record<string, unknown> | null };
 type RuntimeRow = { executions_today: string | number; failed_today: string | number; queued: string | number };
-type QuotaRow = { workspace_daily_limit: string | number | null; executions: string | number | null };
+type QuotaRow = { workspace_daily_limit: string | number | null; executions: string | number | null; enabled: boolean };
 type ObservabilityRow = { executions_last_24h: string | number; failures_last_24h: string | number; last_execution_at: string | null };
 
 function number(value: string | number | null | undefined): number { return Number(value ?? 0); }
@@ -52,13 +52,13 @@ export async function getWorkspaceReadinessReport(
     [workspaceId],
   ))[0] ?? { executions_today: 0, failed_today: 0, queued: 0 };
   const quota = (await sql.query<QuotaRow>(
-    `select p.workspace_daily_limit, u.executions
+    `select p.workspace_daily_limit, p.enabled, u.executions
        from agent_runtime_quota_policies p
        left join agent_runtime_quota_workspace_usage u
          on u.workspace_id = p.workspace_id and u.period_start = current_date
       where p.workspace_id = $1 limit 1`,
     [workspaceId],
-  ))[0] ?? { workspace_daily_limit: null, executions: 0 };
+  ))[0] ?? { workspace_daily_limit: null, executions: 0, enabled: true };
   const observability = (await sql.query<ObservabilityRow>(
     `select
        count(*) as executions_last_24h,
@@ -89,12 +89,13 @@ export async function getWorkspaceReadinessReport(
   if (unhealthy > 0) blockers.push("UNHEALTHY_CONNECTION");
   if (notChecked > 0) blockers.push("HEALTHCHECK_REQUIRED");
   const limit = quota.workspace_daily_limit === null ? null : number(quota.workspace_daily_limit);
+  if (!quota.enabled) blockers.push("RUNTIME_QUOTA_DISABLED");
   if (limit !== null && number(quota.executions) >= limit) blockers.push("WORKSPACE_QUOTA_EXHAUSTED");
   if (number(runtime.failed_today) > 0) blockers.push("RUNTIME_FAILURES_TODAY");
 
   return {
     workspaceId,
-    status: blockers.some((code) => ["NO_CONNECTION", "CONNECTION_CONFIGURATION_REQUIRED", "UNHEALTHY_CONNECTION", "WORKSPACE_QUOTA_EXHAUSTED"].includes(code)) ? "blocked" : blockers.length ? "attention" : "ready",
+    status: blockers.some((code) => ["NO_CONNECTION", "CONNECTION_CONFIGURATION_REQUIRED", "UNHEALTHY_CONNECTION", "WORKSPACE_QUOTA_EXHAUSTED", "RUNTIME_QUOTA_DISABLED"].includes(code)) ? "blocked" : blockers.length ? "attention" : "ready",
     connections: { total: connections.length, ready, notChecked, unhealthy, needsConfiguration },
     runtime: { executionsToday: number(runtime.executions_today), failedToday: number(runtime.failed_today), queued: number(runtime.queued), workspaceDailyLimit: limit, workspaceDailyUsed: number(quota.executions) },
     observability: { executionsLast24h: number(observability.executions_last_24h), failuresLast24h: number(observability.failures_last_24h), lastExecutionAt: observability.last_execution_at },

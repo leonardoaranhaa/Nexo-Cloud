@@ -29,6 +29,15 @@ export class RuntimeQuotaExceededError extends Error {
   }
 }
 
+export class RuntimeQuotaDisabledError extends Error {
+  readonly code = "RUNTIME_QUOTA_DISABLED" as const;
+
+  constructor() {
+    super("Daily runtime execution quota is disabled for this workspace");
+    this.name = "RuntimeQuotaDisabledError";
+  }
+}
+
 function utcPeriodStart(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -50,15 +59,7 @@ export async function reserveRuntimeQuota(
     [job.workspace_id],
   );
   const policy = policyRows[0];
-  if (policy && !policy.enabled) {
-    return {
-      periodStart: utcPeriodStart(),
-      workspaceUsed: 0,
-      workspaceLimit: 0,
-      agentUsed: 0,
-      agentLimit: 0,
-    };
-  }
+  if (policy && !policy.enabled) throw new RuntimeQuotaDisabledError();
 
   const periodStart = utcPeriodStart();
   const workspaceLimit = positiveLimit(policy?.workspace_daily_limit, DEFAULT_WORKSPACE_DAILY_LIMIT);

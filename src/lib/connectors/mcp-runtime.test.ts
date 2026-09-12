@@ -5,6 +5,8 @@ import { McpRuntime } from "./mcp-runtime.ts";
 import { memorySecretProvider } from "./secrets.ts";
 
 test("MCP runtime initializes, lists and calls an allowlisted server tool", async () => {
+  const previousLocalFlag = process.env.NEXO_MCP_ALLOW_LOCAL_ENDPOINTS;
+  process.env.NEXO_MCP_ALLOW_LOCAL_ENDPOINTS = "true";
   const server = createServer(async (request, response) => {
     let body = "";
     for await (const chunk of request) body += chunk;
@@ -36,10 +38,17 @@ test("MCP runtime initializes, lists and calls an allowlisted server tool", asyn
   } finally {
     await runtime.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (previousLocalFlag === undefined) delete process.env.NEXO_MCP_ALLOW_LOCAL_ENDPOINTS;
+    else process.env.NEXO_MCP_ALLOW_LOCAL_ENDPOINTS = previousLocalFlag;
   }
 });
 
 test("MCP runtime rejects non-HTTPS remote endpoints", async () => {
   const runtime = new McpRuntime({ url: "http://remote.example/mcp", secretRef: "", workspaceId: "workspace", connectionId: "connection", getSecret: async () => "" }, memorySecretProvider(new Map()));
   await assert.rejects(() => runtime.listTools(), /MCP_URL_REQUIRES_HTTPS/);
+});
+
+test("MCP runtime rejects private endpoints without an explicit development opt-in", async () => {
+  const runtime = new McpRuntime({ url: "https://10.0.0.8/mcp", secretRef: "", workspaceId: "workspace", connectionId: "connection", getSecret: async () => "" }, memorySecretProvider(new Map()));
+  await assert.rejects(() => runtime.listTools(), /MCP_URL_PRIVATE_HOST/);
 });

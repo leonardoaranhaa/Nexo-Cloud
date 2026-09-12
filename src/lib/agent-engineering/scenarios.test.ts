@@ -31,6 +31,7 @@ async function fixture() {
     "0030_tool_execution_domain.sql",
     "0031_agent_development_blueprints.sql",
     "0043_agent_blueprint_evaluations.sql",
+    "0047_agent_blueprint_evaluation_snapshots.sql",
   ]) {
     await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   }
@@ -61,6 +62,10 @@ test("blueprint scenarios run through the deterministic decision pipeline withou
     assert.equal(run.scenarioCount, 3);
     assert.equal(run.passedCount, 2);
     assert.equal(run.failedCount, 1);
+    const snapshot = await pg.query<{ agent_version_id: string; agent_version_snapshot: { name?: string }; tools_snapshot: unknown[] }>("select agent_version_id, agent_version_snapshot, tools_snapshot from agent_blueprint_evaluation_runs where id = $1", [run.id]);
+    assert.equal(snapshot.rows[0]?.agent_version_id, "version");
+    assert.equal(snapshot.rows[0]?.agent_version_snapshot?.name, "Atendimento");
+    assert.deepEqual(snapshot.rows[0]?.tools_snapshot, []);
     const results = await pg.query<{ scenario_id: string; status: string }>("select scenario_id, status from agent_blueprint_evaluation_results where run_id = $1 order by scenario_id", [run.id]);
     assert.deepEqual(results.rows, [
       { scenario_id: "expected-failure", status: "failed" },

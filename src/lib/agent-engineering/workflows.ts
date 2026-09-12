@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
-import { requireWorkspaceAccess } from "../multitenancy/server.ts";
+import { requireWorkspaceAccess, type JsonObject } from "../multitenancy/server.ts";
 import { compileWorkflowDefinition } from "../workflows/compiler.ts";
 import { createWorkflow, saveWorkflowDefinition, type WorkflowDefinition, type WorkflowRecord } from "../workflows/server.ts";
 
@@ -16,8 +16,19 @@ type BlueprintRow = {
 };
 
 type ApprovedToolRow = {
+  tool_id: string;
   capability: string;
   tool_key: string;
+  name: string;
+  description: string;
+  input_schema: unknown;
+  output_schema: unknown;
+  risk_level: "read" | "write" | "destructive";
+  timeout_ms: number;
+  max_retries: number;
+  tool_version: number;
+  connector_definition_id: string | null;
+  provider: string | null;
   require_approval: boolean;
 };
 
@@ -46,6 +57,10 @@ function list(value: unknown, maxItems: number, maxLength: number): string[] {
 
 function bounded(value: string, max: number): string {
   return value.trim().slice(0, max);
+}
+
+function jsonObject(value: unknown): JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
 }
 
 function workflowPrompt(blueprint: BlueprintRow, objectives: string[]): string {
@@ -83,11 +98,15 @@ async function loadDraftAgentVersion(sql: Sql, workspaceId: string, agentId: str
 
 async function loadApprovedWorkflowTools(sql: Sql, workspaceId: string, blueprintId: string, agentVersionId: string): Promise<ApprovedToolRow[]> {
   return sql.query<ApprovedToolRow>(
-    `select p.capability, t.key as tool_key, (p.requires_approval or ap.require_approval) as require_approval
+    `select p.capability, t.id as tool_id, t.key as tool_key, t.name, t.description,
+            t.input_schema, t.output_schema, t.risk_level, t.timeout_ms, t.max_retries,
+            t.version as tool_version, t.connector_definition_id, d.provider,
+            (p.requires_approval or ap.require_approval) as require_approval
        from agent_tool_proposals p
        join tools t on t.id = p.tool_id
         and t.workspace_id = p.workspace_id
         and t.status = 'active'
+       left join connector_definitions d on d.id = t.connector_definition_id
        join agent_tool_permissions ap on ap.tool_id = t.id
         and ap.agent_version_id = $3
         and ap.workspace_id = $1
@@ -196,6 +215,20 @@ function buildDefinition(
       config: {
         agentId: blueprint.agent_id,
         toolKey: tool.tool_key,
+        toolSnapshot: {
+          id: tool.tool_id,
+          key: tool.tool_key,
+          version: tool.tool_version,
+          name: bounded(tool.name, 160),
+          description: bounded(tool.description, 1000),
+          inputSchema: jsonObject(tool.input_schema),
+          outputSchema: jsonObject(tool.output_schema),
+          riskLevel: tool.risk_level,
+          timeoutMs: tool.timeout_ms,
+          maxRetries: tool.max_retries,
+          connectorDefinitionId: tool.connector_definition_id,
+          provider: tool.provider,
+        },
         ...(connectionId ? { connectionId } : {}),
         ...(tool.require_approval ? { approvalNodeId: `approval-${index + 1}` } : {}),
         ...(tool.require_approval ? { approved: true } : {}),

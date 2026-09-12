@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "../db.ts";
 import type { AgentRuntimeJob } from "./queue.ts";
-import { reserveRuntimeQuota, RuntimeQuotaExceededError } from "./quota.ts";
+import { reserveRuntimeQuota, RuntimeQuotaDisabledError, RuntimeQuotaExceededError } from "./quota.ts";
 
 type QuotaJob = Pick<AgentRuntimeJob, "workspace_id" | "agent_id">;
 
@@ -51,5 +51,13 @@ test("quota usage is isolated by workspace", async () => {
     const rows = await pg.query<{ workspace_id: string; executions: number }>("select workspace_id, executions from agent_runtime_quota_workspace_usage order by workspace_id");
     assert.deepEqual(rows.rows.map((row) => row.workspace_id), ["ws-a", "ws-b"]);
     assert.deepEqual(rows.rows.map((row) => Number(row.executions)), [1, 1]);
+  } finally { await pg.close(); }
+});
+
+test("disabled quota blocks runtime reservation", async () => {
+  const { pg, sql } = await setup();
+  try {
+    await pg.query("insert into agent_runtime_quota_policies (workspace_id, workspace_daily_limit, agent_daily_limit, enabled) values ('ws-a', 10, 10, false)");
+    await assert.rejects(() => reserveRuntimeQuota(sql, { workspace_id: "ws-a", agent_id: "agent-a" }), (error: unknown) => error instanceof RuntimeQuotaDisabledError);
   } finally { await pg.close(); }
 });

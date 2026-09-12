@@ -30,7 +30,7 @@ async function fixture() {
   await pg.query("insert into workspace_memberships (workspace_id,user_id,role) values ('ws','builder','workspace_admin'), ('other','other-user','workspace_admin')");
   await pg.query("insert into agents (id,workspace_id,name,slug,status,system_prompt,created_by,updated_by) values ('agent','ws','Agent','agent','active','Seja objetivo.','builder','builder'), ('other-agent','other','Other','other-agent','active','Ajude.','other-user','other-user')");
   await pg.query("insert into agent_versions (id,agent_id,version_number,status,config,created_by) values ('agent-published','agent',1,'published','{}','builder'), ('agent-draft','agent',2,'draft','{}','builder'), ('other-published','other-agent',1,'published','{}','other-user')");
-  await pg.query("insert into connections (id,workspace_id,name,provider,status,secret_ref,config,created_by) values ('conn','ws','Evolution','evolution','connected','nexo/ws/conn/api_key',$1::jsonb,'builder')", [JSON.stringify({ baseUrl: "http://127.0.0.1:1", instance: "store" })]);
+  await pg.query("insert into connections (id,workspace_id,name,provider,status,secret_ref,config,health_status,last_healthcheck_at,created_by) values ('conn','ws','Evolution','evolution','connected','nexo/ws/conn/api_key',$1::jsonb,'healthy',current_timestamp,'builder')", [JSON.stringify({ baseUrl: "http://127.0.0.1:1", instance: "store" })]);
   await pg.query("insert into tools (id,workspace_id,key,name,description,input_schema,output_schema,risk_level,status,version) values ('tool-send','ws','evolution.send_text','Send text','Send text',$1::jsonb,$2::jsonb,'write','active',1)", [JSON.stringify({ type: "object", required: ["connectionId", "recipient", "text"] }), JSON.stringify({ type: "object" })]);
   return { pg, sql };
 }
@@ -42,6 +42,20 @@ function node(overrides: Record<string, unknown> = {}): WorkflowNode {
     config: {
       agentId: "agent",
       toolKey: "evolution.send_text",
+      toolSnapshot: {
+        id: "tool-send",
+        key: "evolution.send_text",
+        version: 1,
+        name: "Send text",
+        description: "Send text",
+        inputSchema: { type: "object", required: ["connectionId", "recipient", "text"] },
+        outputSchema: { type: "object" },
+        riskLevel: "write",
+        timeoutMs: 3000,
+        maxRetries: 0,
+        connectorDefinitionId: null,
+        provider: null,
+      },
       connectionId: "conn",
       recipient: "+5511999999999",
       text: "Olá",
@@ -180,6 +194,89 @@ test("Tool Gateway authorizes the exact published version after persisted approv
     assert.deepEqual(server.requests, ["/message/sendText/store"]);
     const execution = await pg.query<{ agent_version_id: string; status: string }>("select agent_version_id, status from tool_executions where run_id = $1", [run.id]);
     assert.deepEqual(execution.rows[0], { agent_version_id: "agent-published", status: "succeeded" });
+  } finally {
+    await pg.close();
+    await closeServer(server.server);
+  }
+});
+
+test("Tool Gateway reuses a succeeded external effect for the same workflow node", async () => {
+  const server = await localEvolutionServer();
+  const { pg, sql } = await fixture();
+  try {
+    await pg.query("update connections set config = $1::jsonb where id = 'conn'", [JSON.stringify({ baseUrl: server.baseUrl, instance: "store" })]);
+    await createWorkflow(sql, "published", "workflow-published");
+    await grantPermission(sql);
+    const run = await createWorkflowRun(sql, "workflow-published", "stable-run");
+    const first = await executeWorkflowTool(sql, node(), {}, run, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
+    const second = await executeWorkflowTool(sql, node(), {}, run, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
+    assert.equal(first.status, "sent");
+    assert.deepEqual(second, first);
+    assert.deepEqual(server.requests, ["/message/sendText/store"]);
+    assert.equal((await pg.query<{ count: number }>("select count(*)::int as count from tool_executions where workspace_id = 'ws'")).rows[0]?.count, 1);
+  } finally {
+    await pg.close();
+    await closeServer(server.server);
+  }
+});
+
+test("Tool Gateway blocks pending or unhealthchecked connections before external execution", async () => {
+  const server = await localEvolutionServer();
+  const { pg, sql } = await fixture();
+  try {
+    await pg.query("update connections set config = $1::jsonb, status = 'pending', health_status = 'unknown', last_healthcheck_at = null where id = 'conn'", [JSON.stringify({ baseUrl: server.baseUrl, instance: "store" })]);
+    await createWorkflow(sql, "published", "workflow-published");
+    await grantPermission(sql);
+    const run = await createWorkflowRun(sql, "workflow-published");
+    await assert.rejects(() => executeWorkflowTool(sql, node(), {}, run, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]]))), /TOOL_CONNECTION_NOT_HEALTHY/);
+    assert.deepEqual(server.requests, []);
+  } finally {
+    await pg.close();
+    await closeServer(server.server);
+  }
+});
+
+test("Tool Gateway rejects a tool node without a published snapshot", async () => {
+  const { pg, sql } = await fixture();
+  try {
+    await createWorkflow(sql, "published", "workflow-published");
+    await grantPermission(sql);
+    const run = await createWorkflowRun(sql, "workflow-published");
+    await assert.rejects(() => executeWorkflowTool(sql, node({ toolSnapshot: undefined }), {}, run), /WORKFLOW_TOOL_SNAPSHOT_REQUIRED/);
+  } finally {
+    await pg.close();
+  }
+});
+
+test("Tool Gateway recursively redacts nested credentials before audit persistence", async () => {
+  const server = await localEvolutionServer();
+  const { pg, sql } = await fixture();
+  try {
+    await pg.query("update connections set config = $1::jsonb where id = 'conn'", [JSON.stringify({ baseUrl: server.baseUrl, instance: "store" })]);
+    await createWorkflow(sql, "published", "workflow-published");
+    await grantPermission(sql);
+    const run = await createWorkflowRun(sql, "workflow-published", "redaction-run");
+    await executeWorkflowTool(sql, node(), { metadata: { apiKey: "nested-secret", safe: "kept" } }, run, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
+    const audit = (await pg.query<{ input_redacted: { metadata?: { apiKey?: string; safe?: string } } }>("select input_redacted from tool_executions where run_id = $1", [run.id])).rows[0]?.input_redacted;
+    assert.equal(audit?.metadata?.apiKey, "[redacted]");
+    assert.equal(audit?.metadata?.safe, "kept");
+  } finally {
+    await pg.close();
+    await closeServer(server.server);
+  }
+});
+
+test("Tool Gateway rejects adapter output that violates the published output schema", async () => {
+  const server = await localEvolutionServer();
+  const { pg, sql } = await fixture();
+  try {
+    await pg.query("update connections set config = $1::jsonb where id = 'conn'", [JSON.stringify({ baseUrl: server.baseUrl, instance: "store" })]);
+    await createWorkflow(sql, "published", "workflow-published");
+    await grantPermission(sql);
+    const run = await createWorkflowRun(sql, "workflow-published", "invalid-output-run");
+    await assert.rejects(() => executeWorkflowTool(sql, node({ toolSnapshot: { ...node().config?.toolSnapshot as Record<string, unknown>, outputSchema: { type: "object", required: ["missing"] } } }), {}, run, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]]))), /INVALID_ARGUMENTS/);
+    const audit = (await pg.query<{ status: string; error_code: string }>("select status, error_code from tool_executions where run_id = $1", [run.id])).rows[0];
+    assert.deepEqual(audit, { status: "failed", error_code: "INVALID_ARGUMENTS:$.missing:REQUIRED" });
   } finally {
     await pg.close();
     await closeServer(server.server);

@@ -52,6 +52,10 @@ test("B3 generates an idempotent compilable workflow draft without publishing or
     assert.deepEqual(first.materializedToolKeys, ["evolution.send_text"]);
     assert.equal(first.definition.nodes.find((node) => node.type === "tool")?.config?.agentId, "agent");
     assert.equal(first.definition.nodes.find((node) => node.type === "tool")?.config?.approvalNodeId, "approval-1");
+    const toolSnapshot = first.definition.nodes.find((node) => node.type === "tool")?.config?.toolSnapshot as Record<string, unknown> | undefined;
+    assert.equal(toolSnapshot?.id, "tool-ws-evolution");
+    assert.equal(toolSnapshot?.version, 1);
+    assert.equal(toolSnapshot?.riskLevel, "write");
     assert.deepEqual(first.pendingCapabilities, ["CRM e lead", "capacidade futura não suportada"]);
     assert.equal(first.publishedVersionPreserved, false);
     const runs = await pg.query<{ count: number }>("select count(*)::int as count from workflow_runs");

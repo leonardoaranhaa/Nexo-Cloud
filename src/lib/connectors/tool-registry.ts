@@ -18,6 +18,22 @@ export type RegisteredTool = {
   maxRetries: number;
   status: "active" | "disabled" | "review";
   version: number;
+  provider: string | null;
+};
+
+export type WorkflowToolSnapshot = {
+  id: string;
+  key: string;
+  version: number;
+  name: string;
+  description: string;
+  inputSchema: JsonObject;
+  outputSchema: JsonObject;
+  riskLevel: ToolRisk;
+  timeoutMs: number;
+  maxRetries: number;
+  connectorDefinitionId: string | null;
+  provider: string | null;
 };
 
 function object(value: unknown): JsonObject {
@@ -96,8 +112,8 @@ export async function resolveTool(sql: Sql, workspaceId: string, key: string): P
   const rows = await sql.query<{
     id: string; workspace_id: string | null; connector_definition_id: string | null; key: string; name: string;
     description: string; input_schema: unknown; output_schema: unknown; risk_level: ToolRisk; timeout_ms: number;
-    max_retries: number; status: RegisteredTool["status"]; version: number;
-  }>(`select t.id, t.workspace_id, t.connector_definition_id, t.key, t.name, t.description, t.input_schema, t.output_schema, t.risk_level, t.timeout_ms, t.max_retries, t.status, t.version
+    max_retries: number; status: RegisteredTool["status"]; version: number; provider: string | null;
+  }>(`select t.id, t.workspace_id, t.connector_definition_id, d.provider, t.key, t.name, t.description, t.input_schema, t.output_schema, t.risk_level, t.timeout_ms, t.max_retries, t.status, t.version
       from tools t
       left join connector_definitions d on d.id = t.connector_definition_id
       where (t.workspace_id = $1 or t.workspace_id is null)
@@ -120,12 +136,17 @@ export async function resolveTool(sql: Sql, workspaceId: string, key: string): P
     maxRetries: row.max_retries,
     status: row.status,
     version: row.version,
+    provider: row.provider,
   };
 }
 
 export async function assertConnectionInWorkspace(sql: Sql, workspaceId: string, connectionId: string): Promise<void> {
-  const rows = await sql.query<{ id: string }>(`select id from connections where id = $1 and workspace_id = $2 and deleted_at is null and status in ('connected','pending') limit 1`, [connectionId, workspaceId]);
-  if (!rows[0]) throw new Error("TOOL_CONNECTION_NOT_FOUND");
+  const rows = await sql.query<{ id: string }>(`select id
+      from connections
+     where id = $1 and workspace_id = $2 and deleted_at is null
+       and status = 'connected' and health_status = 'healthy' and last_healthcheck_at is not null
+     limit 1`, [connectionId, workspaceId]);
+  if (!rows[0]) throw new Error("TOOL_CONNECTION_NOT_HEALTHY");
 }
 
 export async function assertPublishedWorkflowRun(sql: Sql, workspaceId: string, workflowId: string, workflowVersionId: string): Promise<void> {
@@ -146,6 +167,23 @@ export async function assertPublishedWorkflowAgent(sql: Sql, workspaceId: string
        and node ->> 'type' = 'agent' and node -> 'config' ->> 'agentId' = $4
      limit 1`, [workspaceId, workflowVersionId, workflowId, agentId]);
   if (!rows[0]) throw new Error("WORKFLOW_AGENT_NOT_BOUND");
+}
+
+export async function assertPublishedWorkflowToolSnapshot(
+  sql: Sql,
+  input: { workspaceId: string; workflowId: string; workflowVersionId: string; nodeId: string; toolId: string; toolKey: string; toolVersion: number },
+): Promise<void> {
+  const rows = await sql.query<{ id: string }>(`select v.id
+      from workflow_versions v
+      join workflows w on w.id = v.workflow_id and w.workspace_id = $1 and w.deleted_at is null
+      cross join lateral jsonb_array_elements(v.definition -> 'nodes') node
+     where v.id = $2 and v.workflow_id = $3 and v.status = 'published'
+       and node ->> 'id' = $4 and node ->> 'type' = 'tool'
+       and node -> 'config' ->> 'toolKey' = $5
+       and node -> 'config' -> 'toolSnapshot' ->> 'id' = $6
+       and (node -> 'config' -> 'toolSnapshot' ->> 'version')::integer = $7
+     limit 1`, [input.workspaceId, input.workflowVersionId, input.workflowId, input.nodeId, input.toolKey, input.toolId, input.toolVersion]);
+  if (!rows[0]) throw new Error("WORKFLOW_TOOL_SNAPSHOT_INVALID");
 }
 
 export async function resolvePublishedAgentVersion(sql: Sql, workspaceId: string, agentId: string): Promise<string> {
@@ -194,4 +232,30 @@ export async function assertPublishedWorkflowApproval(
 
 export function executionIdempotencyKey(workspaceId: string, executionId: string, operation: string): string {
   return createHash("sha256").update(`${workspaceId}:${executionId}:${operation}`).digest("hex");
+}
+
+export function workflowToolIdempotencyKey(workspaceId: string, runId: string, nodeId: string, toolKey: string): string {
+  return createHash("sha256").update(`${workspaceId}:workflow:${runId}:${nodeId}:${toolKey}`).digest("hex");
+}
+
+export function workflowToolSnapshot(value: unknown): WorkflowToolSnapshot {
+  const snapshot = object(value);
+  const schema = (candidate: unknown): JsonObject => object(candidate);
+  if (typeof snapshot.id !== "string" || !snapshot.id || typeof snapshot.key !== "string" || !snapshot.key || typeof snapshot.version !== "number") {
+    throw new Error("WORKFLOW_TOOL_SNAPSHOT_REQUIRED");
+  }
+  return {
+    id: snapshot.id,
+    key: snapshot.key,
+    version: snapshot.version,
+    name: typeof snapshot.name === "string" ? snapshot.name : snapshot.key,
+    description: typeof snapshot.description === "string" ? snapshot.description : "",
+    inputSchema: schema(snapshot.inputSchema),
+    outputSchema: schema(snapshot.outputSchema),
+    riskLevel: snapshot.riskLevel === "destructive" || snapshot.riskLevel === "write" ? snapshot.riskLevel : "read",
+    timeoutMs: typeof snapshot.timeoutMs === "number" ? snapshot.timeoutMs : 10000,
+    maxRetries: typeof snapshot.maxRetries === "number" ? snapshot.maxRetries : 0,
+    connectorDefinitionId: typeof snapshot.connectorDefinitionId === "string" ? snapshot.connectorDefinitionId : null,
+    provider: typeof snapshot.provider === "string" ? snapshot.provider : null,
+  };
 }

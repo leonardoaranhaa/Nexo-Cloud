@@ -4,6 +4,7 @@ import { requireWorkspaceAccess, type JsonObject } from "../multitenancy/server.
 import { validateToolSchema, type ToolRisk } from "../connectors/tool-registry.ts";
 
 export type ToolProposalStatus = "draft" | "approved" | "rejected" | "archived";
+export type ToolProposalDecision = "approved" | "rejected";
 
 export type AgentToolProposal = {
   id: string;
@@ -230,4 +231,76 @@ export async function generateToolProposalsFromBlueprint(
     if (rows[0]) proposals.push(rows[0]);
   }
   return { blueprintId: blueprint.id, proposals, unsupportedCapabilities };
+}
+
+export async function reviewAgentToolProposal(
+  sql: Sql,
+  userId: string,
+  input: { workspaceId: string; proposalId: string; decision: ToolProposalDecision; reason?: string },
+): Promise<AgentToolProposal> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "publish");
+  const proposalRows = await sql.query<{ id: string; agent_id: string; tool_id: string; status: ToolProposalStatus }>(
+    `select id, agent_id, tool_id, status
+       from agent_tool_proposals
+      where id = $1 and workspace_id = $2
+      limit 1`,
+    [input.proposalId, input.workspaceId],
+  );
+  const proposal = proposalRows[0];
+  if (!proposal) throw new Error("TOOL_PROPOSAL_NOT_FOUND");
+  if (proposal.status !== "draft") throw new Error("TOOL_PROPOSAL_NOT_REVIEWABLE");
+
+  await sql.query("begin");
+  try {
+    await sql.query(
+      `insert into agent_tool_proposal_reviews (id, workspace_id, proposal_id, decision, reviewer_id, reason)
+       values ($1,$2,$3,$4,$5,$6)`,
+      [randomUUID(), input.workspaceId, input.proposalId, input.decision, userId, bounded(input.reason ?? "", 500)],
+    );
+    if (input.decision === "approved") {
+      const tool = await sql.query<{ id: string }>(
+        `update tools set status = 'active', updated_at = current_timestamp
+          where id = $1 and workspace_id = $2 and status = 'review'
+          returning id`,
+        [proposal.tool_id, input.workspaceId],
+      );
+      if (!tool[0]) throw new Error("TOOL_PROPOSAL_TOOL_NOT_REVIEWABLE");
+      const draft = await sql.query<{ id: string }>(
+        `select v.id
+           from agent_versions v
+           join agents a on a.id = v.agent_id and a.workspace_id = $2 and a.deleted_at is null
+          where v.agent_id = $1 and v.status = 'draft'
+          order by v.version_number desc
+          limit 1`,
+        [proposal.agent_id, input.workspaceId],
+      );
+      if (!draft[0]) throw new Error("AGENT_DRAFT_VERSION_NOT_FOUND");
+      await sql.query(
+        `insert into agent_tool_permissions (id, workspace_id, agent_version_id, tool_id, enabled, require_approval, allowed_scopes)
+         select $1, $2, $3, p.tool_id, true, p.requires_approval, '{}'::jsonb
+           from agent_tool_proposals p
+          where p.id = $4 and p.workspace_id = $2
+         on conflict (agent_version_id, tool_id) do update set
+           workspace_id = excluded.workspace_id,
+           enabled = true,
+           require_approval = excluded.require_approval`,
+        [randomUUID(), input.workspaceId, draft[0].id, input.proposalId],
+      );
+    }
+    await sql.query(
+      `update agent_tool_proposals
+          set status = $1, reviewed_by = $2, reviewed_at = current_timestamp, updated_at = current_timestamp
+        where id = $3 and workspace_id = $4`,
+      [input.decision, userId, input.proposalId, input.workspaceId],
+    );
+    await sql.query("commit");
+  } catch (error) {
+    await sql.query("rollback");
+    throw error;
+  }
+
+  const reviewed = await listAgentToolProposals(sql, userId, { workspaceId: input.workspaceId, blueprintId: (await sql.query<{ blueprint_id: string }>(`select blueprint_id from agent_tool_proposals where id = $1 and workspace_id = $2`, [input.proposalId, input.workspaceId]))[0]?.blueprint_id ?? "" });
+  const result = reviewed.find((item) => item.id === input.proposalId);
+  if (!result) throw new Error("TOOL_PROPOSAL_REVIEW_FAILED");
+  return result;
 }

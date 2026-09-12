@@ -16,6 +16,7 @@ export type NexoBotAuditEvent = {
   id: string;
   workspaceId: string;
   actorId: string;
+  traceId: string | null;
   eventType: NexoBotAuditEventType;
   actionId: string | null;
   actionType: string | null;
@@ -94,6 +95,7 @@ export async function recordNexoBotAudit(
   input: {
     workspaceId: string;
     actorId: string;
+    traceId?: string | null;
     eventType: NexoBotAuditEventType;
     actionId?: string | null;
     actionType?: string | null;
@@ -111,12 +113,13 @@ export async function recordNexoBotAudit(
   try {
     await sql.query(
       `insert into nexo_bot_audit_events
-        (id, workspace_id, actor_id, event_type, action_id, action_type, status, summary, resource_type, resource_id, duration_ms, input_chars, output_chars, error_code, metadata)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb)`,
+        (id, workspace_id, actor_id, trace_id, event_type, action_id, action_type, status, summary, resource_type, resource_id, duration_ms, input_chars, output_chars, error_code, metadata)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)`,
       [
         randomUUID(),
         input.workspaceId,
         input.actorId,
+        boundedText(input.traceId, 120),
         input.eventType,
         boundedText(input.actionId, 160),
         boundedText(input.actionType, 80),
@@ -163,7 +166,7 @@ export async function listNexoBotAuditEvents(sql: Sql, userId: string, input: Ne
   const limit = Math.min(Math.max(Math.floor(input.limit ?? 100), 1), 200);
   params.push(limit);
   const rows = await sql.query<AuditRow>(
-    `select id, workspace_id as "workspaceId", actor_id as "actorId", event_type as "eventType", action_id as "actionId", action_type as "actionType", status, summary, resource_type as "resourceType", resource_id as "resourceId", duration_ms as "durationMs", input_chars as "inputChars", output_chars as "outputChars", error_code as "errorCode", metadata, created_at as "createdAt"
+    `select id, workspace_id as "workspaceId", actor_id as "actorId", trace_id as "traceId", event_type as "eventType", action_id as "actionId", action_type as "actionType", status, summary, resource_type as "resourceType", resource_id as "resourceId", duration_ms as "durationMs", input_chars as "inputChars", output_chars as "outputChars", error_code as "errorCode", metadata, created_at as "createdAt"
      from nexo_bot_audit_events where ${clauses.join(" and ")} order by created_at desc limit $${params.length}`,
     params,
   );

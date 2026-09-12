@@ -2,7 +2,7 @@
 
 **Status do documento:** fonte de verdade operacional do repositório.
 
-**Última consolidação:** 2026-09-12.
+**Última consolidação:** 2026-09-12 — hardening pré-B4 concluído.
 
 **Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar. A partir da próxima execução da B4, também deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` conforme `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`.
 
@@ -147,11 +147,11 @@ Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, 
 
 ### 5.5 Tool Registry, conectores e MCP
 
-**Estado: governança e execução multi-round do núcleo nativo implementadas; primeiro hardening do Tool Gateway concluído; demais endurecimentos operacionais pendentes.**
+**Estado: governança, execução multi-round e hardening pré-B4 concluídos para o núcleo local/preview.**
 
-Existem catálogo, schemas, risco, permissões por versão publicada, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência do runtime nativo, auditoria e integração de tool calling no runtime. O primeiro hardening pré-B4 agora exige workflow publicado, agente publicado, permissão ativa da tool na versão publicada e aprovação persistida para escritas aprovadas; a decisão ocorre antes do adapter e permanece workspace-scoped.
+Existem catálogo, schemas, risco, permissões por versão publicada, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência do runtime nativo, auditoria e integração de tool calling no runtime. O hardening pré-B4 agora exige workflow publicado, agente publicado, permissão ativa da tool na versão publicada, snapshot imutável de tool/version/schema/adapter, conexão saudável e aprovação persistida quando requerida; também aplica output schema, redaction recursiva, idempotência estável e vínculo workspace-scoped antes do adapter.
 
-A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo com protocolo estruturado: o primeiro round recebe as ferramentas publicadas, o servidor executa chamadas autorizadas, e o segundo round recebe a mensagem assistant com `tool_calls` e resultados `tool`, sem novas ferramentas disponíveis. Cada resultado retorna estado sanitizado de sucesso, aprovação, falha ou bloqueio; retries reutilizam a execução idempotente; falhas do segundo round preservam a resposta inicial segura. CRM, handoff, follow-up e agenda possuem registros nativos no Tool Registry, incluindo `calendar.book_slot`, contratos de entrada/saída versionados e validação dos resultados antes do retorno ao modelo. Ainda faltam adapters externos, circuit breaker, quota/rate limit de tokens/custo e tracing completo.
+A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo com protocolo estruturado: o primeiro round recebe as ferramentas publicadas, o servidor executa chamadas autorizadas, e o segundo round recebe a mensagem assistant com `tool_calls` e resultados `tool`, sem novas ferramentas disponíveis. Cada resultado retorna estado sanitizado de sucesso, aprovação, falha ou bloqueio; retries reutilizam a execução idempotente; falhas do segundo round preservam a resposta inicial segura. CRM, handoff, follow-up e agenda possuem registros nativos no Tool Registry, incluindo `calendar.book_slot`, contratos de entrada/saída versionados e validação dos resultados antes do retorno ao modelo. O hardening também cobre output schema, redaction recursiva, idempotência estável, conexão saudável, reconciliação de delivery e bloqueio de hosts privados no MCP; ainda faltam adapters externos de produção, circuit breaker, quota/rate limit de tokens/custo e tracing distribuído externo.
 
 ### 5.6 Workflows e automação
 
@@ -201,7 +201,7 @@ As avaliações B1, a geração B2 e a geração B3 não criam jobs de produçã
 
 O Nexo Bot está disponível na Home como assistente contextual. Ele consulta o Claude server-side com contexto mínimo do workspace, responde em linguagem natural e pode propor navegação, criação de agente ou provisionamento de horário. Escritas exigem confirmação explícita e passam por nova autorização server-side antes da execução. A rota `/nexo-bot/audit` registra consultas, propostas, confirmações, sucessos e falhas com sanitização, filtros por workspace e timeline operacional.
 
-Ainda faltam memória persistente do assistente, streaming, quotas próprias, mais ações com políticas de aprovação, correlação de `trace_id`, retenção configurável e integração com o Learning RAG. Publicação, exclusão, credenciais, permissões, billing e chamadas externas permanecem bloqueados nesta fase.
+Ainda faltam memória persistente do assistente, streaming, quotas próprias, mais ações com políticas de aprovação, retenção configurável e integração com o Learning RAG. Eventos de chat e ações agora possuem `trace_id` correlacionável. Publicação, exclusão, credenciais, permissões, billing e chamadas externas permanecem bloqueados nesta fase.
 
 ### 5.12 AWS, billing e produção
 
@@ -213,7 +213,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0045_agent_blueprint_workflows.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria do Nexo Bot, workflows de erro, produtos próprios do Nexo, propostas governadas de tools e vínculos de workflows gerados.
+O repositório possui migrations até `0049_nexo_bot_audit_trace.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria correlacionável do Nexo Bot, workflows de erro, produtos próprios do Nexo, propostas governadas de tools, vínculos de workflows gerados, snapshots de avaliação e integridade multi-tenant em banco.
 
 As rotas principais são:
 
@@ -233,7 +233,7 @@ As rotas principais são:
 /marketplace/installed/:installationId
 ```
 
-A validação técnica consolidada inclui typecheck, lint sem erros, build, preview local e suíte automatizada com **165 testes aprovados e 0 falhas** no último ciclo validado. O lint ainda emite sete warnings preexistentes fora desta fatia.
+A validação técnica consolidada inclui typecheck, lint sem erros e sem warnings, build, preview local, `check:auth` aprovado com o dev server oficial e suíte automatizada com **180 testes aprovados e 0 falhas**. A matriz Playwright desktop/mobile validou as rotas críticas sem erros de console/page ou overflow reportado pelo gate. O smoke não substitui testes autenticados nem validação de canal real.
 
 Commit de referência desta consolidação de código:
 
@@ -343,13 +343,13 @@ A validação real de Meta/Evolution permanece registrada como pendência operac
 
 ### 8.2 Gate de refatoração identificado pela auditoria
 
-**Status: obrigatório antes da B4; ainda não implementado.**
+**Status: concluído em 2026-09-12; B4 liberada para a próxima sessão.**
 
-A varredura completa com as fontes recomendadas confirmou necessidade de hardening compartilhado antes do Evaluation Harness. O primeiro item foi concluído: o Tool Gateway de workflows não aceita mais `node.config.approved` como autoridade; exige workflow publicado, agente publicado, permissão ativa da tool na versão publicada e aprovação persistida quando requerida, antes do adapter. A execução grava `agent_id`, `agent_version_id`, `approval_id` e `approved_by`. Permanecem pendentes idempotência externa estável, congelamento de tool/version no snapshot, output schema/redaction recursiva, bloqueio de conexões não saudáveis e convergência com o dispatcher nativo.
+A varredura completa com as fontes recomendadas foi convertida em fatias verticais e resolvida antes da B4. O Tool Gateway exige workflow/agente publicados, permissão ativa da tool, aprovação persistida quando requerida, snapshot imutável de tool/version/schema/adapter, conexão saudável, output schema, redaction recursiva e idempotência estável antes do adapter. A execução grava `agent_id`, `agent_version_id`, `approval_id`, `approved_by`, `trace_id` e provider request id quando disponível.
 
-Também foram confirmados: B1 avalia configuração draft/publicada com tools publicadas sem snapshot imutável conjunto; validators server-side ainda são identidade TypeScript sem validação runtime uniforme; o store frontend persiste inbox/events sem escopo de workspace; o wizard não persiste o `connectionId` selecionado no vínculo backend; o lint falha em duas regex do Evolution; e a matriz Playwright mostrou overflow mobile em `/agents`, `/connections` e `/create`.
+Também foram resolvidos: B1 agora seleciona versão/contexto e persiste snapshots; server functions críticas usam schemas Zod; o banco possui integrity guards multi-tenant; o store limpa estado contextual; o wizard persiste vínculo de conexão; duplicação e runs usam ações server-side idempotentes; o lint está limpo; a matriz Playwright está integrada ao projeto; quota disabled bloqueia runtime; webhook Meta somente ingere/enfileira; delivery Meta é monotônico e reconciliável; MCP bloqueia hosts privados por padrão; e auditoria do Nexo Bot possui `trace_id`.
 
-Antes de iniciar B4, a próxima fatia deve criar testes de falha e corrigir, nesta ordem: (1) idempotência estável de efeitos externos; (2) congelamento de tool/version, output, redaction e readiness do Tool Gateway; (3) snapshots coerentes de B1; (4) isolamento/ações local-only do frontend e smoke Playwright integrado. O documento `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` contém a matriz completa de evidências; `INSTRUCAO-HARDENING-TOOL-GATEWAY-VERSAO-PUBLICADA.md` registra a execução concluída do item 1. Nenhuma sessão deve declarar a B4 iniciada enquanto os gates restantes estiverem pendentes.
+Os gates finais passaram: 180 testes, typecheck, lint sem erros/warnings, build, preview, smoke desktop/mobile e `check:auth` com o dev server oficial. A instrução `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` deve ser atualizada com esse resultado; a próxima sessão pode iniciar a B4, sem declarar conexão real Meta/Evolution, MCP real ou produção validados.
 
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
 
@@ -410,3 +410,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Descoberta de fontes externas de engenharia documentada em `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`. O comando raiz `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` passa a ser obrigatório a partir da próxima execução da B4, sem substituir os contratos internos de segurança, workspace e Tool Gateway. |
 | 2026-09-12 | Varredura completa aplicada às fontes recomendadas em cinco domínios. Typecheck, testes declarados e build passaram; lint falhou em duas regex Evolution; Playwright smoke validou 10 rotas sem erros de console/page, mas encontrou overflow mobile em `/agents`, `/connections` e `/create`. Confirmadas refatorações obrigatórias antes da B4 no Tool Gateway, idempotência, snapshots, validação runtime, estado contextual do frontend e gate de qualidade. Nenhum código de produto foi alterado. |
 | 2026-09-12 | Item 1 do hardening pré-B4 concluído: testes TDD e enforcement server-side de autorização por workflow publicado, agente publicado, permissão ativa na versão publicada e aprovação persistida para escritas. B3 passou a persistir `agentId`/`approvalNodeId` nos nós tool. Suíte passou com 165 testes, typecheck, lint sem erros, build e preview aprovados. Próxima fatia: idempotência estável de efeitos externos. |
+| 2026-09-12 | Hardening pré-B4 concluído: idempotência estável, snapshots imutáveis de tools e B1, output schema/redaction, readiness saudável, integridade multi-tenant, schemas runtime, ações persistentes do console, quota fail-closed, webhook Meta assíncrono, delivery monotônico/reconciliável, MCP com bloqueio de hosts privados e traceId do Nexo Bot. Migrations chegaram a `0049`; gates finais passaram com 180 testes, typecheck, lint sem warnings, build, preview, smoke desktop/mobile e `check:auth`. B4 está liberada para a próxima sessão; Meta/Evolution real continua postergado. |

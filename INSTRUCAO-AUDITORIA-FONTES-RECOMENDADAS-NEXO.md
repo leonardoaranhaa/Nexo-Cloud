@@ -1,6 +1,6 @@
 # Instrução de auditoria com fontes recomendadas — Nexo Cloud
 
-**Status:** auditoria em execução; documento metodológico da varredura completa iniciada em 2026-09-12.
+**Status:** auditoria concluída após resolução dos achados acionáveis; documento metodológico e registro de evidências da varredura iniciada em 2026-09-12.
 
 ## Objetivo
 
@@ -110,3 +110,21 @@ A validação Playwright executada foi smoke, não substitui testes de interaç�
 ### Limitações conhecidas
 
 Não houve conexão com PostgreSQL gerenciado, AWS Secrets Manager, host persistente, Meta real, Evolution real, MCP real ou worker de produção. RLS, egress, IAM, rotação de secrets, retenção, alertas e tracing externo permanecem não verificados. A auditoria não transforma fixtures ou preview em evidência de produção.
+
+## Resolução dos achados — 2026-09-12
+
+Os achados P0, P1, P2 e a correlação P3 acionável foram convertidos em fatias verticais e concluídos antes da B4. O Tool Gateway agora valida contexto publicado, permissão e aprovação server-side, congela tool/version/schema/adapter, bloqueia conexões não saudáveis, valida output, aplica redaction recursiva e usa idempotência estável. B1 persiste snapshots comparáveis; propostas B2 possuem revisão auditável; a integridade multi-tenant possui defesa em banco; schemas Zod protegem server functions críticas; o frontend limpa estado ao trocar workspace e as ações de duplicação, runs e vínculos são persistentes e idempotentes.
+
+Quota desativada agora bloqueia o runtime e aparece como blocker de readiness. O webhook Meta somente valida, persiste e enfileira, enquanto o worker interno processa; deliveries Meta não regridem de estado e deliveries `sending` expiradas são reconciliadas como `unknown`. O MCP Runtime bloqueia hosts privados por padrão, mantendo opt-in explícito somente para fixtures de desenvolvimento. Auditorias do Nexo Bot agora carregam `trace_id` para correlacionar chat, proposta, confirmação e resultado.
+
+| Gate final | Resultado | Evidência |
+|---|---|---|
+| Suíte oficial | **180 pass, 0 fail** | `npm test` |
+| TypeScript | **pass** | `npm run typecheck` |
+| Lint | **pass, 0 errors, 0 warnings** | `npm run lint` |
+| Build/migrations | **pass** | `npm run build`; PGlite fallback ativo, `DATABASE_URL` ausente no sandbox |
+| Auth invariant | **pass** | `npm run check:auth -- --dev-url http://127.0.0.1:8080` com `npm run dev` oficial |
+| Preview | **pass** | preview local reiniciado em `http://127.0.0.1:8081/` |
+| Browser smoke | **pass no gate** | desktop/mobile, rotas críticas sem console/page errors ou overflow reportado |
+
+Esta evidência continua sendo local/preview. Não há validação de produção, canal Meta/Evolution real, servidor MCP real, PostgreSQL gerenciado, AWS Secrets Manager, RLS, egress, IAM, rotação de secrets, retenção, alertas ou tracing externo. A B4 está liberada para a próxima sessão, que deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar a harness.

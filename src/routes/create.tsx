@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusDot } from "@/components/status-dot";
 import { generateAgent } from "@/lib/ai";
-import { createWorkspaceAgent, updateWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
+import { bindWorkspaceAgentConnection, createWorkspaceAgent, updateWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
 import { AGENT_TEMPLATES, type AgentTemplateId } from "@/lib/templates";
 import { useAgentChat } from "@/lib/use-agent-chat";
 import { useNexo } from "@/lib/store";
@@ -71,6 +71,7 @@ function CreateWizard() {
 
   async function persistBlueprint(input: {
     localAgentId?: string;
+    connectionId?: string | null;
     name: string;
     persona: string;
     welcomeMessage: string;
@@ -104,6 +105,9 @@ function CreateWizard() {
             tools: input.config.tools,
           },
         });
+      }
+      if (input.connectionId) {
+        await bindWorkspaceAgentConnection({ data: { agentId: created.id, workspaceId, connectionId: input.connectionId } });
       }
       if (input.localAgentId) {
         updateAgent(input.localAgentId, { id: created.id });
@@ -148,6 +152,7 @@ function CreateWizard() {
           });
           void persistBlueprint({
             localAgentId: id,
+            connectionId,
             name: t.title,
             persona: t.draft.persona,
             welcomeMessage: t.draft.welcomeMessage,
@@ -197,6 +202,7 @@ function CreateWizard() {
         });
         void persistBlueprint({
           localAgentId: id,
+          connectionId,
           name: res.name,
           persona: res.persona,
           welcomeMessage: res.welcomeMessage,
@@ -238,6 +244,7 @@ function CreateWizard() {
     });
     void persistBlueprint({
       localAgentId: id,
+      connectionId,
       name: t.title,
       persona: t.draft.persona,
       welcomeMessage: t.draft.welcomeMessage,

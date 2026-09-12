@@ -1,4 +1,5 @@
 import type { SecretProvider } from "./secrets.ts";
+import { isIP } from "node:net";
 
 type Json = Record<string, unknown>;
 type RpcResponse = { result?: Json; error?: { code?: number; message?: string } };
@@ -7,7 +8,14 @@ function object(value: unknown): Json { return value !== null && typeof value ==
 function endpoint(value: string): URL {
   let url: URL;
   try { url = new URL(value); } catch { throw new Error("MCP_URL_INVALID"); }
-  const local = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const local = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+  const privateIpv4 = isIP(hostname) === 4 && (() => {
+    const parts = hostname.split(".").map(Number);
+    return parts[0] === 0 || parts[0] === 10 || parts[0] === 127 || (parts[0] === 169 && parts[1] === 254) || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) || (parts[0] === 192 && parts[1] === 168);
+  })();
+  const privateIpv6 = isIP(hostname) === 6 && (hostname === "::1" || hostname.startsWith("fc") || hostname.startsWith("fd") || hostname.startsWith("fe8") || hostname.startsWith("fe9") || hostname.startsWith("fea") || hostname.startsWith("feb"));
+  if ((local || privateIpv4 || privateIpv6 || hostname.endsWith(".local") || hostname.endsWith(".internal")) && process.env.NEXO_MCP_ALLOW_LOCAL_ENDPOINTS !== "true") throw new Error("MCP_URL_PRIVATE_HOST");
   if (url.protocol !== "https:" && !local) throw new Error("MCP_URL_REQUIRES_HTTPS");
   return url;
 }

@@ -53,5 +53,12 @@ test("Meta webhook updates outbound delivery and message status", async () => {
   const message = await pg.query<{ status: string }>("select status from messages where id = 'message'");
   assert.equal(delivery.rows[0]?.status, "delivered");
   assert.equal(message.rows[0]?.status, "delivered");
+  const staleBody = JSON.stringify({ object: "whatsapp_business_account", entry: [{ changes: [{ value: { statuses: [{ id: "wamid.outbound", status: "sent" }] } }] }] });
+  await handleMetaWebhook(sql, new Request("https://nexo.test/api/webhooks/meta/meta", { method: "POST", headers: { "x-hub-signature-256": `sha256=${createHmac("sha256", "app-secret").update(staleBody).digest("hex")}` }, body: staleBody }), {
+    connectionId: "meta",
+    secretProvider: memorySecretProvider(new Map([["nexo/ws/meta/meta_app_secret", "app-secret"]])),
+  });
+  const afterStale = await pg.query<{ status: string }>("select status from message_deliveries where id = 'delivery'");
+  assert.equal(afterStale.rows[0]?.status, "delivered");
   await pg.close();
 });

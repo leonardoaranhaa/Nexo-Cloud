@@ -16,7 +16,7 @@ import { useNexo } from "@/lib/store";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { useState } from "react";
 import type { Agent, FlowNodeId } from "@/lib/types";
-import { archiveWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { archiveWorkspaceAgent, bindWorkspaceAgentConnection, createWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
@@ -86,11 +86,23 @@ function AgentStudioPage() {
             size="sm"
             variant="ghost"
             onClick={() => {
-              const nid = duplicateAgent(agent.id);
-              if (nid) {
-                toast("Cópia criada");
-                void navigate({ to: "/agents/$id", params: { id: nid }, search: { tab: "configuration" } });
-              }
+              void (async () => {
+                if (backendReady && workspaceId) {
+                  const copyName = `${agent.name} (cópia)`;
+                  const created = await createWorkspaceAgent({ data: { workspaceId, name: copyName, persona: agent.persona, welcomeMessage: agent.welcomeMessage, systemPrompt: agent.systemPrompt, agentType: agent.template } });
+                  await updateWorkspaceAgent({ data: { workspaceId, id: created.id, ...uiAgentToPersisted({ ...agent, id: created.id, name: copyName, status: "draft" }) } });
+                  if (agent.connectionId) await bindWorkspaceAgentConnection({ data: { workspaceId, agentId: created.id, connectionId: agent.connectionId } });
+                  await refresh(workspaceId);
+                  toast("Cópia criada");
+                  void navigate({ to: "/agents/$id", params: { id: created.id }, search: { tab: "configuration" } });
+                  return;
+                }
+                const nid = duplicateAgent(agent.id);
+                if (nid) {
+                  toast("Cópia criada");
+                  void navigate({ to: "/agents/$id", params: { id: nid }, search: { tab: "configuration" } });
+                }
+              })().catch(() => toast("Não foi possível duplicar o agente."));
             }}
           >
             <Copy className="size-3.5" />
