@@ -9,6 +9,7 @@ import {
   getMarketplaceInstallationUpdatePlan,
   getMarketplaceInstallationOperationalSummary,
   installMarketplaceProduct,
+  listMarketplaceProducts,
   listMarketplaceInstallationRevisions,
   listMarketplaceInstallations,
   rollbackMarketplaceInstallation,
@@ -30,8 +31,21 @@ async function fixture() {
     "0006_webhook_delivery_states.sql",
     "0007_agent_runtime_jobs.sql",
     "0009_agent_runtime_execution_logs.sql",
+    "0010_workflow_core.sql",
+    "0013_tool_gateway.sql",
     "0018_agent_marketplace.sql",
+    "0021_crm_lead_tool.sql",
+    "0022_lead_qualification_tool.sql",
+    "0023_product_qualification_policy.sql",
+    "0024_lead_assignment_tool.sql",
+    "0025_lead_follow_up_tool.sql",
+    "0030_tool_execution_domain.sql",
+    "0032_native_conversation_tools.sql",
+    "0033_calendar_availability.sql",
+    "0036_calendar_booking.sql",
     "0037_marketplace_installation_revisions.sql",
+    "0039_native_commercial_tool_contracts.sql",
+    "0042_nexo_agent_products.sql",
   ]) {
     await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   }
@@ -58,6 +72,41 @@ test("installation is idempotent and isolated to the authorized workspace", asyn
     const count = await pg.query<{ count: number }>("select count(*)::int as count from agent_installations");
     assert.equal(count.rows[0]?.count, 1);
     await assert.rejects(() => listMarketplaceInstallations(sql, "user", "other-workspace"), /WORKSPACE|permission/i);
+  } finally {
+    await pg.close();
+  }
+});
+
+test("catalog exposes Atendimento and Vendas with executable tool permissions", async () => {
+  const { pg, sql } = await fixture();
+  try {
+    const products = await listMarketplaceProducts(sql);
+    assert.deepEqual(products.map((product) => product.id), ["nexo-product-atendimento-leads", "nexo-product-vendas-conversao"]);
+    const sales = products.find((product) => product.id === "nexo-product-vendas-conversao");
+    assert.ok(sales);
+    const requiredTools = sales.manifest.requiredTools as string[];
+    assert.deepEqual(requiredTools, [
+      "lead.create_or_update",
+      "lead.update_qualification",
+      "lead.assign_owner",
+      "lead.create_follow_up",
+      "calendar.list_availability",
+      "calendar.book_slot",
+      "conversation.handoff",
+    ]);
+    assert.deepEqual(sales.manifest.supportedConnectors, ["meta", "evolution"]);
+
+    const installation = await installMarketplaceProduct(sql, "user", { workspaceId: "ws", productId: sales.id });
+    const permissions = await pg.query<{ key: string; require_approval: boolean }>(
+      `select t.key, p.require_approval
+         from agent_tool_permissions p
+         join tools t on t.id = p.tool_id
+        where p.workspace_id = 'ws' and p.agent_version_id = $1
+        order by t.key`,
+      [await pg.query<{ id: string }>("select id from agent_versions where agent_id = $1", [installation.agentId]).then((result) => result.rows[0]?.id)],
+    );
+    assert.deepEqual(permissions.rows.map((permission) => permission.key), [...requiredTools].sort());
+    assert.deepEqual(permissions.rows.filter((permission) => permission.require_approval).map((permission) => permission.key), ["calendar.book_slot", "lead.assign_owner", "lead.create_follow_up"]);
   } finally {
     await pg.close();
   }

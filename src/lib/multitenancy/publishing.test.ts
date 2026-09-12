@@ -19,6 +19,9 @@ async function fixture() {
     "0005_webhook_security.sql",
     "0006_webhook_delivery_states.sql",
     "0007_agent_runtime_jobs.sql",
+    "0010_workflow_core.sql",
+    "0013_tool_gateway.sql",
+    "0030_tool_execution_domain.sql",
     "0031_agent_development_blueprints.sql",
     "0018_agent_marketplace.sql",
     "0037_marketplace_installation_revisions.sql",
@@ -45,10 +48,13 @@ test("publishes immutable versions and rolls back through a new version", async 
     const first = await publishAgent(sql, "user", { workspaceId: "ws", agentId: "agent" });
     assert.equal(first.versionNumber, 1);
     assert.equal(first.status, "published");
+    await pg.query("insert into agent_tool_permissions (id,workspace_id,agent_version_id,tool_id,enabled,require_approval,allowed_scopes) values ('permission-first','ws',$1,'tool_evolution_send_text',true,true,'{}')", [first.id]);
 
     await pg.query("update agents set system_prompt = 'Segundo prompt.', updated_at = current_timestamp where id = 'agent'");
     const second = await publishAgent(sql, "user", { workspaceId: "ws", agentId: "agent" });
     assert.equal(second.versionNumber, 2);
+    const copied = await pg.query<{ enabled: boolean; require_approval: boolean }>("select enabled, require_approval from agent_tool_permissions where agent_version_id = $1", [second.id]);
+    assert.deepEqual(copied.rows[0], { enabled: true, require_approval: true });
 
     const rolledBack = await rollbackAgent(sql, "user", { workspaceId: "ws", agentId: "agent", versionId: first.id });
     assert.equal(rolledBack.versionNumber, 3);

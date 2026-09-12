@@ -148,6 +148,16 @@ function protectedFields(manifest: JsonObject): Set<string> {
   return new Set(Array.isArray(manifest.protectedComponents) ? manifest.protectedComponents.filter((value): value is string => typeof value === "string") : []);
 }
 
+function manifestStringList(manifest: JsonObject, key: string): string[] {
+  return Array.isArray(manifest[key])
+    ? manifest[key].filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    : [];
+}
+
+function manifestToolKeys(manifest: JsonObject): string[] {
+  return [...new Set(manifestStringList(manifest, "requiredTools"))];
+}
+
 function manifestDiff(currentManifest: JsonObject, nextManifest: JsonObject) {
   const ignored = new Set(["editableFields", "protectedComponents"]);
   const fields = new Set([...Object.keys(currentManifest), ...Object.keys(nextManifest)]);
@@ -242,6 +252,21 @@ async function stageAgentConfig(sql: Sql, userId: string, workspaceId: string, a
   );
 }
 
+async function copyAgentToolPermissions(sql: Sql, workspaceId: string, sourceVersionId: string, targetVersionId: string): Promise<void> {
+  await sql.query(
+    `insert into agent_tool_permissions (id, workspace_id, agent_version_id, tool_id, enabled, require_approval, allowed_scopes)
+     select $1 || ':' || row_number() over (), $2, $3, tool_id, enabled, require_approval, allowed_scopes
+       from agent_tool_permissions
+      where workspace_id = $2 and agent_version_id = $4
+     on conflict (agent_version_id, tool_id) do update set
+       enabled = excluded.enabled,
+       require_approval = excluded.require_approval,
+       allowed_scopes = excluded.allowed_scopes,
+       workspace_id = excluded.workspace_id`,
+    [randomUUID(), workspaceId, targetVersionId, sourceVersionId],
+  );
+}
+
 export async function listMarketplaceProducts(sql: Sql): Promise<MarketplaceProduct[]> {
   return sql.query<MarketplaceProduct>(`${productSelect} where p.status = 'published' order by p.name asc`);
 }
@@ -314,20 +339,68 @@ export async function installMarketplaceProduct(sql: Sql, userId: string, input:
   const agentId = randomUUID();
   const agentVersionId = randomUUID();
   const manifest = product.manifest;
+  const requiredToolKeys = manifestToolKeys(manifest);
+  const requiredTools = requiredToolKeys.length === 0
+    ? []
+    : await sql.query<{ id: string; key: string; risk_level: "read" | "write" | "destructive" }>(
+      `select id, key, risk_level
+         from tools
+        where workspace_id is null and status = 'active' and key = any($1::text[])`,
+      [requiredToolKeys],
+    );
+  const availableToolKeys = new Set(requiredTools.map((tool) => tool.key));
+  const missingToolKeys = requiredToolKeys.filter((key) => !availableToolKeys.has(key));
+  if (missingToolKeys.length > 0) throw new Error(`MARKETPLACE_REQUIRED_TOOLS_NOT_FOUND:${missingToolKeys.join(",")}`);
   const slug = `${product.slug}-${agentId.slice(0, 8)}`;
   await sql.query(
     `insert into agent_entitlements (id, workspace_id, product_id, offer_id, mode, created_by) values ($1, $2, $3, $4, $5, $6)`,
     [entitlementId, input.workspaceId, product.id, product.offerId, product.offerMode, userId],
   );
   await sql.query(
-    `insert into agents (id, workspace_id, name, slug, agent_type, language, persona, welcome_message, system_prompt, metadata, created_by, updated_by)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $11)`,
-    [agentId, input.workspaceId, stringValue(manifest.name, product.name), slug, stringValue(manifest.agentType, "support"), stringValue(manifest.language, "pt"), stringValue(manifest.persona), stringValue(manifest.welcomeMessage), stringValue(manifest.systemPrompt), JSON.stringify({ marketplaceProductId: product.id, marketplaceInstallationId: installationId }), userId],
+    `insert into agents (id, workspace_id, name, slug, agent_type, language, persona, welcome_message, system_prompt,
+                         model_provider, model_name, temperature, max_tokens, memory_window, knowledge, tools, metadata,
+                         created_by, updated_by)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16::jsonb, $17::jsonb, $18, $18)`,
+    [
+      agentId,
+      input.workspaceId,
+      stringValue(manifest.name, product.name),
+      slug,
+      stringValue(manifest.agentType, "support"),
+      stringValue(manifest.language, "pt"),
+      stringValue(manifest.persona),
+      stringValue(manifest.welcomeMessage),
+      stringValue(manifest.systemPrompt),
+      stringValue(manifest.modelProvider, "xai"),
+      stringValue(manifest.modelName, "grok-4.5"),
+      numberValue(manifest.temperature, 0.35),
+      numberValue(manifest.maxTokens, 420),
+      numberValue(manifest.memoryWindow, 12),
+      JSON.stringify(objectValue(manifest.knowledge)),
+      JSON.stringify({ requiredTools: requiredToolKeys, approvalRequiredTools: manifestStringList(manifest, "approvalRequiredTools") }),
+      JSON.stringify({ marketplaceProductId: product.id, marketplaceInstallationId: installationId }),
+      userId,
+    ],
   );
   await sql.query(
     `insert into agent_versions (id, agent_id, version_number, status, config, created_by) values ($1, $2, 1, 'draft', $3::jsonb, $4)`,
     [agentVersionId, agentId, JSON.stringify({ ...manifest, marketplaceProductId: product.id, marketplaceVersionId: product.versionId }), userId],
   );
+  if (requiredTools.length > 0) {
+    await sql.query(
+      `insert into agent_tool_permissions (id, workspace_id, agent_version_id, tool_id, enabled, require_approval, allowed_scopes)
+       select $1 || ':' || row_number() over ()::text, $2, $3, t.id, true,
+              t.key = any($5::text[]), '{}'::jsonb
+         from tools t
+        where t.workspace_id is null and t.status = 'active' and t.key = any($4::text[])
+       on conflict (agent_version_id, tool_id) do update set
+         enabled = excluded.enabled,
+         require_approval = excluded.require_approval,
+         allowed_scopes = excluded.allowed_scopes,
+         workspace_id = excluded.workspace_id`,
+      [randomUUID(), input.workspaceId, agentVersionId, requiredToolKeys, manifestStringList(manifest, "approvalRequiredTools")],
+    );
+  }
   await sql.query(
     `insert into agent_installations (id, workspace_id, product_id, version_id, entitlement_id, agent_id, customizations, created_by) values ($1, $2, $3, $4, $5, $6, '{}'::jsonb, $7)`,
     [installationId, input.workspaceId, product.id, product.versionId, entitlementId, agentId, userId],

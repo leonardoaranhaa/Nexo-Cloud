@@ -539,6 +539,33 @@ function agentVersionSelect() {
     from agent_versions av`;
 }
 
+async function copyAgentToolPermissions(sql: Sql, workspaceId: string, sourceVersionId: string, targetVersionId: string): Promise<void> {
+  await sql.query(
+    `insert into agent_tool_permissions (id, workspace_id, agent_version_id, tool_id, enabled, require_approval, allowed_scopes)
+     select $1 || ':' || row_number() over ()::text, $2, $3, tool_id, enabled, require_approval, allowed_scopes
+       from agent_tool_permissions
+      where workspace_id = $2 and agent_version_id = $4
+     on conflict (agent_version_id, tool_id) do update set
+       enabled = excluded.enabled,
+       require_approval = excluded.require_approval,
+       allowed_scopes = excluded.allowed_scopes,
+       workspace_id = excluded.workspace_id`,
+    [randomUUID(), workspaceId, targetVersionId, sourceVersionId],
+  );
+}
+
+async function copyLatestAgentToolPermissions(sql: Sql, workspaceId: string, agentId: string, targetVersionId: string): Promise<void> {
+  const previous = await sql.query<{ id: string }>(
+    `select id
+       from agent_versions
+      where agent_id = $1 and id <> $2 and status in ('draft', 'published')
+      order by version_number desc
+      limit 1`,
+    [agentId, targetVersionId],
+  );
+  if (previous[0]) await copyAgentToolPermissions(sql, workspaceId, previous[0].id, targetVersionId);
+}
+
 export async function publishAgent(
   sql: Sql,
   userId: string,
@@ -625,6 +652,7 @@ export async function publishAgent(
      values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
     [versionId, input.agentId, versionNumber, config, userId],
   );
+  await copyLatestAgentToolPermissions(sql, input.workspaceId, input.agentId, versionId);
   await sql.query(
     `update agent_versions
         set status = 'retired', retired_at = current_timestamp
@@ -711,6 +739,7 @@ async function publishAgentFromConfig(
      values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
     [versionId, input.agentId, versionNumber, JSON.stringify(config), userId],
   );
+  await copyLatestAgentToolPermissions(sql, input.workspaceId, input.agentId, versionId);
   await sql.query(
     `update agent_versions set status = 'retired', retired_at = current_timestamp
       where agent_id = $1 and status = 'published'`,
