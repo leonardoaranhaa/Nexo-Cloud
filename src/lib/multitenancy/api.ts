@@ -92,6 +92,24 @@ export const runWorkspaceAgentBlueprintScenarios = createServerFn({ method: "POS
     return runBlueprintScenarios(await getSql(), context.userId, data);
   });
 
+export const generateWorkspaceAgentToolProposals = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentId: string; blueprintId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { generateToolProposalsFromBlueprint } = await import("@/lib/agent-engineering/tools");
+    return generateToolProposalsFromBlueprint(await getSql(), context.userId, data);
+  });
+
+export const listWorkspaceAgentToolProposals = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; blueprintId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listAgentToolProposals } = await import("@/lib/agent-engineering/tools");
+    return listAgentToolProposals(await getSql(), context.userId, data);
+  });
+
 export const updateWorkspaceAgent = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: {

@@ -67,6 +67,27 @@ export function validateToolInput(value: unknown, schema: JsonObject, path = "$"
   if (Array.isArray(schema.enum) && !schema.enum.some((item) => Object.is(item, value))) fail(path, "ENUM");
 }
 
+const schemaTypes = new Set(["object", "array", "string", "number", "integer", "boolean"]);
+
+function validateSchemaNode(value: unknown, path: string, depth: number): JsonObject {
+  if (depth > 8 || value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`INVALID_TOOL_SCHEMA:${path}:OBJECT_REQUIRED`);
+  const schema = value as JsonObject;
+  if (typeof schema.type !== "string" || !schemaTypes.has(schema.type)) throw new Error(`INVALID_TOOL_SCHEMA:${path}.type:UNSUPPORTED`);
+  if (schema.type === "object") {
+    const properties = schema.properties === undefined ? {} : schema.properties;
+    if (properties === null || typeof properties !== "object" || Array.isArray(properties)) throw new Error(`INVALID_TOOL_SCHEMA:${path}.properties:OBJECT_REQUIRED`);
+    for (const [key, child] of Object.entries(properties as Record<string, unknown>)) validateSchemaNode(child, `${path}.properties.${key}`, depth + 1);
+    if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.some((item) => typeof item !== "string"))) throw new Error(`INVALID_TOOL_SCHEMA:${path}.required:STRING_LIST_REQUIRED`);
+  }
+  if (schema.type === "array" && schema.items !== undefined) validateSchemaNode(schema.items, `${path}.items`, depth + 1);
+  if (schema.enum !== undefined && (!Array.isArray(schema.enum) || schema.enum.length > 20)) throw new Error(`INVALID_TOOL_SCHEMA:${path}.enum:INVALID`);
+  return schema;
+}
+
+export function validateToolSchema(value: unknown): JsonObject {
+  return validateSchemaNode(value, "$", 0);
+}
+
 export function validateToolOutput(value: unknown, schema: JsonObject, path = "$", depth = 0): void {
   validateToolInput(value, schema, path, depth);
 }

@@ -140,6 +140,10 @@ Após conclusão, atualizar o plano mestre na seção 5.10 e neste arquivo marca
 
 ### Fatia B2 — Geração assistida de tools a partir do blueprint
 
+**Status: concluída em modo governado no local/preview.**
+
+Foram implementados o contrato persistente de propostas por workspace, mapeamento determinístico apenas para tools nativas confirmadas, validação estrutural dos schemas, derivação server-side de risco e aprovação, materialização de tools workspace-scoped em `review`, propostas `draft`, idempotência, endpoints autenticados de geração/listagem e testes de isolamento. Nenhuma proposta recebe permissão de agente ou execução automática.
+
 **Objetivo**  
 A partir das “capacidades” declaradas no blueprint, gerar propostas de tools (schemas) que passam pelo Tool Registry e Tool Gateway.
 
@@ -165,6 +169,8 @@ A partir das “capacidades” declaradas no blueprint, gerar propostas de tools
 **Riscos**
 - Alucinação de schemas → validar rigorosamente com Zod/JSON Schema antes de persistir
 - Ferramentas de alto risco geradas sem aprovação → forçar `requires_approval = true` para risco médio/alto
+
+**Próxima fatia:** B3 — gerar workflows versionados a partir do blueprint, sempre em `draft`, com compilação e publicação explícitas.
 
 ---
 

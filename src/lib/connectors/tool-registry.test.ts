@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executionIdempotencyKey, validateToolInput, validateToolOutput } from "./tool-registry.ts";
+import { executionIdempotencyKey, validateToolInput, validateToolOutput, validateToolSchema } from "./tool-registry.ts";
 
 test("tool input validation enforces required fields, types and unknown-field policy", () => {
   const schema = {
@@ -45,4 +45,10 @@ test("tool output validation enforces the native commercial result contract", ()
   validateToolOutput({ leadId: "lead-1", status: "succeeded" }, schema);
   assert.throws(() => validateToolOutput({ status: "succeeded" }, schema), /INVALID_ARGUMENTS:.*leadId:REQUIRED/);
   assert.throws(() => validateToolOutput({ leadId: "lead-1", status: "pending" }, schema), /INVALID_ARGUMENTS:.*status:ENUM/);
+});
+
+test("tool schema validation rejects unsupported or malformed schema nodes", () => {
+  validateToolSchema({ type: "object", additionalProperties: false, properties: { name: { type: "string" } } });
+  assert.throws(() => validateToolSchema({ type: "function" }), /INVALID_TOOL_SCHEMA:.*type:UNSUPPORTED/);
+  assert.throws(() => validateToolSchema({ type: "object", properties: { nested: { type: "object", properties: [] } } }), /INVALID_TOOL_SCHEMA:.*properties:OBJECT_REQUIRED/);
 });
