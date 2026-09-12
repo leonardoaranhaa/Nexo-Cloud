@@ -67,7 +67,7 @@ test("workspace calendar listing is scoped, bounded and filterable", async () =>
 
 test("booking claims an available slot and preserves workspace scope", async () => {
   const queryCalls: unknown[][] = [];
-  const sql = Object.assign(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+  const sql = Object.assign(async (strings: TemplateStringsArray, ..._values: unknown[]) => {
     const statement = strings.join(" ");
     if (statement.includes("from calendar_bookings") && statement.includes("idempotency_key")) return [];
     if (statement.includes("from calendar_availability_slots")) return [{ id: "slot-a" }];

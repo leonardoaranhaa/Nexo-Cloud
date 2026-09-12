@@ -26,7 +26,6 @@ export type WorkspaceReadinessReport = {
   blockers: string[];
 };
 
-type CountRow = { count: string | number };
 type ConnectionRow = { health_status: string | null; secret_ref: string | null; provider: string; config: Record<string, unknown> | null };
 type RuntimeRow = { executions_today: string | number; failed_today: string | number; queued: string | number };
 type QuotaRow = { workspace_daily_limit: string | number | null; executions: string | number | null };

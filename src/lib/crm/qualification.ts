@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
 import type { JsonObject, JsonValue } from "../multitenancy/server.ts";
 import { requireWorkspaceAccess } from "../multitenancy/server.ts";
-import { executeLeadUpdateQualification, type LeadToolResult } from "./leads.ts";
+import { executeLeadUpdateQualification } from "./leads.ts";
 
 export type QualificationCriterionType = "text_present" | "number_min" | "boolean_true" | "enum_match" | "email_present";
 export type QualificationCriterion = { key: string; type: QualificationCriterionType; required?: boolean; weight?: number; min?: number; values?: string[]; label?: string };

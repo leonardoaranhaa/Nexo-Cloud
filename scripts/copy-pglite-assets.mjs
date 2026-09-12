@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, readdirSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 

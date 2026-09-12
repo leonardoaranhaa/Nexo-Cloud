@@ -411,28 +411,6 @@ function SliderRow({
   );
 }
 
-function ToggleRow({
-  label,
-  hint,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  hint: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div>
-        <div className="text-sm font-medium">{label}</div>
-        <p className="mt-0.5 text-xs text-muted">{hint}</p>
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  );
-}
-
 function BlueprintListEditor({
   title,
   hint,
