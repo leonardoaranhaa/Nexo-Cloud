@@ -23,6 +23,8 @@ A referência da AWS é arquitetural: organização por serviços, recursos prov
 
 A plataforma deve começar por agentes de **Atendimento + Vendas**, com canais, conhecimento, CRM, handoff, workflows, ferramentas e métricas. Outras famílias, como suporte, marketing, anúncios, tráfego e operações, entram depois que os contratos multi-tenant, runtime, conectores, permissões, auditoria e medição estiverem estáveis. A prioridade inicial não limita a visão final: o Nexo deve suportar agentes de qualquer tipo de negócio que possa ser modelado, conectado e governado.
 
+**Diretriz de conectividade:** WhatsApp é somente o primeiro canal operacional do MVP, não o nicho do produto. Evolution e Meta são os primeiros adapters de mensageria; a camada de conectores deve permanecer provider-agnostic e crescer para APIs HTTP, CRM, agenda, e-mail, voz, anúncios, tráfego, analytics, pagamentos, storage, bancos, sistemas internos, webhooks, workflows e servidores MCP. Cada novo conector deve reutilizar o mesmo contrato de workspace, Secret Resolver, healthcheck, Tool Gateway, permissões, auditoria, quotas e readiness, sem transformar um fornecedor em fonte de verdade da plataforma.
+
 > O MVP EARLY não é uma aplicação separada nem uma demo descartável. Ele é o primeiro núcleo funcional permanente do próprio Nexo Cloud e deve continuar sendo ampliado sobre os mesmos contratos.
 
 ### 1.1 Definição estratégica permanente
@@ -49,7 +51,7 @@ Os agentes próprios do Nexo devem ser tratados como produtos de alto valor, nã
 |---|---|---|
 | Control Plane | organizações, workspaces, membros, agentes, versões, conexões, permissões e catálogo | Implementado para o núcleo local/preview |
 | Agent Runtime | filas, contexto, decisão, RAG, ferramentas, dispatch, handoff e observabilidade | Implementado para o núcleo local/preview |
-| Integration Layer | Meta, Evolution, CRM interno, MCP e adapters server-side | Evolution e Meta fundacionais implementados; adapters de negócio ainda incompletos |
+| Integration Layer | canais, APIs, CRM, MCP, webhooks e adapters server-side | Evolution e Meta fundacionais implementados; arquitetura preparada para expansão multi-provider |
 | Experience Layer | console, Home, Settings, Inbox, Marketplace, Runs, Metrics e Workflows | Implementado em nível funcional; experiências avançadas ainda evoluem |
 | Learning Layer | eventos sanitizados, avaliação, casos, chunks e candidatos de melhoria | Fundação e laboratório implementados; gate de promoção ainda pendente |
 | Infrastructure Layer | PostgreSQL gerenciado, storage, secrets, filas, workers, observabilidade e deploy | Preparada localmente; AWS permanentemente postergada |
@@ -231,7 +233,7 @@ As rotas principais são:
 /marketplace/installed/:installationId
 ```
 
-A validação técnica consolidada inclui typecheck, build, preview público e suíte automatizada com **119 testes aprovados e 0 falhas** no último ciclo validado.
+A validação técnica consolidada inclui typecheck, build, preview público e suíte automatizada com **150 testes aprovados e 0 falhas** no último ciclo validado.
 
 Commit de referência desta consolidação de código:
 

@@ -27,7 +27,7 @@ O produto possui duas frentes que devem permanecer conectadas:
 1. infraestrutura para usuários criarem, testarem, indexarem, publicarem e operarem seus próprios agentes;
 2. agentes próprios de alto nível do Nexo, oferecidos para uso, customização, locação, venda ou instalação conforme o modelo comercial definido.
 
-O Nexo deve evoluir de um estúdio de prototipação para uma nuvem especializada em agentes de atendimento, vendas, suporte, operações, marketing, gestão de anúncios, tráfego e analytics, sem limitar a plataforma a essas famílias.
+O Nexo deve evoluir de um estúdio de prototipação para uma nuvem especializada em agentes de atendimento, vendas, suporte, operações, marketing, gestão de anúncios, tráfego e analytics, sem limitar a plataforma a essas famílias. WhatsApp é apenas o primeiro canal de validação; nunca tratar Meta ou Evolution como limite de domínio. A base de conectores deve permanecer extensível para múltiplos canais, APIs, sistemas empresariais, MCP, webhooks e integrações de Agents as a Service.
 
 A inspiração na AWS é arquitetural, não uma instrução para copiar serviços indiscriminadamente. O Nexo deve oferecer organizações, workspaces, ambientes, agentes versionados, runtime, ferramentas, MCP, conectores, workflows, eventos, filas, logs, métricas, auditoria, permissões, marketplace, APIs e automações.
 

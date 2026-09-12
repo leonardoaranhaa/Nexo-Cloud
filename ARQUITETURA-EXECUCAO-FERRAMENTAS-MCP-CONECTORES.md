@@ -27,6 +27,8 @@ MCP entra como uma das fontes de ferramentas. Ele não deve ser o único mecanis
 3. **Servidores MCP**, para ferramentas expostas por MCP.
 4. **Webhooks e workflows**, para ações assíncronas ou orientadas a eventos.
 
+WhatsApp, Meta e Evolution são apenas o primeiro conjunto de adapters de mensageria. O Connector Runtime deve ser agnóstico ao fornecedor e permitir a expansão incremental para qualquer serviço externo necessário ao ciclo de vida de agentes: sistemas empresariais, CRM, agenda, e-mail, voz, anúncios, tráfego, analytics, pagamentos, storage, bancos, APIs proprietárias, webhooks e MCP. Nenhum contrato de domínio deve assumir que um agente é um agente de WhatsApp; o canal é uma capacidade contextual instalada e autorizada no workspace.
+
 ## 2. Princípio central de segurança
 
 O modelo nunca deve receber um token e nunca deve executar uma função diretamente.
