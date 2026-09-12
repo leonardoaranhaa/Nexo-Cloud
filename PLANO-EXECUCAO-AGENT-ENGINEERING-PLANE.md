@@ -206,7 +206,7 @@ Transformar capacidades complexas do blueprint em grafos de workflow versionados
 
 **Entrada obrigatória da próxima execução:** executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` e aplicar a matriz de fontes de `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md` antes de criar o contrato, a migration ou os testes da harness.
 
-**Bloqueador pré-B4:** a auditoria documentada em `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` confirmou que o Tool Gateway, a idempotência de efeitos externos, o congelamento de tool/version, a validação de output, os snapshots de B1, o lint e o gate web precisam ser corrigidos antes da implementação desta fatia. A próxima execução deve tratar esse hardening como uma fatia vertical anterior à B4, com testes de falha primeiro.
+**Bloqueador pré-B4:** a auditoria documentada em `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` confirmou que a idempotência de efeitos externos, o congelamento de tool/version, a validação de output, os snapshots de B1, o readiness de conexões e o gate web precisam ser corrigidos antes da implementação desta fatia. O item 1 — testes de falha e autorização por versão publicada — foi concluído em `INSTRUCAO-HARDENING-TOOL-GATEWAY-VERSAO-PUBLICADA.md`; a próxima execução deve iniciar a idempotência estável, ainda como fatia vertical anterior à B4.
 
 **Objetivo**  
 Criar suite de avaliação reutilizável que combina cenários do blueprint + métricas de qualidade, custo e robustez.

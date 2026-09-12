@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Sql } from "../db.ts";
-import { requireWorkspaceAccess, type JsonObject } from "../multitenancy/server.ts";
+import { requireWorkspaceAccess } from "../multitenancy/server.ts";
 import { compileWorkflowDefinition } from "../workflows/compiler.ts";
 import { createWorkflow, saveWorkflowDefinition, type WorkflowDefinition, type WorkflowRecord } from "../workflows/server.ts";
 
@@ -36,10 +36,6 @@ export type GeneratedBlueprintWorkflow = {
   agentVersionId: string;
   publishedVersionPreserved: boolean;
 };
-
-function object(value: unknown): JsonObject {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
-}
 
 function list(value: unknown, maxItems: number, maxLength: number): string[] {
   return [...new Set((Array.isArray(value) ? value : [])
@@ -198,8 +194,10 @@ function buildDefinition(
       type: "tool",
       name: tool.tool_key,
       config: {
+        agentId: blueprint.agent_id,
         toolKey: tool.tool_key,
         ...(connectionId ? { connectionId } : {}),
+        ...(tool.require_approval ? { approvalNodeId: `approval-${index + 1}` } : {}),
         ...(tool.require_approval ? { approved: true } : {}),
       },
     });

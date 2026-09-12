@@ -128,9 +128,68 @@ export async function assertConnectionInWorkspace(sql: Sql, workspaceId: string,
   if (!rows[0]) throw new Error("TOOL_CONNECTION_NOT_FOUND");
 }
 
-export async function assertPublishedToolPermission(sql: Sql, workspaceId: string, agentVersionId: string, toolId: string): Promise<void> {
-  const rows = await sql.query<{ id: string }>(`select p.id from agent_tool_permissions p join agent_versions v on v.id = p.agent_version_id join agents a on a.id = v.agent_id where p.agent_version_id = $1 and p.tool_id = $2 and p.enabled = true and a.workspace_id = $3 and v.status = 'published' limit 1`, [agentVersionId, toolId, workspaceId]);
+export async function assertPublishedWorkflowRun(sql: Sql, workspaceId: string, workflowId: string, workflowVersionId: string): Promise<void> {
+  const rows = await sql.query<{ id: string }>(`select v.id
+      from workflow_versions v
+      join workflows w on w.id = v.workflow_id and w.workspace_id = $1 and w.deleted_at is null
+     where v.id = $2 and v.workflow_id = $3 and v.status = 'published'
+     limit 1`, [workspaceId, workflowVersionId, workflowId]);
+  if (!rows[0]) throw new Error("WORKFLOW_VERSION_NOT_PUBLISHED");
+}
+
+export async function assertPublishedWorkflowAgent(sql: Sql, workspaceId: string, workflowId: string, workflowVersionId: string, agentId: string): Promise<void> {
+  const rows = await sql.query<{ id: string }>(`select v.id
+      from workflow_versions v
+      join workflows w on w.id = v.workflow_id and w.workspace_id = $1 and w.deleted_at is null
+      cross join lateral jsonb_array_elements(v.definition -> 'nodes') node
+     where v.id = $2 and v.workflow_id = $3 and v.status = 'published'
+       and node ->> 'type' = 'agent' and node -> 'config' ->> 'agentId' = $4
+     limit 1`, [workspaceId, workflowVersionId, workflowId, agentId]);
+  if (!rows[0]) throw new Error("WORKFLOW_AGENT_NOT_BOUND");
+}
+
+export async function resolvePublishedAgentVersion(sql: Sql, workspaceId: string, agentId: string): Promise<string> {
+  const rows = await sql.query<{ id: string }>(`select v.id
+      from agent_versions v
+      join agents a on a.id = v.agent_id and a.workspace_id = $1 and a.deleted_at is null
+     where v.agent_id = $2 and v.status = 'published'
+     limit 1`, [workspaceId, agentId]);
+  if (!rows[0]) throw new Error("AGENT_VERSION_NOT_PUBLISHED");
+  return rows[0].id;
+}
+
+export type PublishedToolPermission = { id: string; requireApproval: boolean };
+
+export async function assertPublishedToolPermission(sql: Sql, workspaceId: string, agentVersionId: string, toolId: string): Promise<PublishedToolPermission> {
+  const rows = await sql.query<{ id: string; require_approval: boolean }>(`select p.id, p.require_approval
+      from agent_tool_permissions p
+      join agent_versions v on v.id = p.agent_version_id
+      join agents a on a.id = v.agent_id
+     where p.workspace_id = $1 and p.agent_version_id = $2 and p.tool_id = $3
+       and p.enabled = true and a.workspace_id = $1 and v.status = 'published'
+     limit 1`, [workspaceId, agentVersionId, toolId]);
   if (!rows[0]) throw new Error("TOOL_NOT_ALLOWED");
+  return { id: rows[0].id, requireApproval: rows[0].require_approval };
+}
+
+export type PublishedWorkflowApproval = { id: string; approverId: string | null };
+
+export async function assertPublishedWorkflowApproval(
+  sql: Sql,
+  workspaceId: string,
+  runId: string,
+  approvalNodeId: string,
+): Promise<PublishedWorkflowApproval> {
+  const rows = await sql.query<{ id: string; decided_by: string | null }>(`select a.id, a.decided_by
+      from workflow_approvals a
+      join workflow_node_runs nr on nr.id = a.node_run_id and nr.run_id = a.run_id and nr.node_id = $3
+      join workflow_runs r on r.id = a.run_id and r.workspace_id = a.workspace_id
+     where a.workspace_id = $1 and a.run_id = $2 and a.status = 'approved'
+       and a.decided_at is not null and (a.expires_at is null or a.expires_at > current_timestamp)
+     order by a.decided_at desc
+     limit 1`, [workspaceId, runId, approvalNodeId]);
+  if (!rows[0]) throw new Error("TOOL_APPROVAL_REQUIRED");
+  return { id: rows[0].id, approverId: rows[0].decided_by };
 }
 
 export function executionIdempotencyKey(workspaceId: string, executionId: string, operation: string): string {

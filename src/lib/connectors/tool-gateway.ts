@@ -7,7 +7,17 @@ import type { ConnectorContext } from "./runtime.ts";
 import type { ClaimedWorkflowRun } from "../workflows/queue.ts";
 import type { WorkflowNode } from "../workflows/server.ts";
 import { McpRuntime } from "./mcp-runtime.ts";
-import { assertConnectionInWorkspace, executionIdempotencyKey, resolveTool, validateToolInput } from "./tool-registry.ts";
+import {
+  assertConnectionInWorkspace,
+  assertPublishedWorkflowAgent,
+  assertPublishedToolPermission,
+  assertPublishedWorkflowApproval,
+  assertPublishedWorkflowRun,
+  executionIdempotencyKey,
+  resolvePublishedAgentVersion,
+  resolveTool,
+  validateToolInput,
+} from "./tool-registry.ts";
 
 function object(value: unknown): JsonObject { return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {}; }
 function text(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
@@ -27,8 +37,19 @@ export async function executeWorkflowTool(
 ): Promise<JsonObject> {
   const toolKey = text(node.config?.toolKey);
   if (!toolKey) throw new Error("WORKFLOW_TOOL_CONFIG_REQUIRED");
+  const agentId = text(node.config?.agentId);
+  if (!agentId) throw new Error("WORKFLOW_AGENT_CONFIG_REQUIRED");
+  await assertPublishedWorkflowRun(sql, run.workspace_id, run.workflow_id, run.workflow_version_id);
+  await assertPublishedWorkflowAgent(sql, run.workspace_id, run.workflow_id, run.workflow_version_id, agentId);
   const tool = await resolveTool(sql, run.workspace_id, toolKey);
-  if (tool.riskLevel !== "read" && node.config?.approved !== true) throw new Error("TOOL_APPROVAL_REQUIRED");
+  const agentVersionId = await resolvePublishedAgentVersion(sql, run.workspace_id, agentId);
+  const permission = await assertPublishedToolPermission(sql, run.workspace_id, agentVersionId, tool.id);
+  let approval: { id: string; approverId: string | null } | null = null;
+  if (tool.riskLevel !== "read" && permission.requireApproval) {
+    const approvalNodeId = text(node.config?.approvalNodeId);
+    if (!approvalNodeId) throw new Error("TOOL_APPROVAL_REQUIRED");
+    approval = await assertPublishedWorkflowApproval(sql, run.workspace_id, run.id, approvalNodeId);
+  }
   const connectionId = text(node.config?.connectionId);
   await assertConnectionInWorkspace(sql, run.workspace_id, connectionId);
   const connection = await sql.query<{ id: string; provider: string; secret_ref: string; config: unknown }>(`select id, provider, secret_ref, config from connections where id = $1 and workspace_id = $2 and deleted_at is null and status in ('connected','pending') limit 1`, [connectionId, run.workspace_id]);
@@ -43,7 +64,7 @@ export async function executeWorkflowTool(
   const executionId = randomUUID();
   const inputRedacted = redacted(input);
   const idempotencyKey = executionIdempotencyKey(run.workspace_id, executionId, toolKey);
-  await sql.query(`insert into tool_executions (id, workspace_id, run_id, tool_id, connector_instance_id, requested_by, status, input_hash, input_redacted, trace_id, idempotency_key, started_at) values ($1,$2,$3,$4,$5,'workflow','running',$6,$7::jsonb,$8,$9,current_timestamp)`, [executionId, run.workspace_id, run.id, tool.id, connection[0].id, hash(validationInput), JSON.stringify(inputRedacted), run.correlation_id, idempotencyKey]);
+  await sql.query(`insert into tool_executions (id, workspace_id, run_id, tool_id, agent_id, agent_version_id, connector_instance_id, requested_by, status, input_hash, input_redacted, trace_id, idempotency_key, approved_by, approval_id, started_at) values ($1,$2,$3,$4,$5,$6,$7,'workflow','running',$8,$9::jsonb,$10,$11,$12,$13,current_timestamp)`, [executionId, run.workspace_id, run.id, tool.id, agentId, agentVersionId, connection[0].id, hash(validationInput), JSON.stringify(inputRedacted), run.correlation_id, idempotencyKey, approval?.approverId ?? null, approval?.id ?? null]);
   const startedAt = Date.now();
   try {
     const config = object(connection[0].config);

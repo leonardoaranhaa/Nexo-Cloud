@@ -147,9 +147,9 @@ Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, 
 
 ### 5.5 Tool Registry, conectores e MCP
 
-**Estado: governança e execução multi-round do núcleo nativo implementadas; adapters externos e endurecimento operacional pendentes.**
+**Estado: governança e execução multi-round do núcleo nativo implementadas; primeiro hardening do Tool Gateway concluído; demais endurecimentos operacionais pendentes.**
 
-Existem catálogo, schemas, risco, permissões por versão publicada, congelamento, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência, auditoria e integração de tool calling no runtime.
+Existem catálogo, schemas, risco, permissões por versão publicada, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência do runtime nativo, auditoria e integração de tool calling no runtime. O primeiro hardening pré-B4 agora exige workflow publicado, agente publicado, permissão ativa da tool na versão publicada e aprovação persistida para escritas aprovadas; a decisão ocorre antes do adapter e permanece workspace-scoped.
 
 A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo com protocolo estruturado: o primeiro round recebe as ferramentas publicadas, o servidor executa chamadas autorizadas, e o segundo round recebe a mensagem assistant com `tool_calls` e resultados `tool`, sem novas ferramentas disponíveis. Cada resultado retorna estado sanitizado de sucesso, aprovação, falha ou bloqueio; retries reutilizam a execução idempotente; falhas do segundo round preservam a resposta inicial segura. CRM, handoff, follow-up e agenda possuem registros nativos no Tool Registry, incluindo `calendar.book_slot`, contratos de entrada/saída versionados e validação dos resultados antes do retorno ao modelo. Ainda faltam adapters externos, circuit breaker, quota/rate limit de tokens/custo e tracing completo.
 
@@ -233,7 +233,7 @@ As rotas principais são:
 /marketplace/installed/:installationId
 ```
 
-A validação técnica consolidada inclui typecheck, build, preview público e suíte automatizada com **158 testes aprovados e 0 falhas** no último ciclo validado.
+A validação técnica consolidada inclui typecheck, lint sem erros, build, preview local e suíte automatizada com **165 testes aprovados e 0 falhas** no último ciclo validado. O lint ainda emite sete warnings preexistentes fora desta fatia.
 
 Commit de referência desta consolidação de código:
 
@@ -345,11 +345,11 @@ A validação real de Meta/Evolution permanece registrada como pendência operac
 
 **Status: obrigatório antes da B4; ainda não implementado.**
 
-A varredura completa com as fontes recomendadas confirmou necessidade de hardening compartilhado antes do Evaluation Harness. O Tool Gateway de workflows ainda aceita `node.config.approved` sem revalidar a permissão congelada da versão publicada, deriva idempotência externa de UUID novo por tentativa e resolve a tool ativa mais recente em vez de congelar tool/version no snapshot do workflow. O caminho externo ainda não aplica output schema/redaction recursiva de forma uniforme, e conexões `pending` podem alcançar execução. O runtime conversacional mantém um dispatcher nativo separado do Gateway.
+A varredura completa com as fontes recomendadas confirmou necessidade de hardening compartilhado antes do Evaluation Harness. O primeiro item foi concluído: o Tool Gateway de workflows não aceita mais `node.config.approved` como autoridade; exige workflow publicado, agente publicado, permissão ativa da tool na versão publicada e aprovação persistida quando requerida, antes do adapter. A execução grava `agent_id`, `agent_version_id`, `approval_id` e `approved_by`. Permanecem pendentes idempotência externa estável, congelamento de tool/version no snapshot, output schema/redaction recursiva, bloqueio de conexões não saudáveis e convergência com o dispatcher nativo.
 
 Também foram confirmados: B1 avalia configuração draft/publicada com tools publicadas sem snapshot imutável conjunto; validators server-side ainda são identidade TypeScript sem validação runtime uniforme; o store frontend persiste inbox/events sem escopo de workspace; o wizard não persiste o `connectionId` selecionado no vínculo backend; o lint falha em duas regex do Evolution; e a matriz Playwright mostrou overflow mobile em `/agents`, `/connections` e `/create`.
 
-Antes de iniciar B4, a próxima fatia deve criar testes de falha e corrigir, nesta ordem: (1) autorização, versionamento, output, redaction e idempotência do Tool Gateway; (2) readiness e bloqueio de conexões não saudáveis; (3) lint e inventário completo da suíte; (4) snapshots coerentes de B1; (5) isolamento/ações local-only do frontend e smoke Playwright integrado. O documento `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` contém a matriz completa de evidências e prioridades. Nenhuma dessas correções foi implementada nesta auditoria.
+Antes de iniciar B4, a próxima fatia deve criar testes de falha e corrigir, nesta ordem: (1) idempotência estável de efeitos externos; (2) congelamento de tool/version, output, redaction e readiness do Tool Gateway; (3) snapshots coerentes de B1; (4) isolamento/ações local-only do frontend e smoke Playwright integrado. O documento `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` contém a matriz completa de evidências; `INSTRUCAO-HARDENING-TOOL-GATEWAY-VERSAO-PUBLICADA.md` registra a execução concluída do item 1. Nenhuma sessão deve declarar a B4 iniciada enquanto os gates restantes estiverem pendentes.
 
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
 
@@ -389,6 +389,7 @@ A plataforma não deve inventar endpoints externos, payloads, credenciais, tabel
 - `B3-GERACAO-ASSISTIDA-DE-WORKFLOWS.md`
 - `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`
 - `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md`
+- `INSTRUCAO-HARDENING-TOOL-GATEWAY-VERSAO-PUBLICADA.md`
 - `README.md`
 
 Os documentos especializados complementam este plano. Em caso de conflito, este plano define a prioridade de produto e o comando interno define o método obrigatório de execução.
@@ -408,3 +409,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Fatia B3 concluída em local/preview: workflow draft compilável por blueprint, vínculo idempotente, tools condicionadas a aprovação/permissão/adapter, preservação de snapshot publicado, nenhum run automático e isolamento. Suíte passou com 158 testes, typecheck, build e preview aprovados. Próxima prioridade interna: B4. |
 | 2026-09-12 | Descoberta de fontes externas de engenharia documentada em `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`. O comando raiz `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` passa a ser obrigatório a partir da próxima execução da B4, sem substituir os contratos internos de segurança, workspace e Tool Gateway. |
 | 2026-09-12 | Varredura completa aplicada às fontes recomendadas em cinco domínios. Typecheck, testes declarados e build passaram; lint falhou em duas regex Evolution; Playwright smoke validou 10 rotas sem erros de console/page, mas encontrou overflow mobile em `/agents`, `/connections` e `/create`. Confirmadas refatorações obrigatórias antes da B4 no Tool Gateway, idempotência, snapshots, validação runtime, estado contextual do frontend e gate de qualidade. Nenhum código de produto foi alterado. |
+| 2026-09-12 | Item 1 do hardening pré-B4 concluído: testes TDD e enforcement server-side de autorização por workflow publicado, agente publicado, permissão ativa na versão publicada e aprovação persistida para escritas. B3 passou a persistir `agentId`/`approvalNodeId` nos nós tool. Suíte passou com 165 testes, typecheck, lint sem erros, build e preview aprovados. Próxima fatia: idempotência estável de efeitos externos. |

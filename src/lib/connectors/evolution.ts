@@ -27,10 +27,17 @@ function localHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
+function hasInvalidCredentialCharacters(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f || /\s/.test(character);
+  });
+}
+
 export function validateEvolutionApiKey(value: unknown): string {
   if (typeof value !== "string") throw new EvolutionConfigError("api_key_invalid", "Evolution API key is invalid");
   const normalized = value.trim();
-  if (normalized.length < 16 || normalized.length > 512 || /[\u0000-\u001f\u007f\s]/.test(normalized)) {
+  if (normalized.length < 16 || normalized.length > 512 || hasInvalidCredentialCharacters(normalized)) {
     throw new EvolutionConfigError("api_key_invalid", "Evolution API key is invalid");
   }
   return normalized;
@@ -39,7 +46,7 @@ export function validateEvolutionApiKey(value: unknown): string {
 export function validateEvolutionWebhookSecret(value: unknown): string {
   if (typeof value !== "string") throw new EvolutionConfigError("api_key_invalid", "Evolution webhook secret is invalid");
   const normalized = value.trim();
-  if (normalized.length < 16 || normalized.length > 1024 || /[\u0000-\u001f\u007f\s]/.test(normalized)) {
+  if (normalized.length < 16 || normalized.length > 1024 || hasInvalidCredentialCharacters(normalized)) {
     throw new EvolutionConfigError("api_key_invalid", "Evolution webhook secret is invalid");
   }
   return normalized;

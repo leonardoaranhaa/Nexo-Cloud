@@ -180,4 +180,5 @@ Uma etapa só pode ser declarada concluída quando o código, os testes, o build
 - `PLANO-EXECUCAO-FUNCIONAL.md`
 - `docs/CONNECTOR-RUNTIME-SECRET-RESOLVER.md`
 - `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`
+- `INSTRUCAO-HARDENING-TOOL-GATEWAY-VERSAO-PUBLICADA.md`
 - `README.md`
