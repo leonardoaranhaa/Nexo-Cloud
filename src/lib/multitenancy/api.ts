@@ -83,6 +83,15 @@ export const upsertWorkspaceAgentDevelopmentBlueprint = createServerFn({ method:
     return upsertAgentDevelopmentBlueprint(await getSql(), context.userId, data);
   });
 
+export const runWorkspaceAgentBlueprintScenarios = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentId: string; blueprintId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { runBlueprintScenarios } = await import("@/lib/agent-engineering/scenarios");
+    return runBlueprintScenarios(await getSql(), context.userId, data);
+  });
+
 export const updateWorkspaceAgent = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: {

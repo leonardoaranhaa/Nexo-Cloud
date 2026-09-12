@@ -189,11 +189,11 @@ Ainda faltam configurações server-side completas, governança por papel, confi
 
 ### 5.10 Ambiente de desenvolvimento assistido por IA
 
-**Estado: primeira fatia implementada e persistida.**
+**Estado: blueprint persistido e primeira execução offline de cenários implementada.**
 
-O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails.
+O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails. A fatia B1 adicionou cenários estruturados, endpoint server-side autenticado, execução offline reutilizando decisão e RAG, expectativas de resposta/handoff/tools, persistência de resultados em tabelas próprias e snapshots sanitizados no Learning RAG.
 
-Ainda faltam execução dos cenários de teste, indexação de documentos e sistemas, geração assistida de workflows e ferramentas, comparação de versões e testes automatizados de qualidade antes da publicação.
+As avaliações B1 não criam jobs de produção, mensagens, deliveries, chamadas externas ou publicação. Ainda faltam geração assistida de tools, geração assistida de workflows, Evaluation Harness comparável entre versões, indexação de documentos e sistemas e testes automatizados de qualidade antes da publicação.
 
 ### 5.11 Nexo Bot
 
@@ -253,7 +253,7 @@ Manter compatibilidade e fechar produção apenas depois do núcleo funcional.
 
 **Status: concluída para MVP local/preview.**
 
-Próximas ações: validação real de canal, healthchecks, operação de webhook e melhoria de Inbox/handoff.
+Próximas ações: validação real de canal, healthchecks, operação de webhook e melhoria de Inbox/handoff. A validação com host persistente, Docker e credenciais reais está **postergada por decisão do usuário**; o desenvolvimento interno em local/preview continua com fixtures e contratos, sem declarar canal real validado.
 
 ### Fase 3 — Agente de Vendas
 
@@ -333,6 +333,12 @@ A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketpl
 8. revisar observabilidade, quotas e readiness de produção; **relatório server-side, painel visual em `/metrics` e checklist explícita de aprovação para produção implementados no preview, agregando conexões, jobs, quotas, logs e critérios manuais; observabilidade externa e alertas seguem pendentes**;
 9. retomar AWS somente após o núcleo demonstrável passar pelos critérios de aceite.
 
+### 8.1 Prioridade interna durante a postergação de conexões reais
+
+Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. A fatia B1 de execução isolada dos cenários do blueprint está concluída; a próxima frente interna é a geração governada de tools (`B2`), seguida por geração de workflows e avaliação offline. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
+
+A validação real de Meta/Evolution permanece registrada como pendência operacional e deverá ser retomada quando o host estiver preparado. Nenhuma sessão deve tentar contornar essa dependência criando credenciais no repositório, simulando healthcheck saudável ou tratando o preview como canal de produção.
+
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
 
 ## 9. Protocolo obrigatório de cada sessão
@@ -380,3 +386,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-11 | Checklist de publicação em produção adicionada ao painel, separando critérios automáticos aprovados/bloqueados e validações manuais de cenários, handoff, permissões e rollback. |
 | 2026-09-11 | Gate de publicação efetivo: botão desabilitado para canal sem healthcheck saudável, cenários ausentes ou backend indisponível; `publishAgent` também bloqueia server-side e possui teste de isolamento. |
 | 2026-09-12 | Plano mestre revisado contra o repositório: migrations atualizadas até `0042`, Tool Registry alinhado ao multi-round nativo concluído, agenda removida da lista de pendências já entregues e sequência futura de conectores registrada sem iniciar nova implementação. |
+| 2026-09-12 | Por decisão do usuário, host persistente, Docker, credenciais e validação real de Meta/Evolution foram postergados. A continuidade interna foi liberada em local/preview pelo Agent Engineering Plane, começando pela fatia B1 de cenários isolados. |

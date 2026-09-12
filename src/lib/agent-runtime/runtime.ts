@@ -322,6 +322,44 @@ export async function executeAgentRuntime(
   return { reply: localFallbackReply(agent, inboundText), usedAi: false, reason: "fallback", decision: { ...decision, answerMode: "fallback", nextAction: "respond" } };
 }
 
+export async function evaluateAgentRuntimeTurn(input: {
+  agent: Agent;
+  inboundText: string;
+  history?: { role: "user" | "assistant"; content: string }[];
+  commercialState?: CommercialState;
+  ragEvidence?: KnowledgeEvidence[];
+  authorizedTools?: RuntimeAuthorizedTool[];
+}): Promise<{ reply?: string; usedAi: boolean; reason: string; decision: AgentDecision; toolCalls?: RuntimeToolCall[] }> {
+  const result = await executeAgentRuntime(
+    {
+      job: {
+        id: "evaluation-job",
+        workspace_id: "evaluation-workspace",
+        agent_id: input.agent.id,
+        conversation_id: "evaluation-conversation",
+        inbound_message_id: "evaluation-message",
+        status: "running",
+        attempt_count: 1,
+        available_at: new Date().toISOString(),
+        locked_at: new Date().toISOString(),
+        locked_by: "evaluation",
+        trace_id: "evaluation-trace",
+      },
+      agent: input.agent,
+      connectionId: "evaluation-connection",
+      recipient: "evaluation-contact",
+      inboundText: input.inboundText,
+      history: input.history ?? [],
+      commercialState: input.commercialState ?? "new",
+      ragEvidence: input.ragEvidence ?? [],
+      authorizedTools: input.authorizedTools ?? [],
+      crmConfig: null,
+    },
+    { generate: async () => ({ usedAi: false }) },
+  );
+  return result;
+}
+
 async function executeAuthorizedRuntimeTools(
   sql: Sql,
   context: RuntimeContext,

@@ -1,7 +1,7 @@
 # PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md
 
 **Status do documento:** plano de execução detalhado e operacional  
-**Última consolidação:** 2026-09-10  
+**Última consolidação:** 2026-09-12
 **Fonte de verdade superior:** `PLANO-CONJUNTO-NEXO-CLOUD-DE-AGENTES.md`  
 **Contrato operacional:** `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md`
 
@@ -58,7 +58,7 @@ Todas as operações ocorrem dentro do workspace do usuário. O Learning global 
 
 ## 3. Pré-requisitos absolutos (Fase 0)
 
-Estas etapas pertencem ao “Próximo ponto de partida obrigatório” do plano mestre e **devem ser concluídas antes** de qualquer fatia das Fases B em diante.
+Estas etapas pertencem ao “Próximo ponto de partida obrigatório” do plano mestre. A validação real de Meta/Evolution permanece um gate para produção, mas foi explicitamente postergada pelo usuário; por isso, as fatias de engenharia offline da Fase B podem avançar em local/preview sem chamadas externas reais.
 
 ### 3.1 Ordem obrigatória de conclusão
 
@@ -66,13 +66,11 @@ Estas etapas pertencem ao “Próximo ponto de partida obrigatório” do plano 
 2. Fechar atualização e rollback de instalações do Marketplace — concluído com migration `0037`
 3. Criar rota e operação de `/marketplace/installed` (Minhas Instalações) — concluído
 4. Criar e validar templates prontos de Atendimento e Vendas — concluído com persistência multi-tenant e testes contratuais
-5. Executar validação ponta a ponta com conexão real Meta ou Evolution — handshake, POST assinado e execução do agente validados; envio real bloqueado pela lista de destinatários da Meta
+5. Executar validação ponta a ponta com conexão real Meta ou Evolution — handshake, POST assinado e execução do agente validados; envio real bloqueado pela lista de destinatários da Meta; **postergado até host persistente e credenciais reais**
 6. Revisar observabilidade, quotas e readiness de produção — relatório server-side, painel visual em `/metrics`, checklist de aprovação e gate server-side de publicação implementados; observabilidade externa, quotas de tokens/custo e alertas seguem pendentes
 
 **Critério de saída da Fase 0:**  
-O núcleo de Atendimento + Vendas + Marketplace interno está estável, testado com canal real e documentado no plano mestre como concluído. No estado atual, a saída permanece pendente pela ausência da validação real de Meta/Evolution e da revisão de readiness.
-
-Somente após essa saída a IA pode iniciar a Fase B.
+O núcleo de Atendimento + Vendas + Marketplace interno está estável, testado localmente e documentado no plano mestre. A saída operacional para produção permanece pendente pela ausência da validação real de Meta/Evolution e da revisão de readiness. Enquanto essa dependência estiver postergada, a Fase B pode avançar somente em modo offline/evaluation, sem efeitos externos.
 
 ---
 
@@ -81,6 +79,10 @@ Somente após essa saída a IA pode iniciar a Fase B.
 **Objetivo da fase:** transformar o blueprint de documento estático em artefato central e executável da engenharia de agentes.
 
 ### Fatia B1 — Execução de cenários de teste do blueprint
+
+**Status: concluída em modo offline/evaluation no local/preview.**
+
+Foram implementados cenários estruturados retrocompatíveis com textos legados, endpoint server-side autenticado, execução isolada reutilizando decisão e recuperação RAG, expectativas de resposta/handoff/tools/tokens, persistência de runs e resultados, snapshots sanitizados no Learning RAG e testes de isolamento. A execução não cria jobs de produção, mensagens, deliveries, chamadas externas ou publicação.
 
 **Objetivo**  
 Permitir que o Runtime execute os cenários de teste definidos no blueprint em ambiente isolado do workspace e grave os resultados no Improvement Lab.
