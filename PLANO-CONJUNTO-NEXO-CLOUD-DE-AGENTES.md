@@ -153,11 +153,13 @@ A ferramenta `lead.create_or_update` já é executável pelo runtime quando auto
 
 ### 5.6 Workflows e automação
 
-**Estado: motor durável implementado; experiência completa parcial.**
+**Estado: motor durável e editor visual orientado a nós implementados; experiência completa em evolução.**
 
 Existem versões, compilação de grafos, condições, eventos internos, webhooks, execução manual, scheduler, filas, leases, retries, espera, retomada, aprovações, histórico e follow-ups agendados.
 
-Ainda faltam executor universal de nós `agent` e `tool`, editor visual completo, mapeamento de dados, transformações, integração oficial com n8n, observabilidade por nó e reprocessamento operacional avançado.
+O editor `/workflows` agora segue o padrão de automação visual por nós: configuração explícita de agentes, ferramentas, condições e aprovações; conexões visíveis; validação de ponto de entrada único, conectividade, duplicidades e configurações obrigatórias; e bloqueio de publicação quando a definição não é executável. Os testes de integração do motor usam caminhos portáveis e cobrem eventos, scheduler, retries, espera, retomada, publicação e isolamento multi-tenant.
+
+Ainda faltam mapeamento de dados entre nós, transformações dedicadas, workflow de erro configurável, observabilidade por nó e reprocessamento operacional avançado. A integração oficial com n8n deve permanecer opcional: o contrato nativo do Nexo é a fonte de verdade, enquanto uma ponte futura poderá importar/exportar apenas definições compatíveis e sanitizadas.
 
 ### 5.7 Marketplace interno
 

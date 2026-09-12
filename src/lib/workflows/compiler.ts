@@ -3,6 +3,43 @@ import type { WorkflowDefinition } from "./server.ts";
 
 export type CompiledWorkflowDefinition = WorkflowDefinition & { order: string[] };
 
+export type WorkflowValidationIssue = { code: string; message: string; nodeId?: string };
+
+export function validateWorkflowDefinition(definition: WorkflowDefinition): WorkflowValidationIssue[] {
+  const issues: WorkflowValidationIssue[] = [];
+  if (definition.nodes.length === 0) return [{ code: "WORKFLOW_EMPTY", message: "Adicione pelo menos um nó ao workflow." }];
+  const ids = new Set<string>();
+  for (const node of definition.nodes) {
+    if (!node.id || ids.has(node.id)) issues.push({ code: "WORKFLOW_NODE_ID_DUPLICATE", message: "Cada nó precisa ter um identificador único.", nodeId: node.id });
+    ids.add(node.id);
+    if (node.type === "agent" && !node.config?.agentId) issues.push({ code: "WORKFLOW_AGENT_CONFIG_REQUIRED", message: "Selecione um agente para este nó.", nodeId: node.id });
+    if (node.type === "tool" && !node.config?.toolKey) issues.push({ code: "WORKFLOW_TOOL_CONFIG_REQUIRED", message: "Selecione uma ferramenta para este nó.", nodeId: node.id });
+    if (node.type === "condition" && !node.config?.field) issues.push({ code: "WORKFLOW_CONDITION_CONFIG_REQUIRED", message: "Informe o campo usado pela condição.", nodeId: node.id });
+  }
+  const outgoing = new Map<string, string[]>();
+  const incoming = new Map<string, number>();
+  for (const node of definition.nodes) { outgoing.set(node.id, []); incoming.set(node.id, 0); }
+  const edges = new Set<string>();
+  for (const edge of definition.edges) {
+    if (!ids.has(edge.from) || !ids.has(edge.to)) { issues.push({ code: "WORKFLOW_EDGE_NODE_NOT_FOUND", message: "Existe uma conexão apontando para um nó inexistente." }); continue; }
+    const key = `${edge.from}:${edge.to}:${edge.condition ?? ""}`;
+    if (edges.has(key)) issues.push({ code: "WORKFLOW_EDGE_DUPLICATE", message: "Existem conexões duplicadas no workflow." });
+    edges.add(key);
+    if (edge.from === edge.to) issues.push({ code: "WORKFLOW_SELF_EDGE", message: "Um nó não pode apontar para ele mesmo.", nodeId: edge.from });
+    outgoing.get(edge.from)?.push(edge.to);
+    incoming.set(edge.to, (incoming.get(edge.to) ?? 0) + 1);
+  }
+  const roots = definition.nodes.filter((node) => incoming.get(node.id) === 0);
+  if (roots.length !== 1) issues.push({ code: "WORKFLOW_ROOT_COUNT_INVALID", message: roots.length === 0 ? "O workflow não possui um ponto de entrada." : "O workflow deve ter exatamente um ponto de entrada." });
+  if (roots[0]) {
+    const reachable = new Set<string>([roots[0].id]);
+    const queue = [roots[0].id];
+    while (queue.length) for (const next of outgoing.get(queue.shift()!) ?? []) if (!reachable.has(next)) { reachable.add(next); queue.push(next); }
+    for (const node of definition.nodes) if (!reachable.has(node.id)) issues.push({ code: "WORKFLOW_NODE_DISCONNECTED", message: "Este nó não é alcançável a partir do ponto de entrada.", nodeId: node.id });
+  }
+  return issues;
+}
+
 export function compileWorkflowDefinition(definition: WorkflowDefinition): CompiledWorkflowDefinition {
   const nodes = definition.nodes;
   const ids = new Set<string>();
@@ -34,6 +71,8 @@ export function compileWorkflowDefinition(definition: WorkflowDefinition): Compi
     }
   }
   if (order.length !== nodes.length) throw new Error("WORKFLOW_CYCLE_NOT_ALLOWED");
+  const validation = validateWorkflowDefinition(definition);
+  if (validation.length > 0) throw new Error(validation[0].code);
   return { ...definition, order };
 }
 
