@@ -238,7 +238,7 @@ A validação técnica consolidada inclui typecheck, lint sem erros, build, prev
 Commit de referência desta consolidação de código:
 
 ```text
-2dc9f0f feat: generate governed workflow drafts from blueprints
+e0ac5bd feat: enforce published workflow tool authorization
 ```
 
 ## 7. Roadmap oficial atualizado
