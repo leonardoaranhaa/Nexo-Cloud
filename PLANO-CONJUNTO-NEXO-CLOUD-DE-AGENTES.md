@@ -189,11 +189,11 @@ Ainda faltam configurações server-side completas, governança por papel, confi
 
 ### 5.10 Ambiente de desenvolvimento assistido por IA
 
-**Estado: blueprint persistido e primeira execução offline de cenários implementada.**
+**Estado: blueprint persistido, avaliações offline, propostas governadas de tools e geração de workflows draft implementados.**
 
-O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails. A fatia B1 adicionou cenários estruturados, endpoint server-side autenticado, execução offline reutilizando decisão e RAG, expectativas de resposta/handoff/tools, persistência de resultados em tabelas próprias e snapshots sanitizados no Learning RAG. A fatia B2 adicionou geração determinística de propostas de tools nativas confirmadas, schemas preservados do Tool Registry, risco e aprovação derivados server-side, tools workspace-scoped em `review`, propostas `draft`, idempotência e endpoint de listagem.
+O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails. A fatia B1 adicionou cenários estruturados, endpoint server-side autenticado, execução offline reutilizando decisão e RAG, expectativas de resposta/handoff/tools, persistência de resultados em tabelas próprias e snapshots sanitizados no Learning RAG. A fatia B2 adicionou geração determinística de propostas de tools nativas confirmadas, schemas preservados do Tool Registry, risco e aprovação derivados server-side, tools workspace-scoped em `review`, propostas `draft`, idempotência e endpoint de listagem. A fatia B3 adicionou vínculo idempotente entre blueprint e workflow, geração de grafo compilável em `draft`, preservação de versões publicadas, capacidades pendentes e materialização condicional de tools aprovadas, autorizadas e compatíveis com adapters do executor.
 
-As avaliações B1 e a geração B2 não criam jobs de produção, mensagens, deliveries, chamadas externas ou publicação. Tools B2 não recebem permissões de agente e não podem ser resolvidas pelo runtime enquanto estiverem em `review`. Ainda faltam geração assistida de workflows, Evaluation Harness comparável entre versões, indexação de documentos e sistemas e testes automatizados de qualidade antes da publicação.
+As avaliações B1, a geração B2 e a geração B3 não criam jobs de produção, mensagens, deliveries, chamadas externas ou publicação automática. Tools B2 não recebem permissões de agente e não podem ser resolvidas pelo runtime enquanto estiverem em `review`. Workflows B3 não criam runs e somente incluem tools quando há proposta aprovada, tool ativa, permissão habilitada na versão draft e adapter de workflow confirmado. Ainda faltam Evaluation Harness comparável entre versões, indexação de documentos e sistemas e testes automatizados de qualidade antes da publicação.
 
 ### 5.11 Nexo Bot
 
@@ -213,7 +213,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0044_agent_tool_proposals.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria do Nexo Bot, workflows de erro, produtos próprios do Nexo e propostas governadas de tools.
+O repositório possui migrations até `0045_agent_blueprint_workflows.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria do Nexo Bot, workflows de erro, produtos próprios do Nexo, propostas governadas de tools e vínculos de workflows gerados.
 
 As rotas principais são:
 
@@ -233,12 +233,12 @@ As rotas principais são:
 /marketplace/installed/:installationId
 ```
 
-A validação técnica consolidada inclui typecheck, build, preview público e suíte automatizada com **155 testes aprovados e 0 falhas** no último ciclo validado.
+A validação técnica consolidada inclui typecheck, build, preview público e suíte automatizada com **158 testes aprovados e 0 falhas** no último ciclo validado.
 
 Commit de referência desta consolidação de código:
 
 ```text
-1f325ee feat: add offline blueprint scenario evaluations
+f86b0e8 feat: add governed blueprint tool proposals
 ```
 
 ## 7. Roadmap oficial atualizado
@@ -335,7 +335,7 @@ A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketpl
 
 ### 8.1 Prioridade interna durante a postergação de conexões reais
 
-Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1 e B2 estão concluídas em modo offline/evaluation; a próxima frente interna é a geração governada de workflows (`B3`), seguida pelo Evaluation Harness comparável. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
+Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas em modo offline/evaluation; a próxima frente interna é o Evaluation Harness comparável (`B4`). Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
 
 A validação real de Meta/Evolution permanece registrada como pendência operacional e deverá ser retomada quando o host estiver preparado. Nenhuma sessão deve tentar contornar essa dependência criando credenciais no repositório, simulando healthcheck saudável ou tratando o preview como canal de produção.
 
@@ -372,6 +372,8 @@ A plataforma não deve inventar endpoints externos, payloads, credenciais, tabel
 - `MODELO-DADOS-MULTI-TENANT.md`
 - `PLANO-EXECUCAO-FUNCIONAL.md`
 - `docs/CONNECTOR-RUNTIME-SECRET-RESOLVER.md`
+- `B2-GERACAO-GOVERNADA-DE-TOOLS.md`
+- `B3-GERACAO-ASSISTIDA-DE-WORKFLOWS.md`
 - `README.md`
 
 Os documentos especializados complementam este plano. Em caso de conflito, este plano define a prioridade de produto e o comando interno define o método obrigatório de execução.
@@ -388,3 +390,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Plano mestre revisado contra o repositório: migrations atualizadas até `0042`, Tool Registry alinhado ao multi-round nativo concluído, agenda removida da lista de pendências já entregues e sequência futura de conectores registrada sem iniciar nova implementação. |
 | 2026-09-12 | Por decisão do usuário, host persistente, Docker, credenciais e validação real de Meta/Evolution foram postergados. A continuidade interna foi liberada em local/preview pelo Agent Engineering Plane, começando pela fatia B1 de cenários isolados. |
 | 2026-09-12 | Fatia B2 concluída em local/preview: propostas determinísticas de tools nativas, schemas validados, risco/aprovação server-side, tools em `review`, propostas `draft`, isolamento, idempotência e endpoints autenticados. Suíte passou com 155 testes, typecheck e build aprovados. Próxima prioridade interna: B3. |
+| 2026-09-12 | Fatia B3 concluída em local/preview: workflow draft compilável por blueprint, vínculo idempotente, tools condicionadas a aprovação/permissão/adapter, preservação de snapshot publicado, nenhum run automático e isolamento. Suíte passou com 158 testes, typecheck, build e preview aprovados. Próxima prioridade interna: B4. |

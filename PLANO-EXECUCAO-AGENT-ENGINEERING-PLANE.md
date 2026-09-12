@@ -170,11 +170,15 @@ A partir das “capacidades” declaradas no blueprint, gerar propostas de tools
 - Alucinação de schemas → validar rigorosamente com Zod/JSON Schema antes de persistir
 - Ferramentas de alto risco geradas sem aprovação → forçar `requires_approval = true` para risco médio/alto
 
-**Próxima fatia:** B3 — gerar workflows versionados a partir do blueprint, sempre em `draft`, com compilação e publicação explícitas.
+**Próxima fatia:** B4 — Evaluation Harness offline básico, comparando cenários e versões antes de promoção.
 
 ---
 
 ### Fatia B3 — Geração assistida de workflows a partir do blueprint
+
+**Status: concluída em modo draft no local/preview.**
+
+Foram implementados o vínculo idempotente entre blueprint e workflow, geração de grafo compilável, preservação de snapshot publicado, registro de capacidades pendentes, materialização condicional de tools aprovadas/autorizadas e endpoints server-side autenticados. A geração não publica, não cria runs e não executa chamadas externas. Tools nativas sem handler de workflow permanecem pendentes.
 
 **Objetivo**  
 Transformar capacidades complexas do blueprint em grafos de workflow versionados.
@@ -193,6 +197,8 @@ Transformar capacidades complexas do blueprint em grafos de workflow versionados
 - Workflow gerado é compilável e executável no motor existente
 - Isolamento e versionamento preservados
 - Testes de compilação e execução de grafo simples
+
+**Resultado da primeira fatia:** o grafo gerado é compilável e permanece em `draft`; execução e publicação continuam operações explícitas do console. A próxima fatia é B4 — Evaluation Harness offline básico.
 
 ---
 

@@ -110,6 +110,15 @@ export const listWorkspaceAgentToolProposals = createServerFn({ method: "GET" })
     return listAgentToolProposals(await getSql(), context.userId, data);
   });
 
+export const generateWorkspaceAgentWorkflow = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; agentId: string; blueprintId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { generateWorkflowFromBlueprint } = await import("@/lib/agent-engineering/workflows");
+    return generateWorkflowFromBlueprint(await getSql(), context.userId, data);
+  });
+
 export const updateWorkspaceAgent = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: {
