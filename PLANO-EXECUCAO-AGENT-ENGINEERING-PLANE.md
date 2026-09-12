@@ -204,6 +204,8 @@ Transformar capacidades complexas do blueprint em grafos de workflow versionados
 
 ### Fatia B4 — Evaluation Harness offline básico
 
+**Entrada obrigatória da próxima execução:** executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` e aplicar a matriz de fontes de `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md` antes de criar o contrato, a migration ou os testes da harness.
+
 **Objetivo**  
 Criar suite de avaliação reutilizável que combina cenários do blueprint + métricas de qualidade, custo e robustez.
 

@@ -16,7 +16,17 @@ O caminho equivalente no ambiente de projeto compartilhado é:
 
 Se o documento mestre não existir, estiver vazio, contraditório ou desatualizado em relação ao código, a IA deve parar a implementação estrutural, registrar a divergência e atualizar o documento antes de continuar. Não deve inventar uma nova direção de produto.
 
-A cada sessão, a IA deve partir do **Próximo ponto de partida obrigatório** do plano mestre. Deve identificar a primeira etapa incompleta, subdividi-la em uma menor fatia vertical reversível e executar somente essa fatia, salvo decisão explícita do usuário.
+ A cada sessão, a IA deve partir do **Próximo ponto de partida obrigatório** do plano mestre. Deve identificar a primeira etapa incompleta, subdividi-la em uma menor fatia vertical reversível e executar somente essa fatia, salvo decisão explícita do usuário.
+
+## 0.1 Comando raiz de fontes recomendadas
+
+A partir da próxima execução da fatia B4, depois da leitura dos documentos de entrada, executar conceitualmente:
+
+```text
+APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD
+```
+
+Este comando exige ler `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`, selecionar somente as fontes aplicáveis à fatia, confrontar cada recomendação com os contratos locais e registrar internamente quais princípios serão adotados, rejeitados ou postergados. As fontes externas não substituem o plano mestre, este comando, o Tool Gateway, o Secret Resolver, o isolamento por workspace ou a autorização server-side. Nenhum código externo deve ser copiado sem revisão de licença, contrato, segurança, teste e compatibilidade.
 
 ## 1. Identidade do produto
 
@@ -42,7 +52,8 @@ Para qualquer solicitação de desenvolvimento, execute este ciclo na ordem:
 ```text
 Ler o plano mestre
   → ler este comando e os documentos especializados
-      → revisar alteração anterior e estado do Git
+      → executar APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD a partir da B4
+          → revisar alteração anterior e estado do Git
           → confrontar código, migrations, rotas e testes com o plano
               → detectar desvio, flutuação ou alucinação
                   → subdividir a próxima etapa em menor fatia vertical
@@ -72,7 +83,8 @@ ASSUMIR_PROJETO NEXO_CLOUD
 7. Executar ou registrar typecheck, testes, lint e build.
 8. Identificar se o ambiente é local, preview, staging ou produção.
 9. Localizar a primeira etapa incompleta do próximo ponto de partida.
-10. Subdividir essa etapa antes de implementar.
+10. Ler `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md` e selecionar as fontes aplicáveis à etapa.
+11. Subdividir essa etapa antes de implementar.
 ```
 
 O diagnóstico deve informar objetivo, componentes afetados, dependências existentes, riscos, testes disponíveis, lacunas, relação com o plano mestre, classificação de alinhamento e reversibilidade.
@@ -167,4 +179,5 @@ Uma etapa só pode ser declarada concluída quando o código, os testes, o build
 - `MODELO-DADOS-MULTI-TENANT.md`
 - `PLANO-EXECUCAO-FUNCIONAL.md`
 - `docs/CONNECTOR-RUNTIME-SECRET-RESOLVER.md`
+- `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`
 - `README.md`

@@ -4,9 +4,9 @@
 
 **Última consolidação:** 2026-09-12.
 
-**Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar.
+**Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar. A partir da próxima execução da B4, também deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` conforme `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`.
 
-**Plano especializado vinculante:** `PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md` detalha a evolução do Agent Engineering Plane. Após ler este plano mestre e o comando interno, toda sessão que atuar nessa frente deve ler o plano especializado integralmente, respeitar a ordem da Fase 0 e atualizar ambos os documentos ao concluir cada fatia.
+**Plano especializado vinculante:** `PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md` detalha a evolução do Agent Engineering Plane. Após ler este plano mestre e o comando interno, toda sessão que atuar nessa frente deve ler o plano especializado integralmente, respeitar a ordem da Fase 0, aplicar as fontes recomendadas a partir da B4 e atualizar ambos os documentos ao concluir cada fatia.
 
 ## 1. Visão do produto
 
@@ -335,7 +335,7 @@ A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketpl
 
 ### 8.1 Prioridade interna durante a postergação de conexões reais
 
-Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas em modo offline/evaluation; a próxima frente interna é o Evaluation Harness comparável (`B4`). Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
+Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas em modo offline/evaluation; a próxima frente interna é o Evaluation Harness comparável (`B4`). A próxima sessão que iniciar B4 deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar a implementação. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
 
 A validação real de Meta/Evolution permanece registrada como pendência operacional e deverá ser retomada quando o host estiver preparado. Nenhuma sessão deve tentar contornar essa dependência criando credenciais no repositório, simulando healthcheck saudável ou tratando o preview como canal de produção.
 
@@ -349,12 +349,13 @@ Ao iniciar qualquer sessão, a IA deve:
 2. ler este arquivo integralmente;
 3. ler `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md`;
 4. ler os documentos especializados relacionados ao próximo item;
-5. verificar `git status`, último commit, migrations, rotas, scripts e testes;
-6. confrontar o estado real do código com este documento;
-7. identificar a primeira etapa incompleta do próximo ponto de partida;
-8. subdividir essa etapa em uma menor fatia vertical reversível;
-9. registrar objetivo, arquivos afetados, riscos, dependências, critério de aceite e classificação de alinhamento;
-10. implementar, testar, revisar o diff e atualizar este documento quando o estado do roadmap mudar.
+5. executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` quando a sessão iniciar B4 ou qualquer fatia posterior;
+6. verificar `git status`, último commit, migrations, rotas, scripts e testes;
+7. confrontar o estado real do código com este documento;
+8. identificar a primeira etapa incompleta do próximo ponto de partida;
+9. subdividir essa etapa em uma menor fatia vertical reversível;
+10. registrar objetivo, arquivos afetados, riscos, dependências, critério de aceite e classificação de alinhamento;
+11. implementar, testar, revisar o diff e atualizar este documento quando o estado do roadmap mudar.
 
 Nenhuma IA deve iniciar uma nova frente apenas porque ela aparece em uma documentação antiga. A prioridade é sempre o **Próximo ponto de partida obrigatório** deste arquivo, salvo decisão explícita do usuário.
 
@@ -374,6 +375,7 @@ A plataforma não deve inventar endpoints externos, payloads, credenciais, tabel
 - `docs/CONNECTOR-RUNTIME-SECRET-RESOLVER.md`
 - `B2-GERACAO-GOVERNADA-DE-TOOLS.md`
 - `B3-GERACAO-ASSISTIDA-DE-WORKFLOWS.md`
+- `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`
 - `README.md`
 
 Os documentos especializados complementam este plano. Em caso de conflito, este plano define a prioridade de produto e o comando interno define o método obrigatório de execução.
@@ -391,3 +393,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Por decisão do usuário, host persistente, Docker, credenciais e validação real de Meta/Evolution foram postergados. A continuidade interna foi liberada em local/preview pelo Agent Engineering Plane, começando pela fatia B1 de cenários isolados. |
 | 2026-09-12 | Fatia B2 concluída em local/preview: propostas determinísticas de tools nativas, schemas validados, risco/aprovação server-side, tools em `review`, propostas `draft`, isolamento, idempotência e endpoints autenticados. Suíte passou com 155 testes, typecheck e build aprovados. Próxima prioridade interna: B3. |
 | 2026-09-12 | Fatia B3 concluída em local/preview: workflow draft compilável por blueprint, vínculo idempotente, tools condicionadas a aprovação/permissão/adapter, preservação de snapshot publicado, nenhum run automático e isolamento. Suíte passou com 158 testes, typecheck, build e preview aprovados. Próxima prioridade interna: B4. |
+| 2026-09-12 | Descoberta de fontes externas de engenharia documentada em `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`. O comando raiz `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` passa a ser obrigatório a partir da próxima execução da B4, sem substituir os contratos internos de segurança, workspace e Tool Gateway. |
