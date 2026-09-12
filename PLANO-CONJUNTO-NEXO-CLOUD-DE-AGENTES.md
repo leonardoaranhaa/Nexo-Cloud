@@ -238,7 +238,7 @@ A validação técnica consolidada inclui typecheck, build, preview público e s
 Commit de referência desta consolidação de código:
 
 ```text
-f86b0e8 feat: add governed blueprint tool proposals
+2dc9f0f feat: generate governed workflow drafts from blueprints
 ```
 
 ## 7. Roadmap oficial atualizado
