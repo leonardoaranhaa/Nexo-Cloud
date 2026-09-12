@@ -76,7 +76,7 @@ test("Evolution inbound flows through queue, runtime, dispatch and operational h
   if (!address || typeof address === "string") throw new Error("test server did not bind");
   const { pg, sql } = await fixture(`http://127.0.0.1:${address.port}`);
   const secrets = memorySecretProvider(new Map([
-    ["nexo/ws/conn/api_key", "fixture-api-key"],
+    ["nexo/ws/conn/api_key", "fixture-api-key-1234567890"],
     ["nexo/ws/conn/webhook_jwt", "webhook-secret"],
   ]));
   const body = {

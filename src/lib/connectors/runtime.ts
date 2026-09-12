@@ -31,6 +31,7 @@ export type HealthcheckResult = {
     | "ok"
     | "configuration_invalid"
     | "secret_unavailable"
+    | "secret_invalid"
     | "timeout"
     | "unauthorized"
     | "rate_limited"

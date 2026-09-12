@@ -1,4 +1,5 @@
 import type { ConnectorConfig, ConnectorContext } from "./runtime.ts";
+import { parseEvolutionConfig, validateEvolutionApiKey } from "./evolution.ts";
 
 export type EvolutionTextMessage = {
   baseUrl: string;
@@ -10,30 +11,12 @@ export type EvolutionTextMessage = {
 
 export type EvolutionDispatchResult = {
   status: "sent" | "failed" | "unknown";
-  code: "ok" | "secret_unavailable" | "invalid_request" | "unauthorized" | "rate_limited" | "provider_error" | "timeout" | "network_error";
+  code: "ok" | "secret_unavailable" | "secret_invalid" | "invalid_request" | "unauthorized" | "rate_limited" | "provider_error" | "timeout" | "network_error";
   httpStatus?: number;
   latencyMs: number;
   message: string;
   providerMessageId?: string;
 };
-
-function baseUrl(value: string): URL {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("EVOLUTION_CONFIG_INVALID: baseUrl must be an absolute URL");
-  }
-  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
-  if (url.protocol !== "https:" && !local) throw new Error("EVOLUTION_CONFIG_INVALID: baseUrl must use HTTPS");
-  return url;
-}
-
-function timeoutMs(value: number | undefined): number {
-  if (value === undefined) return 10000;
-  if (!Number.isFinite(value)) throw new Error("EVOLUTION_CONFIG_INVALID: timeoutMs must be finite");
-  return Math.min(Math.max(Math.round(value), 500), 30000);
-}
 
 function recipient(value: string): string {
   const normalized = value.trim().replace(/^[+\s]/, "").replace(/[\s().-]/g, "");
@@ -44,11 +27,10 @@ function recipient(value: string): string {
 export class EvolutionTextDispatcher {
   async sendText(message: EvolutionTextMessage, ctx: ConnectorContext): Promise<EvolutionDispatchResult> {
     const startedAt = Date.now();
-    let url: URL;
+    let config: ReturnType<typeof parseEvolutionConfig>;
     let to: string;
     try {
-      url = baseUrl(message.baseUrl);
-      if (!message.instance.trim()) throw new Error("EVOLUTION_CONFIG_INVALID: instance is required");
+      config = parseEvolutionConfig({ baseUrl: message.baseUrl, instance: message.instance, timeoutMs: message.timeoutMs });
       to = recipient(message.recipient);
       if (!message.text.trim() || message.text.length > 4096) throw new Error("TEXT_INVALID");
     } catch {
@@ -66,11 +48,16 @@ export class EvolutionTextDispatcher {
     } catch {
       return { status: "failed", code: "secret_unavailable", latencyMs: Date.now() - startedAt, message: "The Evolution API key could not be resolved server-side" };
     }
+    try {
+      apiKey = validateEvolutionApiKey(apiKey);
+    } catch {
+      return { status: "failed", code: "secret_invalid", latencyMs: Date.now() - startedAt, message: "The Evolution API key failed server-side validation" };
+    }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs(message.timeoutMs));
+    const timer = setTimeout(() => controller.abort(), config.timeoutMs);
     try {
-      const endpoint = new URL(`/message/sendText/${encodeURIComponent(message.instance)}`, url).toString();
+      const endpoint = new URL(`/message/sendText/${encodeURIComponent(config.instance)}`, config.baseUrl).toString();
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { accept: "application/json", "content-type": "application/json", apikey: apiKey },

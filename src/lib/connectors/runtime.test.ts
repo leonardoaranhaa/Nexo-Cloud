@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 import { HttpHealthcheckAdapter } from "./runtime.ts";
-import { EvolutionApiAdapter } from "./evolution.ts";
+import { EvolutionApiAdapter, validateEvolutionApiKey, validateEvolutionBaseUrl, validateEvolutionInstance } from "./evolution.ts";
 import { EvolutionTextDispatcher } from "./evolution-messaging.ts";
 import { createSecretResolver, localDevelopmentSecretProvider, memorySecretProvider, SecretResolverError } from "./secrets.ts";
 
@@ -58,8 +58,8 @@ test("http adapter rejects non-local insecure endpoints before network access", 
 
 test("Evolution adapter calls connectionState with the apikey header", async () => {
   const server = createServer((request, response) => {
-    assert.equal(request.url, "/instance/connectionState/loja%2Fcentro");
-    assert.equal(request.headers.apikey, "test-key");
+    assert.equal(request.url, "/instance/connectionState/loja-centro");
+    assert.equal(request.headers.apikey, "test-api-key-1234567890");
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ state: "open", token: "must-not-leak" }));
   });
@@ -72,18 +72,18 @@ test("Evolution adapter calls connectionState with the apikey header", async () 
         id: "conn-1",
         provider: "evolution",
         secretRef: "secret-1",
-        config: { baseUrl: `http://127.0.0.1:${address.port}`, instance: "loja/centro", timeoutMs: 1000 },
+        config: { baseUrl: `http://127.0.0.1:${address.port}`, instance: "loja-centro", timeoutMs: 1000 },
       },
       {
         workspaceId: "ws-1",
         connectionId: "conn-1",
         traceId: "trace-1",
-        getSecret: async () => "test-key",
+        getSecret: async () => "test-api-key-1234567890",
       },
     );
     assert.equal(result.status, "healthy");
     assert.equal(result.httpStatus, 200);
-    assert.doesNotMatch(result.message, /test-key|must-not-leak/);
+    assert.doesNotMatch(result.message, /test-api-key-1234567890|must-not-leak/);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
@@ -91,8 +91,8 @@ test("Evolution adapter calls connectionState with the apikey header", async () 
 
 test("Evolution dispatcher sends the documented text payload", async () => {
   const server = createServer(async (request, response) => {
-    assert.equal(request.url, "/message/sendText/loja%2Fcentro");
-    assert.equal(request.headers.apikey, "test-key");
+    assert.equal(request.url, "/message/sendText/loja-centro");
+    assert.equal(request.headers.apikey, "test-api-key-1234567890");
     let body = "";
     for await (const chunk of request) body += chunk;
     assert.deepEqual(JSON.parse(body), { number: "5511999999999", textMessage: { text: "Olá" } });
@@ -104,13 +104,13 @@ test("Evolution dispatcher sends the documented text payload", async () => {
   if (!address || typeof address === "string") throw new Error("test server did not bind");
   try {
     const result = await new EvolutionTextDispatcher().sendText(
-      { baseUrl: `http://127.0.0.1:${address.port}`, instance: "loja/centro", recipient: "+55 (11) 99999-9999", text: "Olá", timeoutMs: 1000 },
-      { workspaceId: "ws-1", connectionId: "conn-1", traceId: "trace-1", getSecret: async () => "test-key" },
+      { baseUrl: `http://127.0.0.1:${address.port}`, instance: "loja-centro", recipient: "+55 (11) 99999-9999", text: "Olá", timeoutMs: 1000 },
+      { workspaceId: "ws-1", connectionId: "conn-1", traceId: "trace-1", getSecret: async () => "test-api-key-1234567890" },
     );
     assert.equal(result.status, "sent");
     assert.equal(result.code, "ok");
     assert.equal(result.providerMessageId, "provider-id");
-    assert.doesNotMatch(result.message, /test-key|provider-id/);
+    assert.doesNotMatch(result.message, /test-api-key-1234567890|provider-id/);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
@@ -149,4 +149,27 @@ test("local development provider cannot be created outside development", () => {
   } finally {
     if (previousNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousNodeEnv;
   }
+});
+
+test("Evolution validation rejects insecure remote URLs and path-like instances", () => {
+  assert.throws(() => validateEvolutionBaseUrl("http://evolution.example.com"), /HTTPS/);
+  assert.throws(() => validateEvolutionBaseUrl("https://user:pass@evolution.example.com"), /credentials/);
+  assert.throws(() => validateEvolutionInstance("loja/centro"), /letters, numbers/);
+  assert.equal(validateEvolutionInstance("loja-centro_1"), "loja-centro_1");
+});
+
+test("Evolution validation rejects empty, short and whitespace-bearing API keys", () => {
+  assert.throws(() => validateEvolutionApiKey(""), /API key is invalid/);
+  assert.throws(() => validateEvolutionApiKey("short-key"), /API key is invalid/);
+  assert.throws(() => validateEvolutionApiKey("key-with whitespace-123"), /API key is invalid/);
+  assert.equal(validateEvolutionApiKey("fixture-api-key-1234567890"), "fixture-api-key-1234567890");
+});
+
+test("Evolution healthcheck reports invalid resolved credentials without leaking them", async () => {
+  const result = await new EvolutionApiAdapter().healthcheck(
+    { id: "conn-1", provider: "evolution", secretRef: "secret-1", config: { baseUrl: "http://127.0.0.1:9999", instance: "loja" } },
+    { workspaceId: "ws-1", connectionId: "conn-1", traceId: "trace-1", getSecret: async () => "short-key" },
+  );
+  assert.equal(result.code, "secret_invalid");
+  assert.doesNotMatch(result.message, /short-key/);
 });

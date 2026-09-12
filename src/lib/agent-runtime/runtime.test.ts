@@ -87,7 +87,7 @@ test("Agent Runtime processes one inbound job and dispatches one outbound reply"
     assert.equal(queued.created, true);
     const result = await runNextAgentRuntimeJob(sql, "worker-test", {
       async generate() { return { text: "Atendemos das 9h às 18h.", usedAi: true }; },
-    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));
+    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
     assert.equal(result.status, "succeeded");
     const jobs = await pg.query<{ status: string }>("select status from agent_runtime_jobs where id = $1", [queued.id]);
     const messages = await pg.query<{ direction: string; status: string; content: { text?: string } }>("select direction, status, content from messages where workspace_id = 'ws' order by created_at");
@@ -148,7 +148,7 @@ test("Agent Runtime executes only tools authorized by the published version", as
       async generate() {
         return { text: "Registrei seu interesse.", usedAi: true, toolCalls: [{ id: "call-1", name: "lead.create_or_update", arguments: { stage: "new", score: 84, name: "Não deve ser capturado", email: "lead@example.com", intent: "availability_question", qualificationData: { need: "automação", company: "Não permitido" } } }] };
       },
-    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));
+    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
     assert.equal(result.status, "succeeded");
     const executions = await pg.query<{ status: string; idempotency_key: string }>("select status, idempotency_key from tool_executions where workspace_id = 'ws' order by created_at");
     assert.equal(executions.rows.some((row) => row.status === "succeeded" && row.idempotency_key === `runtime:${queued.id}:tool:call-1`), true);
@@ -196,7 +196,7 @@ test("Agent Runtime follows a second model pass after executing a tool call", as
         assert.equal(input.toolRound?.results[0]?.output.stage, "qualifying");
         return { text: "Confirmado: a sua solicitação foi registrada e já foi encaminhada para continuidade.", usedAi: true };
       },
-    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));
+    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
     assert.equal(result.status, "succeeded");
     const outbound = await pg.query<{ direction: string; content: { text?: string } }>("select direction, content from messages where workspace_id = 'ws' and direction = 'outbound' order by created_at desc limit 1");
     assert.equal(outbound.rows[0]?.content.text, "Confirmado: a sua solicitação foi registrada e já foi encaminhada para continuidade.");
@@ -229,7 +229,7 @@ test("Agent Runtime exposes authorized conversation handoff as a native tool", a
         if (turns === 1) return { text: "Vou encaminhar você para uma pessoa.", usedAi: true, toolCalls: [{ id: "handoff-1", name: "conversation.handoff", arguments: { action: "assign", reason: "Cliente solicitou atendimento humano" } }] };
         return { text: "Certo, um atendente continuará o atendimento.", usedAi: true };
       },
-    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key"]])));
+    }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
     assert.equal(result.status, "succeeded");
     assert.equal(turns, 2);
     const conversation = await pg.query<{ status: string; handoff_reason: string }>("select status, handoff_reason from conversations where id = 'conversation'");

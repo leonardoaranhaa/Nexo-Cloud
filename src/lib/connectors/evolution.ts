@@ -1,51 +1,125 @@
 import type { ConnectorAdapter, ConnectorConfig, ConnectorContext, ConnectorInstance, HealthcheckResult } from "./runtime.ts";
 
-function required(value: string | undefined, field: string): string {
-  if (!value?.trim()) throw new Error(`EVOLUTION_CONFIG_INVALID: ${field} is required`);
-  return value.trim();
+export type EvolutionValidatedConfig = {
+  baseUrl: string;
+  instance: string;
+  timeoutMs: number;
+};
+
+export class EvolutionConfigError extends Error {
+  readonly code:
+    | "base_url_invalid"
+    | "base_url_insecure"
+    | "base_url_credentials_forbidden"
+    | "base_url_suffix_forbidden"
+    | "instance_invalid"
+    | "timeout_invalid"
+    | "api_key_invalid";
+
+  constructor(code: EvolutionConfigError["code"], message: string) {
+    super(message);
+    this.name = "EvolutionConfigError";
+    this.code = code;
+  }
 }
 
-function baseUrl(value: string): URL {
+function localHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+export function validateEvolutionApiKey(value: unknown): string {
+  if (typeof value !== "string") throw new EvolutionConfigError("api_key_invalid", "Evolution API key is invalid");
+  const normalized = value.trim();
+  if (normalized.length < 16 || normalized.length > 512 || /[\u0000-\u001f\u007f\s]/.test(normalized)) {
+    throw new EvolutionConfigError("api_key_invalid", "Evolution API key is invalid");
+  }
+  return normalized;
+}
+
+export function validateEvolutionWebhookSecret(value: unknown): string {
+  if (typeof value !== "string") throw new EvolutionConfigError("api_key_invalid", "Evolution webhook secret is invalid");
+  const normalized = value.trim();
+  if (normalized.length < 16 || normalized.length > 1024 || /[\u0000-\u001f\u007f\s]/.test(normalized)) {
+    throw new EvolutionConfigError("api_key_invalid", "Evolution webhook secret is invalid");
+  }
+  return normalized;
+}
+
+export function validateEvolutionBaseUrl(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new EvolutionConfigError("base_url_invalid", "Evolution base URL is required");
+  }
   let url: URL;
   try {
-    url = new URL(value);
+    url = new URL(value.trim());
   } catch {
-    throw new Error("EVOLUTION_CONFIG_INVALID: baseUrl must be an absolute URL");
+    throw new EvolutionConfigError("base_url_invalid", "Evolution base URL must be an absolute URL");
   }
-  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
-  if (url.protocol !== "https:" && !local) {
-    throw new Error("EVOLUTION_CONFIG_INVALID: baseUrl must use HTTPS");
+  if (!url.hostname || url.username || url.password || url.search || url.hash) {
+    throw new EvolutionConfigError("base_url_credentials_forbidden", "Evolution base URL contains unsupported credentials or suffixes");
   }
-  return url;
+  if (url.protocol !== "https:" && !localHost(url.hostname)) {
+    throw new EvolutionConfigError("base_url_insecure", "Evolution base URL must use HTTPS outside local development");
+  }
+  return url.toString().replace(/\/$/, "");
 }
 
-function timeoutMs(value: number | undefined): number {
-  if (value === undefined) return 8000;
-  if (!Number.isFinite(value)) throw new Error("EVOLUTION_CONFIG_INVALID: timeoutMs must be finite");
+export function validateEvolutionInstance(value: unknown): string {
+  if (typeof value !== "string") throw new EvolutionConfigError("instance_invalid", "Evolution instance is invalid");
+  const normalized = value.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(normalized)) {
+    throw new EvolutionConfigError("instance_invalid", "Evolution instance must use letters, numbers, dot, underscore or hyphen");
+  }
+  return normalized;
+}
+
+export function validateEvolutionTimeout(value: unknown): number {
+  if (value === undefined || value === null) return 8000;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new EvolutionConfigError("timeout_invalid", "Evolution timeout must be a finite number");
+  }
   return Math.min(Math.max(Math.round(value), 500), 30000);
+}
+
+export function parseEvolutionConfig(config: unknown): EvolutionValidatedConfig {
+  const value = config && typeof config === "object" && !Array.isArray(config) ? config as ConnectorConfig : {};
+  return {
+    baseUrl: validateEvolutionBaseUrl(value.baseUrl),
+    instance: validateEvolutionInstance(value.instance),
+    timeoutMs: validateEvolutionTimeout(value.timeoutMs),
+  };
+}
+
+export function validateEvolutionCredential(input: { apiKey: unknown; baseUrl: unknown; instance: unknown }): {
+  apiKey: string;
+  baseUrl: string;
+  instance: string;
+} {
+  return {
+    apiKey: validateEvolutionApiKey(input.apiKey),
+    baseUrl: validateEvolutionBaseUrl(input.baseUrl),
+    instance: validateEvolutionInstance(input.instance),
+  };
 }
 
 export class EvolutionApiAdapter implements ConnectorAdapter {
   readonly provider = "evolution";
 
   validateConfig(config: unknown): void {
-    const value = (config && typeof config === "object" ? config : {}) as ConnectorConfig;
-    baseUrl(required(value.baseUrl, "baseUrl"));
-    required(value.instance, "instance");
-    timeoutMs(value.timeoutMs);
+    parseEvolutionConfig(config);
   }
 
   async healthcheck(instance: ConnectorInstance, ctx: ConnectorContext): Promise<HealthcheckResult> {
     const startedAt = Date.now();
-    const config = instance.config;
+    let config: EvolutionValidatedConfig;
     try {
-      this.validateConfig(config);
+      config = parseEvolutionConfig(instance.config);
     } catch (error) {
       return {
         status: "unhealthy",
         code: "configuration_invalid",
         latencyMs: Date.now() - startedAt,
-        message: error instanceof Error ? error.message.replace(/^EVOLUTION_CONFIG_INVALID: /, "") : "Invalid Evolution configuration",
+        message: error instanceof Error ? error.message : "Invalid Evolution configuration",
       };
     }
 
@@ -60,13 +134,22 @@ export class EvolutionApiAdapter implements ConnectorAdapter {
         message: "The Evolution API key could not be resolved server-side",
       };
     }
-
-    const url = baseUrl(config.baseUrl!);
-    const path = `/instance/connectionState/${encodeURIComponent(config.instance!)}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs(config.timeoutMs));
     try {
-      const response = await fetch(new URL(path, url).toString(), {
+      apiKey = validateEvolutionApiKey(apiKey);
+    } catch {
+      return {
+        status: "unhealthy",
+        code: "secret_invalid",
+        latencyMs: Date.now() - startedAt,
+        message: "The Evolution API key failed server-side validation",
+      };
+    }
+
+    const path = `/instance/connectionState/${encodeURIComponent(config.instance)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+    try {
+      const response = await fetch(new URL(path, config.baseUrl).toString(), {
         method: "GET",
         headers: { accept: "application/json", apikey: apiKey },
         signal: controller.signal,

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Sql } from "@/lib/db";
 import { connectorDefinitionForProvider } from "../connectors/registry.ts";
 import type { SecretProvisioner } from "../connectors/secrets.ts";
+import { validateEvolutionBaseUrl, validateEvolutionCredential, validateEvolutionInstance, validateEvolutionWebhookSecret } from "../connectors/evolution.ts";
 
 export type OrganizationRole = "owner" | "admin" | "member" | "billing";
 export type WorkspaceRole = "workspace_admin" | "builder" | "operator" | "analyst" | "viewer";
@@ -1055,6 +1056,10 @@ export async function createConnection(
   const name = requiredText(input.name, "name", 120);
   const definition = connectorDefinitionForProvider(input.provider);
   if (!definition) throw new Error("INVALID_PROVIDER");
+  if (input.provider === "evolution" && (input.baseUrl !== undefined || input.instance !== undefined)) {
+    validateEvolutionBaseUrl(input.baseUrl);
+    validateEvolutionInstance(input.instance);
+  }
   const id = randomUUID();
   const config = JSON.stringify({
     instance: input.instance?.trim().slice(0, 160) || null,
@@ -1084,11 +1089,15 @@ export async function updateConnection(
   },
 ): Promise<void> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
-  const current = await sql.query<{ workspace_id: string; config: JsonObject }>(
-    `select workspace_id, config from connections where id = $1 and deleted_at is null limit 1`,
+  const current = await sql.query<{ workspace_id: string; provider: ConnectionProvider; config: JsonObject }>(
+    `select workspace_id, provider, config from connections where id = $1 and deleted_at is null limit 1`,
     [input.id],
   );
   if (!current[0] || current[0].workspace_id !== input.workspaceId) throw new WorkspaceAccessError();
+  if (current[0].provider === "evolution" && (input.baseUrl !== undefined || input.instance !== undefined)) {
+    validateEvolutionBaseUrl(input.baseUrl ?? current[0].config?.baseUrl);
+    validateEvolutionInstance(input.instance ?? current[0].config?.instance);
+  }
   const config = {
     ...(current[0].config ?? {}),
     ...(input.instance !== undefined ? { instance: input.instance.trim().slice(0, 160) || null } : {}),
@@ -1143,26 +1152,17 @@ export async function provisionEvolutionCredential(
   );
   if (!connection[0]) throw new Error("CONNECTION_NOT_FOUND");
   if (connection[0].provider !== "evolution") throw new Error("EVOLUTION_CONNECTION_REQUIRED");
-  const apiKey = requiredText(input.apiKey, "apiKey", 512);
-  const instance = requiredText(input.instance, "instance", 160);
-  let baseUrl: URL;
-  try {
-    baseUrl = new URL(requiredText(input.baseUrl, "baseUrl", 240));
-  } catch {
-    throw new Error("INVALID_BASE_URL");
-  }
-  const local = baseUrl.hostname === "localhost" || baseUrl.hostname === "127.0.0.1" || baseUrl.hostname === "::1";
-  if (baseUrl.protocol !== "https:" && !local) throw new Error("BASE_URL_MUST_USE_HTTPS");
+  const validated = validateEvolutionCredential(input);
 
   const secretRef = connection[0].secret_ref ?? `nexo/${input.workspaceId}/${input.connectionId}/api_key`;
-  await provisioner.put(secretRef, apiKey, {
+  await provisioner.put(secretRef, validated.apiKey, {
     workspaceId: input.workspaceId,
     connectionId: input.connectionId,
   });
   const config = {
     ...(connection[0].config ?? {}),
-    baseUrl: baseUrl.toString().replace(/\/$/, ""),
-    instance,
+    baseUrl: validated.baseUrl,
+    instance: validated.instance,
   };
   await sql.query(
     `update connections
@@ -1193,7 +1193,7 @@ export async function provisionEvolutionWebhookCredential(
   );
   if (!connection[0]) throw new Error("CONNECTION_NOT_FOUND");
   if (connection[0].provider !== "evolution") throw new Error("EVOLUTION_CONNECTION_REQUIRED");
-  const secret = requiredText(input.secret, "secret", 1024);
+  const secret = validateEvolutionWebhookSecret(input.secret);
   const secretRef = `nexo/${input.workspaceId}/${input.connectionId}/webhook_jwt`;
   await provisioner.put(secretRef, secret, {
     workspaceId: input.workspaceId,

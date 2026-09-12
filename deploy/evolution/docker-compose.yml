@@ -1,0 +1,74 @@
+services:
+  api:
+    image: ${EVOLUTION_IMAGE:?set EVOLUTION_IMAGE to a pinned tag or digest}
+    container_name: nexo_evolution_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DATABASE}?schema=evolution_api
+      CACHE_REDIS_URI: redis://redis:6379/6
+    ports:
+      - "${EVOLUTION_BIND_ADDRESS:-127.0.0.1}:${EVOLUTION_HOST_PORT:-8080}:8080"
+    expose:
+      - "8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: nexo_evolution_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE:?set POSTGRES_DATABASE}
+      POSTGRES_USER: ${POSTGRES_USERNAME:?set POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  redis:
+    image: redis:7-alpine
+    container_name: nexo_evolution_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  evolution_instances:
+    name: nexo_evolution_instances
+  postgres_data:
+    name: nexo_evolution_postgres
+  redis_data:
+    name: nexo_evolution_redis
