@@ -2,7 +2,7 @@
 
 **Status do documento:** fonte de verdade operacional do repositório.
 
-**Última consolidação:** 2026-09-11.
+**Última consolidação:** 2026-09-12.
 
 **Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar.
 
@@ -328,7 +328,7 @@ A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketpl
 3. implementar agenda e disponibilidade como conector ou ferramenta controlada;
 4. fechar atualização e rollback de instalações do Marketplace;
 5. criar `marketplace/installed` e a operação de Minhas Instalações;
-6. criar e validar templates prontos de Atendimento e Vendas;
+6. criar e validar templates prontos de Atendimento e Vendas; **concluído e revalidado com os produtos próprios, manifestos, permissões, instalação, customização, isolamento, atualização e rollback**;
 7. executar validação com conexão Meta ou Evolution real;
 8. revisar observabilidade, quotas e readiness de produção; **relatório server-side, painel visual em `/metrics` e checklist explícita de aprovação para produção implementados no preview, agregando conexões, jobs, quotas, logs e critérios manuais; observabilidade externa e alertas seguem pendentes**;
 9. retomar AWS somente após o núcleo demonstrável passar pelos critérios de aceite.
