@@ -4,12 +4,16 @@ import type { JsonObject } from "../multitenancy/server";
 const workspaceId = z.string().trim().min(1).max(120);
 const agentId = z.string().trim().min(1).max(120);
 const blueprintId = z.string().trim().min(1).max(120);
+const versionId = z.string().trim().min(1).max(120);
 const jsonObject = z.record(z.string(), z.unknown()).transform((value) => value as JsonObject);
 
 export const workspaceOnlyInput = z.object({ workspaceId }).strict();
 export const workspaceAgentInput = z.object({ workspaceId, agentId }).strict();
 export const workspaceBlueprintInput = z.object({ workspaceId, agentId, blueprintId }).strict();
 export const workspaceBlueprintListInput = z.object({ workspaceId, blueprintId }).strict();
+export const evaluationHarnessInput = z.object({ workspaceId, agentId, blueprintId, baselineVersionId: versionId, candidateVersionId: versionId }).strict();
+export const evaluationHarnessListInput = z.object({ workspaceId, agentId: agentId.optional(), blueprintId: blueprintId.optional() }).strict();
+export const evaluationHarnessRunInput = z.object({ workspaceId, runId: z.string().trim().min(1).max(120) }).strict();
 export const reviewToolProposalInput = z.object({
   workspaceId,
   proposalId: z.string().trim().min(1).max(120),

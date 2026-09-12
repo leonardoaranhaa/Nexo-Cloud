@@ -4,6 +4,9 @@ import { randomUUID } from "node:crypto";
 import type { JsonObject } from "./server";
 import {
   blueprintInput,
+  evaluationHarnessInput,
+  evaluationHarnessListInput,
+  evaluationHarnessRunInput,
   reviewToolProposalInput,
   updateAgentInput,
   workspaceBlueprintInput,
@@ -90,6 +93,33 @@ export const runWorkspaceAgentBlueprintScenarios = createServerFn({ method: "POS
     const { getSql } = await import("@/lib/db");
     const { runBlueprintScenarios } = await import("@/lib/agent-engineering/scenarios");
     return runBlueprintScenarios(await getSql(), context.userId, data);
+  });
+
+export const runWorkspaceAgentEvaluationHarness = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input) => evaluationHarnessInput.parse(input))
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { runEvaluationHarness } = await import("@/lib/agent-engineering/harness");
+    return runEvaluationHarness(await getSql(), context.userId, data);
+  });
+
+export const listWorkspaceAgentEvaluationHarnessRuns = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input) => evaluationHarnessListInput.parse(input))
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { listEvaluationHarnessRuns } = await import("@/lib/agent-engineering/harness");
+    return listEvaluationHarnessRuns(await getSql(), context.userId, data);
+  });
+
+export const getWorkspaceAgentEvaluationHarnessRun = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input) => evaluationHarnessRunInput.parse(input))
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getEvaluationHarnessRun } = await import("@/lib/agent-engineering/harness");
+    return getEvaluationHarnessRun(await getSql(), context.userId, data);
   });
 
 export const generateWorkspaceAgentToolProposals = createServerFn({ method: "POST" })

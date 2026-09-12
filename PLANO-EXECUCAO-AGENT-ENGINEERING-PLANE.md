@@ -206,10 +206,14 @@ Transformar capacidades complexas do blueprint em grafos de workflow versionados
 
 **Entrada obrigatória da próxima execução:** executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` e aplicar a matriz de fontes de `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md` antes de criar o contrato, a migration ou os testes da harness.
 
+**Status: primeira fatia backend concluída em local/preview; painel de comparação ainda pendente.**
+
 **Gate pré-B4:** concluído em 2026-09-12. Foram corrigidos e testados idempotência estável, autorização por versão publicada, snapshots de tool/version/schema/adapter, validação de output, redaction recursiva, readiness de conexões, snapshots de B1, schemas runtime, integridade multi-tenant, ações contextuais do frontend, quota fail-closed, ingestão assíncrona de webhook, monotonicidade/reconciliação de delivery, bloqueio de hosts privados no MCP e tracing de auditoria do Nexo Bot. Os gates finais passaram com 180 testes, typecheck, lint, build, preview, smoke Playwright e `check:auth`. A próxima execução pode iniciar diretamente a B4, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD`.
 
 **Objetivo**  
 Criar suite de avaliação reutilizável que combina cenários do blueprint + métricas de qualidade, custo e robustez.
+
+**Primeira fatia implementada:** `runEvaluationHarness` compara duas versões draft/publicadas do mesmo agente usando o mesmo conjunto de cenários, o pipeline determinístico de decisão e a recuperação RAG somente leitura. A migration `0050_agent_evaluation_harness.sql` persiste snapshots sanitizados de configuração e tools, métricas por versão e diferenças/regressões por cenário, com guards de integridade multi-tenant. Endpoints autenticados permitem executar, listar e consultar runs. A harness não grava Learning Events, não cria jobs, não envia mensagens, não chama adapters, não publica e não promove candidatos.
 
 **Instruções de construção para a IA**
 
@@ -223,6 +227,8 @@ Criar suite de avaliação reutilizável que combina cenários do blueprint + m�
    - guardrail_violation_count
 3. Criar comando/job que executa a suite completa de um blueprint/versão e grava snapshot comparável.
 4. Expor no console (rota futura `/agents/:id/evaluations`) os resultados e comparação entre versões.
+
+**Próxima fatia B4:** expor a consulta de runs na área **Testes** do agente, com seleção contextual de versões, estados vazio/carregando/erro, comparação legível e smoke Playwright. O painel não poderá publicar, promover ou executar efeitos externos.
 
 **Critérios de aceite**
 - Uma execução de avaliação produz snapshot completo e versionado

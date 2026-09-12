@@ -2,7 +2,7 @@
 
 **Status do documento:** fonte de verdade operacional do repositório.
 
-**Última consolidação:** 2026-09-12 — hardening pré-B4 concluído.
+**Última consolidação:** 2026-09-12 — primeira fatia B4 backend concluída; painel pendente.
 
 **Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar. A partir da próxima execução da B4, também deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` conforme `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`.
 
@@ -173,11 +173,11 @@ As instalações agora possuem lista geral em `/marketplace/installed`, revisão
 
 ### 5.8 Nexo Learning RAG e Improvement Lab
 
-**Estado: fundação, avaliação, casos e laboratório implementados; promoção pendente.**
+**Estado: fundação, avaliação, casos, laboratório e primeira harness comparável implementados; promoção pendente.**
 
-Existem eventos sanitizados, consentimento, mascaramento, avaliações, casos, chunks de engenharia, recuperação interna, candidatos versionados e revisão. Dados privados de clientes não entram no aprendizado global por padrão.
+Existem eventos sanitizados, consentimento, mascaramento, avaliações, casos, chunks de engenharia, recuperação interna, candidatos versionados, revisão e a primeira harness offline comparável. Dados privados de clientes não entram no aprendizado global por padrão.
 
-Ainda faltam avaliação offline contra regressões, gate formal de promoção, publicação gradual, comparação entre versões, A/B testing, painel operacional e eventual separação física do Learning Store.
+A primeira Evaluation Harness offline agora compara duas versões do mesmo agente, calcula `success_rate`, tokens médios, latência média, taxa de erro de tool, taxa de handoff e violações de guardrail, persiste snapshots sanitizados e marca regressões por cenário. Ainda faltam painel operacional de comparação, gate formal de promoção, publicação gradual, A/B testing e eventual separação física do Learning Store.
 
 ### 5.9 Experiência principal
 
@@ -193,7 +193,7 @@ Ainda faltam configurações server-side completas, governança por papel, confi
 
 O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails. A fatia B1 adicionou cenários estruturados, endpoint server-side autenticado, execução offline reutilizando decisão e RAG, expectativas de resposta/handoff/tools, persistência de resultados em tabelas próprias e snapshots sanitizados no Learning RAG. A fatia B2 adicionou geração determinística de propostas de tools nativas confirmadas, schemas preservados do Tool Registry, risco e aprovação derivados server-side, tools workspace-scoped em `review`, propostas `draft`, idempotência e endpoint de listagem. A fatia B3 adicionou vínculo idempotente entre blueprint e workflow, geração de grafo compilável em `draft`, preservação de versões publicadas, capacidades pendentes e materialização condicional de tools aprovadas, autorizadas e compatíveis com adapters do executor.
 
-As avaliações B1, a geração B2 e a geração B3 não criam jobs de produção, mensagens, deliveries, chamadas externas ou publicação automática. Tools B2 não recebem permissões de agente e não podem ser resolvidas pelo runtime enquanto estiverem em `review`. Workflows B3 não criam runs e somente incluem tools quando há proposta aprovada, tool ativa, permissão habilitada na versão draft e adapter de workflow confirmado. Ainda faltam Evaluation Harness comparável entre versões, indexação de documentos e sistemas e testes automatizados de qualidade antes da publicação.
+As avaliações B1, a geração B2, a geração B3 e a harness B4 não criam jobs de produção, mensagens, deliveries, chamadas externas ou publicação automática. Tools B2 não recebem permissões de agente e não podem ser resolvidas pelo runtime enquanto estiverem em `review`. Workflows B3 não criam runs e somente incluem tools quando há proposta aprovada, tool ativa, permissão habilitada na versão draft e adapter de workflow confirmado. A B4 já compara versões no backend, persiste métricas, snapshots sanitizados e regressões por cenário; ainda faltam painel operacional, indexação de documentos e sistemas e testes automatizados de qualidade antes da publicação.
 
 ### 5.11 Nexo Bot
 
@@ -213,7 +213,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0049_nexo_bot_audit_trace.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria correlacionável do Nexo Bot, workflows de erro, produtos próprios do Nexo, propostas governadas de tools, vínculos de workflows gerados, snapshots de avaliação e integridade multi-tenant em banco.
+O repositório possui migrations até `0050_agent_evaluation_harness.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria correlacionável do Nexo Bot, workflows de erro, produtos próprios do Nexo, propostas governadas de tools, vínculos de workflows gerados, snapshots de avaliação, integridade multi-tenant em banco e comparação de versões.
 
 As rotas principais são:
 
@@ -233,7 +233,7 @@ As rotas principais são:
 /marketplace/installed/:installationId
 ```
 
-A validação técnica consolidada inclui typecheck, lint sem erros e sem warnings, build, preview local, `check:auth` aprovado com o dev server oficial e suíte automatizada com **180 testes aprovados e 0 falhas**. A matriz Playwright desktop/mobile validou as rotas críticas sem erros de console/page ou overflow reportado pelo gate. O smoke não substitui testes autenticados nem validação de canal real.
+A validação técnica consolidada inclui typecheck, lint sem erros e sem warnings, build, preview local e suíte automatizada com **184 testes aprovados e 0 falhas**. A matriz Playwright desktop/mobile validou as rotas críticas sem erros de console/page ou overflow reportado pelo gate. O smoke não substitui testes autenticados nem validação de canal real.
 
 Commit de referência desta consolidação de código:
 
@@ -303,11 +303,11 @@ Z-API não é prioridade desta sequência, porque acrescenta principalmente outr
 
 ### Learning RAG
 
-**Status: fundação e laboratório implementados; gate de promoção pendente.**
+**Status: fundação, primeira harness comparável e laboratório implementados; painel e gate de promoção pendentes.**
 
 Retomar depois do fechamento do núcleo de vendas, ferramentas e Marketplace interno.
 
-O Evaluation Harness não deve iniciar antes do hardening pré-B4 identificado na auditoria de 2026-09-12: Tool Gateway único com autorização da versão publicada, idempotência estável, tool/version congelada, output schema e redaction recursiva; validação runtime de entradas; snapshots coerentes de B1; e gates de lint, testes e Playwright verdes.
+O hardening pré-B4 foi concluído. A primeira fatia da Evaluation Harness já compara versões offline sem efeitos externos; a próxima fatia deve construir a superfície de comparação no console, mantendo Tool Gateway único, snapshots sanitizados, validação runtime, isolamento e gates de lint, testes e Playwright.
 
 ### AWS e infraestrutura permanente
 
@@ -337,19 +337,19 @@ A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketpl
 
 ### 8.1 Prioridade interna durante a postergação de conexões reais
 
-Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas em modo offline/evaluation; a próxima frente interna é o Evaluation Harness comparável (`B4`). A próxima sessão que iniciar B4 deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar a implementação. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
+Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas e a primeira fatia backend da B4 está implementada em modo offline/evaluation. A próxima execução deve continuar a B4 pelo painel de comparação, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar a implementação. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
 
 A validação real de Meta/Evolution permanece registrada como pendência operacional e deverá ser retomada quando o host estiver preparado. Nenhuma sessão deve tentar contornar essa dependência criando credenciais no repositório, simulando healthcheck saudável ou tratando o preview como canal de produção.
 
 ### 8.2 Gate de refatoração identificado pela auditoria
 
-**Status: concluído em 2026-09-12; B4 liberada para a próxima sessão.**
+**Status: hardening concluído em 2026-09-12; B4 em execução com primeira fatia backend entregue.**
 
 A varredura completa com as fontes recomendadas foi convertida em fatias verticais e resolvida antes da B4. O Tool Gateway exige workflow/agente publicados, permissão ativa da tool, aprovação persistida quando requerida, snapshot imutável de tool/version/schema/adapter, conexão saudável, output schema, redaction recursiva e idempotência estável antes do adapter. A execução grava `agent_id`, `agent_version_id`, `approval_id`, `approved_by`, `trace_id` e provider request id quando disponível.
 
 Também foram resolvidos: B1 agora seleciona versão/contexto e persiste snapshots; server functions críticas usam schemas Zod; o banco possui integrity guards multi-tenant; o store limpa estado contextual; o wizard persiste vínculo de conexão; duplicação e runs usam ações server-side idempotentes; o lint está limpo; a matriz Playwright está integrada ao projeto; quota disabled bloqueia runtime; webhook Meta somente ingere/enfileira; delivery Meta é monotônico e reconciliável; MCP bloqueia hosts privados por padrão; e auditoria do Nexo Bot possui `trace_id`.
 
-Os gates finais passaram: 180 testes, typecheck, lint sem erros/warnings, build, preview, smoke desktop/mobile e `check:auth` com o dev server oficial. A instrução `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` deve ser atualizada com esse resultado; a próxima sessão pode iniciar a B4, sem declarar conexão real Meta/Evolution, MCP real ou produção validados.
+Os gates finais da fatia passaram: 184 testes, typecheck, lint sem erros/warnings, build, preview e smoke desktop/mobile. A instrução `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` permanece aplicável; a próxima execução deve continuar o painel B4, sem declarar conexão real Meta/Evolution, MCP real ou produção validados.
 
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
 
@@ -411,3 +411,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Varredura completa aplicada às fontes recomendadas em cinco domínios. Typecheck, testes declarados e build passaram; lint falhou em duas regex Evolution; Playwright smoke validou 10 rotas sem erros de console/page, mas encontrou overflow mobile em `/agents`, `/connections` e `/create`. Confirmadas refatorações obrigatórias antes da B4 no Tool Gateway, idempotência, snapshots, validação runtime, estado contextual do frontend e gate de qualidade. Nenhum código de produto foi alterado. |
 | 2026-09-12 | Item 1 do hardening pré-B4 concluído: testes TDD e enforcement server-side de autorização por workflow publicado, agente publicado, permissão ativa na versão publicada e aprovação persistida para escritas. B3 passou a persistir `agentId`/`approvalNodeId` nos nós tool. Suíte passou com 165 testes, typecheck, lint sem erros, build e preview aprovados. Próxima fatia: idempotência estável de efeitos externos. |
 | 2026-09-12 | Hardening pré-B4 concluído: idempotência estável, snapshots imutáveis de tools e B1, output schema/redaction, readiness saudável, integridade multi-tenant, schemas runtime, ações persistentes do console, quota fail-closed, webhook Meta assíncrono, delivery monotônico/reconciliável, MCP com bloqueio de hosts privados e traceId do Nexo Bot. Migrations chegaram a `0049`; gates finais passaram com 180 testes, typecheck, lint sem warnings, build, preview, smoke desktop/mobile e `check:auth`. B4 está liberada para a próxima sessão; Meta/Evolution real continua postergado. |
+| 2026-09-12 | Primeira fatia B4 implementada: `0050_agent_evaluation_harness.sql`, comparação backend de duas versões por workspace, métricas de sucesso/tokens/latência/tools/handoff/guardrails, snapshots sanitizados de configuração e tools, regressões por cenário, endpoints autenticados e guards SQL. A harness não cria jobs, deliveries, Learning Events, chamadas externas, publicação ou promoção. Testes B4 cobrem regressão, sanitização, versões distintas, isolamento e efeitos nulos. Próxima fatia: painel de comparação na área Testes do agente. |

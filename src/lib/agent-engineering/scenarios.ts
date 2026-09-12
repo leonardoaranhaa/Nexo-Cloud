@@ -23,6 +23,14 @@ export type BlueprintEvaluationRun = {
   results: BlueprintScenarioResult[];
 };
 
+export type BlueprintVersionEvaluation = {
+  agentVersionId: string | null;
+  versionSnapshot: JsonObject;
+  toolsSnapshot: JsonObject[];
+  scenarios: BlueprintTestScenario[];
+  results: BlueprintScenarioResult[];
+};
+
 type BlueprintRow = {
   id: string;
   workspace_id: string;
@@ -178,7 +186,7 @@ function evaluateExpectations(
   return failures.slice(0, 20);
 }
 
-async function loadBlueprint(sql: Sql, input: { workspaceId: string; agentId: string; blueprintId: string }): Promise<BlueprintRow> {
+async function loadBlueprint(sql: Sql, input: { workspaceId: string; agentId: string; blueprintId: string; agentVersionId?: string }): Promise<BlueprintRow> {
   const rows = await sql.query<BlueprintRow>(
     `select b.id, b.workspace_id, b.agent_id, b.agent_type, b.test_scenarios,
             v.id as version_id, v.config as version_config,
@@ -190,16 +198,91 @@ async function loadBlueprint(sql: Sql, input: { workspaceId: string; agentId: st
        left join lateral (
          select id, config
            from agent_versions
-          where agent_id = b.agent_id and status in ('draft', 'published')
+          where agent_id = b.agent_id
+            and status in ('draft', 'published')
+            and ($4::text is null or id = $4)
           order by case when status = 'draft' then 0 else 1 end, version_number desc
           limit 1
        ) v on true
       where b.id = $1 and b.workspace_id = $2 and b.agent_id = $3
       limit 1`,
-    [input.blueprintId, input.workspaceId, input.agentId],
+    [input.blueprintId, input.workspaceId, input.agentId, input.agentVersionId ?? null],
   );
   if (!rows[0]) throw new Error("BLUEPRINT_NOT_FOUND");
+  if (input.agentVersionId && rows[0].version_id !== input.agentVersionId) throw new Error("AGENT_VERSION_NOT_FOUND");
   return rows[0];
+}
+
+function toolsSnapshot(authorizedTools: RuntimeAuthorizedTool[]): JsonObject[] {
+  return authorizedTools.map((tool) => ({
+    id: tool.id,
+    key: tool.key,
+    riskLevel: tool.riskLevel,
+    requireApproval: tool.requireApproval,
+    inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema,
+  }));
+}
+
+export async function evaluateBlueprintVersion(
+  sql: Sql,
+  input: { workspaceId: string; agentId: string; blueprintId: string; agentVersionId?: string; scenarioSet?: BlueprintTestScenario[] },
+): Promise<BlueprintVersionEvaluation> {
+  const blueprint = await loadBlueprint(sql, input);
+  const definedScenarios = input.scenarioSet ?? scenarios(blueprint.test_scenarios);
+  const agent = evaluationAgent(blueprint);
+  const authorizedTools: RuntimeAuthorizedTool[] = blueprint.version_id
+    ? await listAgentToolsForVersion(sql, input.workspaceId, blueprint.version_id)
+    : [];
+  const results: BlueprintScenarioResult[] = [];
+  for (const scenario of definedScenarios) {
+    const scenarioStartedAt = Date.now();
+    let ragEvidence: KnowledgeEvidence[] = [];
+    try {
+      ragEvidence = await retrieveKnowledge(sql, { workspaceId: input.workspaceId, query: scenario.input.message, limit: 5 });
+    } catch {
+      ragEvidence = [];
+    }
+    const execution = await evaluateAgentRuntimeTurn({
+      agent,
+      inboundText: scenario.input.message,
+      history: [],
+      ragEvidence,
+      authorizedTools,
+      evaluationContext: {
+        ...(scenario.input.channel ? { channel: scenario.input.channel } : {}),
+        ...scenario.input.context,
+      },
+    });
+    const reply = execution.reply ?? "";
+    const toolsCalled = (execution.toolCalls ?? []).map((call) => call.name).filter(Boolean);
+    const handoff = execution.decision.nextAction === "handoff" || execution.decision.answerMode === "handoff";
+    const outputTokens = estimateTokens(reply);
+    const failures = evaluateExpectations(scenario.expected, reply, toolsCalled, handoff, outputTokens);
+    results.push({
+      scenarioId: scenario.id,
+      name: scenario.name,
+      status: failures.length ? "failed" : "passed",
+      reply,
+      reason: execution.reason,
+      intent: execution.decision.intent,
+      nextAction: execution.decision.nextAction,
+      toolsCalled,
+      handoff,
+      usedAi: execution.usedAi,
+      evidenceCount: execution.decision.evidence.length,
+      latencyMs: Date.now() - scenarioStartedAt,
+      outputTokens,
+      failures,
+    });
+  }
+  return {
+    agentVersionId: blueprint.version_id,
+    versionSnapshot: object(blueprint.version_config) as JsonObject,
+    toolsSnapshot: toolsSnapshot(authorizedTools),
+    scenarios: definedScenarios,
+    results,
+  };
 }
 
 async function persistScenarioResult(sql: Sql, input: { runId: string; workspaceId: string; agentId: string; blueprintId: string; result: BlueprintScenarioResult }): Promise<void> {
@@ -275,77 +358,28 @@ export async function runBlueprintScenarios(
   input: { workspaceId: string; agentId: string; blueprintId: string },
 ): Promise<BlueprintEvaluationRun> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
-  const blueprint = await loadBlueprint(sql, input);
-  const definedScenarios = scenarios(blueprint.test_scenarios);
-  const agent = evaluationAgent(blueprint);
-  const authorizedTools: RuntimeAuthorizedTool[] = blueprint.version_id
-    ? await listAgentToolsForVersion(sql, input.workspaceId, blueprint.version_id)
-    : [];
-  const agentVersionSnapshot = object(blueprint.version_config) as JsonObject;
-  const toolsSnapshot = authorizedTools.map((tool) => ({
-    id: tool.id,
-    key: tool.key,
-    riskLevel: tool.riskLevel,
-    requireApproval: tool.requireApproval,
-    inputSchema: tool.inputSchema,
-    outputSchema: tool.outputSchema,
-  }));
+  const initial = await loadBlueprint(sql, input);
+  const definedScenarios = scenarios(initial.test_scenarios);
   const runId = randomUUID();
   const startedAt = Date.now();
+  const evaluation = await evaluateBlueprintVersion(sql, {
+    ...input,
+    ...(initial.version_id ? { agentVersionId: initial.version_id } : {}),
+    scenarioSet: definedScenarios,
+  });
   await sql.query(
     `insert into agent_blueprint_evaluation_runs
       (id, workspace_id, agent_id, blueprint_id, agent_version_id, agent_version_snapshot, tools_snapshot, scenario_count, created_by)
      values ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)`,
-    [runId, input.workspaceId, input.agentId, input.blueprintId, blueprint.version_id, JSON.stringify(agentVersionSnapshot), JSON.stringify(toolsSnapshot), definedScenarios.length, userId],
+    [runId, input.workspaceId, input.agentId, input.blueprintId, evaluation.agentVersionId, JSON.stringify(evaluation.versionSnapshot), JSON.stringify(evaluation.toolsSnapshot), definedScenarios.length, userId],
   );
-  const results: BlueprintScenarioResult[] = [];
   try {
-    for (const scenario of definedScenarios) {
-      const scenarioStartedAt = Date.now();
-      let ragEvidence: KnowledgeEvidence[] = [];
-      try {
-        ragEvidence = await retrieveKnowledge(sql, { workspaceId: input.workspaceId, query: scenario.input.message, limit: 5 });
-      } catch {
-        ragEvidence = [];
-      }
-      const execution = await evaluateAgentRuntimeTurn({
-        agent,
-        inboundText: scenario.input.message,
-        history: [],
-        ragEvidence,
-        authorizedTools,
-        evaluationContext: {
-          ...(scenario.input.channel ? { channel: scenario.input.channel } : {}),
-          ...scenario.input.context,
-        },
-      });
-      const reply = execution.reply ?? "";
-      const toolsCalled = (execution.toolCalls ?? []).map((call) => call.name).filter(Boolean);
-      const handoff = execution.decision.nextAction === "handoff" || execution.decision.answerMode === "handoff";
-      const outputTokens = estimateTokens(reply);
-      const failures = evaluateExpectations(scenario.expected, reply, toolsCalled, handoff, outputTokens);
-      const result: BlueprintScenarioResult = {
-        scenarioId: scenario.id,
-        name: scenario.name,
-        status: failures.length ? "failed" : "passed",
-        reply,
-        reason: execution.reason,
-        intent: execution.decision.intent,
-        nextAction: execution.decision.nextAction,
-        toolsCalled,
-        handoff,
-        usedAi: execution.usedAi,
-        evidenceCount: execution.decision.evidence.length,
-        latencyMs: Date.now() - scenarioStartedAt,
-        outputTokens,
-        failures,
-      };
-      results.push(result);
+    for (const result of evaluation.results) {
       await persistScenarioResult(sql, { runId, workspaceId: input.workspaceId, agentId: input.agentId, blueprintId: input.blueprintId, result });
       await persistLearningSnapshot(sql, { runId, workspaceId: input.workspaceId, agentId: input.agentId, result });
     }
-    const passedCount = results.filter((result) => result.status === "passed").length;
-    const failedCount = results.length - passedCount;
+    const passedCount = evaluation.results.filter((result) => result.status === "passed").length;
+    const failedCount = evaluation.results.length - passedCount;
     await sql.query(
       `update agent_blueprint_evaluation_runs
           set status = 'succeeded', passed_count = $2, failed_count = $3,
@@ -353,7 +387,7 @@ export async function runBlueprintScenarios(
         where id = $1 and workspace_id = $5`,
       [runId, passedCount, failedCount, Date.now() - startedAt, input.workspaceId],
     );
-    return { id: runId, workspaceId: input.workspaceId, agentId: input.agentId, blueprintId: input.blueprintId, agentVersionId: blueprint.version_id, status: "succeeded", scenarioCount: results.length, passedCount, failedCount, results };
+    return { id: runId, workspaceId: input.workspaceId, agentId: input.agentId, blueprintId: input.blueprintId, agentVersionId: evaluation.agentVersionId, status: "succeeded", scenarioCount: evaluation.results.length, passedCount, failedCount, results: evaluation.results };
   } catch (error) {
     const message = error instanceof Error ? error.message.slice(0, 500) : "BLUEPRINT_EVALUATION_FAILED";
     await sql.query(
@@ -366,3 +400,5 @@ export async function runBlueprintScenarios(
     throw error;
   }
 }
+
+export { scenarios as normalizeBlueprintScenarios };

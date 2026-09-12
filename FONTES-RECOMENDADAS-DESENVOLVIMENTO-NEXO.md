@@ -1,6 +1,6 @@
 # Fontes recomendadas de desenvolvimento — Nexo Cloud
 
-**Status:** fonte de conhecimento operacional para a partir da próxima execução da fatia B4.
+**Status:** fonte de conhecimento operacional aplicada na primeira fatia B4 e obrigatória nas próximas fatias.
 
 **Data da descoberta:** 2026-09-12.
 
