@@ -147,7 +147,7 @@ Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, 
 
 ### 5.5 Tool Registry, conectores e MCP
 
-**Estado: governança implementada; adapters e execução multi-round incompletos.**
+**Estado: governança e execução multi-round do núcleo nativo implementadas; adapters externos e endurecimento operacional pendentes.**
 
 Existem catálogo, schemas, risco, permissões por versão publicada, congelamento, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência, auditoria e integração de tool calling no runtime.
 
@@ -213,7 +213,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0039_native_commercial_tool_contracts.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação e quotas diárias do runtime.
+O repositório possui migrations até `0042_nexo_agent_products.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria do Nexo Bot, workflows de erro e produtos próprios do Nexo.
 
 As rotas principais são:
 
@@ -259,7 +259,7 @@ Próximas ações: validação real de canal, healthchecks, operação de webhoo
 
 **Status: núcleo CRM e ferramentas conversacionais concluído; fechamento pendente.**
 
-Próximas ações: agenda, ferramenta de disponibilidade, reserva com aprovação quando necessário e CRM externo opcional.
+Próximas ações: aprovação configurável para escritas de agenda, ingestão e reconciliação de disponibilidade externa, integração com CRM externo opcional e fechamento da operação comercial com critérios de aceite.
 
 ### Fase 4 — Hub de ferramentas e MCP
 
@@ -284,6 +284,20 @@ Começar somente depois de estabilizar Fases 3–5. A primeira versão deve ser 
 **Status: Marketplace interno parcial; plataforma aberta não iniciada.**
 
 Completar instalações, atualizações e operação do catálogo interno antes de abrir para terceiros.
+
+### Sequência futura de conectores e validação de Agents as a Service
+
+Esta sequência é roadmap futuro e não altera a prioridade do próximo ponto de partida obrigatório. Cada conector deverá usar `connector_definition` versionada, instância por workspace, Secret Resolver, healthcheck, Tool Registry, Tool Gateway, permissões congeladas, auditoria, idempotência, quotas e readiness.
+
+1. **Meta Cloud API:** consolidar o segundo adapter de canal sem duplicar o runtime de mensageria. A validação deve cobrir autenticação, webhook, assinatura, envio e status de entrega.
+2. **Google Calendar:** conectar a agenda externa com OAuth, disponibilidade, reservas idempotentes, timezone, renovação de token, aprovação para escrita e reconciliação.
+3. **REST/OpenAPI genérico:** permitir APIs empresariais configuradas por contrato publicado, com schema de entrada e saída, autenticação server-side, timeout, retries, rate limit e risco por operação. O modelo não poderá inventar endpoints.
+4. **MCP Connector governado:** registrar servidores por workspace, descobrir ferramentas em revisão, aprovar allowlists, validar schemas, controlar transporte, autenticação, limites, timeout e auditoria. MCP será fonte de tools, não substituto do Tool Gateway.
+5. **HubSpot ou CRM externo equivalente:** validar OAuth, contatos, propriedades, estágios, owners, deduplicação, idempotência, sincronização e conflitos com o CRM interno.
+6. **E-mail transacional:** adicionar envio, templates, anexos controlados, entrega, bounce, replies e threads sob consentimento, limites e auditoria.
+7. **Ads e Analytics somente leitura:** iniciar com campanhas, métricas, conversões e recomendações. Alterações de orçamento, publicação ou pausa exigirão aprovação explícita e política de alto risco.
+
+Z-API não é prioridade desta sequência, porque acrescenta principalmente outro provider de WhatsApp sem ampliar tanto a cobertura de capacidades empresariais. Ads e Analytics permanecem subordinados à Fase 6 e não devem iniciar antes da estabilização das Fases 3–5.
 
 **Escopo futuro — Agent as a Service:** depois do fechamento do Marketplace interno, avaliar uma API pública versionada (`/v1`) para que plataformas externas consumam agentes publicados. O escopo inclui API keys/OAuth, escopos por workspace e ambiente, execução síncrona e assíncrona, idempotência, quotas, medição de uso, webhooks assinados, OpenAPI e SDKs. Não implementar nesta etapa nem expor rotas internas diretamente.
 
@@ -365,3 +379,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-11 | Painel visual de readiness operacional integrado à página `/metrics`, com status, conexões, fila, quota diária, execuções e blockers; typecheck, testes e build aprovados. |
 | 2026-09-11 | Checklist de publicação em produção adicionada ao painel, separando critérios automáticos aprovados/bloqueados e validações manuais de cenários, handoff, permissões e rollback. |
 | 2026-09-11 | Gate de publicação efetivo: botão desabilitado para canal sem healthcheck saudável, cenários ausentes ou backend indisponível; `publishAgent` também bloqueia server-side e possui teste de isolamento. |
+| 2026-09-12 | Plano mestre revisado contra o repositório: migrations atualizadas até `0042`, Tool Registry alinhado ao multi-round nativo concluído, agenda removida da lista de pendências já entregues e sequência futura de conectores registrada sem iniciar nova implementação. |
