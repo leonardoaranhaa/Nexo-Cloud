@@ -1,7 +1,7 @@
 # PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md
 
 **Status do documento:** plano de execução detalhado e operacional  
-**Última consolidação:** 2026-09-12
+**Última consolidação:** 2026-09-13
 **Fonte de verdade superior:** `PLANO-CONJUNTO-NEXO-CLOUD-DE-AGENTES.md`  
 **Contrato operacional:** `COMANDO-INTERNO-DESENVOLVIMENTO-NEXO-CLOUD.md`
 
@@ -53,6 +53,22 @@ Tudo isso reutilizando exclusivamente os contratos já existentes (Tool Gateway,
 | Promotion Gate                | Decide promoção com critérios objetivos + aprovação humana quando necessário    | Novo (usa versões + Marketplace)        | Construir   |
 
 Todas as operações ocorrem dentro do workspace do usuário. O Learning global permanece sanitizado e opt-in.
+
+### 2.1 Padrão de construção de cada agente
+
+Toda criação ou alteração de agente deve aplicar a skill local `agent-development` como checklist de engenharia, traduzindo seus princípios para os contratos do Nexo. O agente deve possuir identidade estável, descrição de propósito e acionamento, modelo resolvido server-side, prompt versionado, tools mínimas, guardrails, formato de saída, casos-limite e cenários de teste.
+
+| Dimensão | Artefato ou verificação no Nexo |
+|---|---|
+| Identidade | nome/slug estável, tipo, versão e vínculo com workspace. |
+| Acionamento | condições de uso, canais, gatilhos, pré-condições e situações em que o agente não deve atuar. |
+| Prompt | persona, responsabilidades, processo de análise, padrões de qualidade e formato de resposta. |
+| Modelo | provider/model policy definido no servidor e congelado ou auditável na versão avaliada. |
+| Tools | permissões least-privilege, risco, aprovação, schemas e execução apenas pelo Tool Gateway. |
+| Guardrails | limites de escopo, dados, segurança, handoff, fallback, timeout e ausência de evidência. |
+| Avaliação | 2–4 cenários representativos de trigger, resposta, tool, handoff e edge cases no B1/B4. |
+
+O `color` da skill é somente metadado visual e não possui efeito no runtime. O formato de plugin Claude Code não deve ser criado dentro do produto. A qualidade do agente será determinada por contratos persistidos, testes, Evaluation Harness, isolamento, auditoria e comportamento da versão publicada.
 
 ---
 
@@ -204,16 +220,18 @@ Transformar capacidades complexas do blueprint em grafos de workflow versionados
 
 ### Fatia B4 — Evaluation Harness offline básico
 
-**Entrada obrigatória da próxima execução:** executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` e aplicar a matriz de fontes de `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md` antes de criar o contrato, a migration ou os testes da harness.
+**Entrada obrigatória de cada fatia B4:** executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` e aplicar a matriz de fontes de `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md` antes de alterar contrato, código, migration, interface ou testes da harness.
 
 **Status: primeira fatia backend concluída em local/preview; painel de comparação ainda pendente.**
 
-**Gate pré-B4:** concluído em 2026-09-12. Foram corrigidos e testados idempotência estável, autorização por versão publicada, snapshots de tool/version/schema/adapter, validação de output, redaction recursiva, readiness de conexões, snapshots de B1, schemas runtime, integridade multi-tenant, ações contextuais do frontend, quota fail-closed, ingestão assíncrona de webhook, monotonicidade/reconciliação de delivery, bloqueio de hosts privados no MCP e tracing de auditoria do Nexo Bot. Os gates finais passaram com 180 testes, typecheck, lint, build, preview, smoke Playwright e `check:auth`. A próxima execução pode iniciar diretamente a B4, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD`.
+**Gate pré-B4:** concluído em 2026-09-12. Foram corrigidos e testados idempotência estável, autorização por versão publicada, snapshots de tool/version/schema/adapter, validação de output, redaction recursiva, readiness de conexões, snapshots de B1, schemas runtime, integridade multi-tenant, ações contextuais do frontend, quota fail-closed, ingestão assíncrona de webhook, monotonicidade/reconciliação de delivery, bloqueio de hosts privados no MCP e tracing de auditoria do Nexo Bot. Os gates finais passaram com 180 testes, typecheck, lint, build, preview, smoke Playwright e `check:auth`. A primeira fatia B4 backend já foi entregue; a próxima execução deve continuar pelo painel de comparação, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD`.
 
 **Objetivo**  
 Criar suite de avaliação reutilizável que combina cenários do blueprint + métricas de qualidade, custo e robustez.
 
 **Primeira fatia implementada:** `runEvaluationHarness` compara duas versões draft/publicadas do mesmo agente usando o mesmo conjunto de cenários, o pipeline determinístico de decisão e a recuperação RAG somente leitura. A migration `0050_agent_evaluation_harness.sql` persiste snapshots sanitizados de configuração e tools, métricas por versão e diferenças/regressões por cenário, com guards de integridade multi-tenant. Endpoints autenticados permitem executar, listar e consultar runs. A harness não grava Learning Events, não cria jobs, não envia mensagens, não chama adapters, não publica e não promove candidatos.
+
+**Aplicação da skill agent-development:** a próxima tela e as próximas fatias de avaliação devem apresentar e validar, no contexto do agente, propósito, condições de acionamento, versão do prompt/modelo, tools autorizadas, guardrails, formato de saída e cenários B1/B4. Nenhum agente deve ser considerado pronto apenas por possuir uma resposta plausível.
 
 **Instruções de construção para a IA**
 
@@ -228,7 +246,7 @@ Criar suite de avaliação reutilizável que combina cenários do blueprint + m�
 3. Criar comando/job que executa a suite completa de um blueprint/versão e grava snapshot comparável.
 4. Expor no console (rota futura `/agents/:id/evaluations`) os resultados e comparação entre versões.
 
-**Próxima fatia B4:** expor a consulta de runs na área **Testes** do agente, com seleção contextual de versões, estados vazio/carregando/erro, comparação legível e smoke Playwright. O painel não poderá publicar, promover ou executar efeitos externos.
+**Próxima fatia B4:** expor a consulta de runs na área **Testes** do agente, com seleção contextual de versões, estados vazio/carregando/erro, comparação legível dos contratos da skill e smoke Playwright. O painel não poderá publicar, promover ou executar efeitos externos.
 
 **Critérios de aceite**
 - Uma execução de avaliação produz snapshot completo e versionado
@@ -375,8 +393,9 @@ ASSUMIR_AGENT_ENGINEERING_PLANE
    - Riscos
    - Critérios de aceite
    - Classificação de alinhamento (ALINHADA / ALINHADA_COM_RISCO / DESVIO...)
-9. Implementar
-10. Executar typecheck + testes relevantes + build
-11. Revisar diff
-12. Atualizar este documento e o plano mestre
-13. Reportar resultado de forma concisa
+9. Aplicar a matriz de identidade, acionamento, prompt, modelo, tools, guardrails, saída e edge cases da skill `agent-development` quando a fatia alterar agentes
+10. Implementar
+11. Executar typecheck + testes relevantes + build
+12. Revisar diff
+13. Atualizar este documento e o plano mestre
+14. Reportar resultado de forma concisa

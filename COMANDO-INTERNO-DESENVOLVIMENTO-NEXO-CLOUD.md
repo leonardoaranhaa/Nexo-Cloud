@@ -20,7 +20,7 @@ Se o documento mestre não existir, estiver vazio, contraditório ou desatualiza
 
 ## 0.1 Comando raiz de fontes recomendadas
 
-A partir da próxima execução da fatia B4, depois da leitura dos documentos de entrada, executar conceitualmente:
+A partir da fatia B4 e em qualquer fatia posterior, depois da leitura dos documentos de entrada, executar conceitualmente:
 
 ```text
 APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD
@@ -45,6 +45,26 @@ O MVP EARLY é o primeiro núcleo funcional permanente do próprio Nexo Cloud. N
 
 Toda implementação deve preservar o ciclo de vida completo do agente: criação assistida por IA, configuração, indexação de sistemas e conhecimento, teste, publicação, operação, observabilidade, atualização, rollback, instalação e eventual distribuição comercial. Um agente próprio do Nexo deve ser tratado como produto versionado com manifesto, capacidades, oferta, entitlement, instalação, customização e métricas.
 
+## 1.1 Padrão obrigatório de engenharia de agentes
+
+O desenvolvimento de agentes deve aplicar a skill local `agent-development` como referência metodológica para identidade, acionamento, prompt, ferramentas, testes e tratamento de exceções. A skill foi criada para agentes de plugins Claude Code; no Nexo, seus princípios devem ser traduzidos para os contratos multi-tenant e versionados da plataforma, sem criar um segundo runtime ou uma convenção paralela.
+
+| Princípio da skill | Tradução obrigatória no Nexo |
+|---|---|
+| `name` com identificador estável | `slug`/nome do agente e identificador da versão, sempre válidos e vinculados ao workspace. |
+| `description` com condições de acionamento | propósito, público, canais, contexto de ativação e condições de não uso no blueprint e manifesto. |
+| `model` explícito | provider/model policy resolvido server-side; nunca uma escolha livre do navegador ou do modelo. |
+| `tools` com least privilege | permissões congeladas por versão e execução exclusivamente pelo Tool Gateway, Connector Runtime ou MCP Runtime autorizado. |
+| system prompt estruturado | persona, objetivos, capacidades, guardrails, política de decisão, formato de resposta e limites persistidos no blueprint/versionamento. |
+| seção “When to invoke” | cenários de acionamento, gatilhos, pré-condições e casos de não acionamento testáveis no Runtime e nos Workflows. |
+| output format definido | contrato de resposta e schemas de tools, com sanitização, validação e auditoria server-side. |
+| edge cases documentados | fallback, handoff, ausência de evidência, timeout, falha de tool, aprovação e comportamento seguro. |
+| testes de trigger e prompt | cenários B1, Evaluation Harness B4, testes de isolamento, regressão e validação do ciclo publicado. |
+
+Todo agente novo deve possuir, antes de ser tratado como pronto para revisão, uma identidade clara, 2–4 cenários representativos de acionamento, prompt com responsabilidades e processo explícitos, ferramentas mínimas necessárias, formato de saída, casos-limite e cenários de teste. `color` da skill é apenas metadado de apresentação e não pode ser usado como regra de runtime ou autorização.
+
+Não usar a skill para criar arquivos de plugin Claude Code dentro do produto, conceder acesso amplo a ferramentas, permitir autoacionamento irrestrito, publicar prompts sem versão ou declarar um agente funcional sem testes de trigger, prompt, guardrails, isolamento e efeitos externos.
+
 ## 2. Ciclo obrigatório de execução
 
 Para qualquer solicitação de desenvolvimento, execute este ciclo na ordem:
@@ -52,7 +72,7 @@ Para qualquer solicitação de desenvolvimento, execute este ciclo na ordem:
 ```text
 Ler o plano mestre
   → ler este comando e os documentos especializados
-      → executar APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD a partir da B4
+      → executar APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD a partir da B4 e aplicar agent-development quando houver alteração de agentes
           → revisar alteração anterior e estado do Git
           → confrontar código, migrations, rotas e testes com o plano
               → detectar desvio, flutuação ou alucinação
@@ -164,6 +184,8 @@ Toda fatia deve, quando aplicável, conter:
 - preview;
 - revisão de diff;
 - atualização do plano mestre se o status mudar.
+
+Para fatias que criem ou alterem agentes, incluir também a matriz de identidade, acionamento, prompt, modelo, tools, guardrails, formato de saída, casos-limite e cenários de avaliação derivados da skill `agent-development`.
 
 A comunicação deve ser concisa. Não enviar alertas de infraestrutura fora do escopo. Reportar somente decisão, resultado, falhas materiais, próximos passos e links de artefatos.
 

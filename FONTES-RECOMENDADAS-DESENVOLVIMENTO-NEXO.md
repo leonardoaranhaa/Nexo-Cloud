@@ -10,7 +10,7 @@
 
 Estas fontes complementam, mas não substituem, o plano mestre, o comando interno de desenvolvimento e os contratos existentes no repositório. Nenhuma recomendação externa autoriza copiar código, alterar arquitetura, introduzir dependências ou executar chamadas externas sem validação local, revisão de segurança, teste e alinhamento multi-tenant.
 
-A partir da próxima execução do bloco B4, toda sessão deve iniciar executando conceitualmente o comando raiz:
+A partir do bloco B4 e em qualquer fatia posterior, toda sessão deve iniciar executando conceitualmente o comando raiz:
 
 ```text
 APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD
@@ -36,6 +36,7 @@ O comando significa:
 | [4] Webapp Testing | Usar Playwright para testar rotas, formulários, estados vazios, mensagens de erro, console e fluxos visuais. | Aplicar quando a B4 expuser resultados no console do agente ou avaliações. |
 | [5] MCP Builder | Projetar tools MCP com nomes descobríveis, schemas precisos, paginação, limites, erros acionáveis e controle de contexto. | Aplicar no futuro MCP Connector governado; não libera MCP direto no navegador ou fora do Tool Gateway. |
 | [6] React Best Practices | Evitar waterfalls, chamadas sequenciais desnecessárias, bundle excessivo e re-renderizações evitáveis. | Aplicar em painéis de avaliação, comparações de versões e telas do Agent Engineering Plane. |
+| [22] Agent Development | Estruturar identidade, acionamento, prompt, tools, modelo, limites, formato de saída e testes de agentes. | Aplicar a cada agente próprio ou de usuário; traduzir para blueprint, manifesto, versão publicada, Tool Gateway e Evaluation Harness. Não importar o runtime de plugin Claude Code. |
 
 ## 3. Fontes de processo e colaboração
 
@@ -85,6 +86,14 @@ Quando uma fonte externa divergir do Nexo, prevalece a seguinte ordem:
 
 Uma fonte externa não pode introduzir endpoint inventado, secret no browser, chamada MCP direta, tool fora do gateway, estado global sem workspace, publicação implícita ou dependência de produção não validada.
 
+## 6.1 Aplicação da skill `agent-development`
+
+A skill `agent-development` é uma referência de engenharia para agentes autônomos. No Nexo, ela deve ser aplicada como checklist de qualidade do artefato do agente, não como formato de plugin. O `frontmatter` da skill corresponde conceitualmente aos metadados persistidos do agente; `description` corresponde ao propósito e às condições de acionamento; o corpo do prompt corresponde à persona, responsabilidades, processo, qualidade, formato de saída e casos-limite; e `tools` corresponde às permissões congeladas da versão publicada.
+
+Cada agente deve ser revisado em seis dimensões: identidade estável; condições de acionamento e não acionamento; prompt operacional; ferramentas mínimas e risco; guardrails e comportamento em falhas; e cenários verificáveis no Evaluation Harness. O nome deve ser estável e legível, a descrição deve conter condições de uso e exemplos representativos, e o prompt deve permanecer versionado. A seleção de modelo e a execução das ferramentas continuam server-side e não podem ser delegadas ao navegador.
+
+Esta referência não autoriza criar agentes sem workspace, conceder todas as tools por padrão, acessar secrets, executar MCP diretamente, publicar automaticamente ou tratar uma resposta plausível como evidência de qualidade. Quando houver conflito, prevalecem o plano mestre, o comando interno, o isolamento multi-tenant, o Tool Gateway e os contratos locais.
+
 ## 7. Repositórios de origem
 
 As skills prioritárias foram localizadas nos repositórios verificados pelo Internet Skill Finder. Os links de importação abaixo são referências; a importação efetiva deve ser uma decisão separada, após revisão do conteúdo.
@@ -120,3 +129,4 @@ As skills prioritárias foram localizadas nos repositórios verificados pelo Int
 [19]: https://github.com/vercel-labs/agent-skills "Vercel Agent Skills"
 [20]: https://github.com/ComposioHQ/awesome-claude-skills "Composio Awesome Claude Skills"
 [21]: https://github.com/BehiSecc/awesome-claude-skills "BehiSecc Awesome Claude Skills"
+[22]: file:///home/ubuntu/skills/agent-development/SKILL.md "Agent Development — referência interna para estrutura e qualidade de agentes"

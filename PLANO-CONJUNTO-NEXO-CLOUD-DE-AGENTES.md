@@ -2,11 +2,11 @@
 
 **Status do documento:** fonte de verdade operacional do repositório.
 
-**Última consolidação:** 2026-09-12 — primeira fatia B4 backend concluída; painel pendente.
+**Última consolidação:** 2026-09-13 — skill `agent-development` adotada; primeira fatia B4 backend concluída; painel pendente.
 
-**Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar. A partir da próxima execução da B4, também deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` conforme `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`.
+**Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar. A partir da B4 e em qualquer fatia posterior, também deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` conforme `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`.
 
-**Plano especializado vinculante:** `PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md` detalha a evolução do Agent Engineering Plane. Após ler este plano mestre e o comando interno, toda sessão que atuar nessa frente deve ler o plano especializado integralmente, respeitar a ordem da Fase 0, aplicar as fontes recomendadas a partir da B4 e atualizar ambos os documentos ao concluir cada fatia.
+**Plano especializado vinculante:** `PLANO-EXECUCAO-AGENT-ENGINEERING-PLANE.md` detalha a evolução do Agent Engineering Plane. Após ler este plano mestre e o comando interno, toda sessão que atuar nessa frente deve ler o plano especializado integralmente, respeitar a ordem da Fase 0, aplicar as fontes recomendadas a partir da B4, aplicar a skill local `agent-development` ao criar ou alterar agentes e atualizar ambos os documentos ao concluir cada fatia.
 
 ## 1. Visão do produto
 
@@ -189,11 +189,13 @@ Ainda faltam configurações server-side completas, governança por papel, confi
 
 ### 5.10 Ambiente de desenvolvimento assistido por IA
 
-**Estado: blueprint persistido, avaliações offline, propostas governadas de tools e geração de workflows draft implementados.**
+**Estado: blueprint persistido, avaliações offline, propostas governadas de tools e geração de workflows draft implementados; padrão de engenharia de agentes adotado.**
 
 O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails. A fatia B1 adicionou cenários estruturados, endpoint server-side autenticado, execução offline reutilizando decisão e RAG, expectativas de resposta/handoff/tools, persistência de resultados em tabelas próprias e snapshots sanitizados no Learning RAG. A fatia B2 adicionou geração determinística de propostas de tools nativas confirmadas, schemas preservados do Tool Registry, risco e aprovação derivados server-side, tools workspace-scoped em `review`, propostas `draft`, idempotência e endpoint de listagem. A fatia B3 adicionou vínculo idempotente entre blueprint e workflow, geração de grafo compilável em `draft`, preservação de versões publicadas, capacidades pendentes e materialização condicional de tools aprovadas, autorizadas e compatíveis com adapters do executor.
 
 As avaliações B1, a geração B2, a geração B3 e a harness B4 não criam jobs de produção, mensagens, deliveries, chamadas externas ou publicação automática. Tools B2 não recebem permissões de agente e não podem ser resolvidas pelo runtime enquanto estiverem em `review`. Workflows B3 não criam runs e somente incluem tools quando há proposta aprovada, tool ativa, permissão habilitada na versão draft e adapter de workflow confirmado. A B4 já compara versões no backend, persiste métricas, snapshots sanitizados e regressões por cenário; ainda faltam painel operacional, indexação de documentos e sistemas e testes automatizados de qualidade antes da publicação.
+
+Toda evolução de agente deve aplicar a matriz da skill `agent-development`: identidade, propósito e condições de acionamento, prompt estruturado, modelo, tools mínimas, guardrails, formato de saída, casos-limite e cenários de avaliação. A skill é adaptada aos blueprints, manifestos, versões publicadas, Tool Gateway e Evaluation Harness do Nexo; não cria um runtime de plugin paralelo nem autoriza acesso amplo a ferramentas.
 
 ### 5.11 Nexo Bot
 
@@ -366,8 +368,9 @@ Ao iniciar qualquer sessão, a IA deve:
 7. confrontar o estado real do código com este documento;
 8. identificar a primeira etapa incompleta do próximo ponto de partida;
 9. subdividir essa etapa em uma menor fatia vertical reversível;
-10. registrar objetivo, arquivos afetados, riscos, dependências, critério de aceite e classificação de alinhamento;
-11. implementar, testar, revisar o diff e atualizar este documento quando o estado do roadmap mudar.
+10. quando a sessão alterar agentes, aplicar a matriz de identidade, acionamento, prompt, modelo, tools, guardrails, saída e edge cases da skill `agent-development`;
+11. registrar objetivo, arquivos afetados, riscos, dependências, critério de aceite e classificação de alinhamento;
+12. implementar, testar, revisar o diff e atualizar este documento quando o estado do roadmap mudar.
 
 Nenhuma IA deve iniciar uma nova frente apenas porque ela aparece em uma documentação antiga. A prioridade é sempre o **Próximo ponto de partida obrigatório** deste arquivo, salvo decisão explícita do usuário.
 
@@ -412,3 +415,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Item 1 do hardening pré-B4 concluído: testes TDD e enforcement server-side de autorização por workflow publicado, agente publicado, permissão ativa na versão publicada e aprovação persistida para escritas. B3 passou a persistir `agentId`/`approvalNodeId` nos nós tool. Suíte passou com 165 testes, typecheck, lint sem erros, build e preview aprovados. Próxima fatia: idempotência estável de efeitos externos. |
 | 2026-09-12 | Hardening pré-B4 concluído: idempotência estável, snapshots imutáveis de tools e B1, output schema/redaction, readiness saudável, integridade multi-tenant, schemas runtime, ações persistentes do console, quota fail-closed, webhook Meta assíncrono, delivery monotônico/reconciliável, MCP com bloqueio de hosts privados e traceId do Nexo Bot. Migrations chegaram a `0049`; gates finais passaram com 180 testes, typecheck, lint sem warnings, build, preview, smoke desktop/mobile e `check:auth`. B4 está liberada para a próxima sessão; Meta/Evolution real continua postergado. |
 | 2026-09-12 | Primeira fatia B4 implementada: `0050_agent_evaluation_harness.sql`, comparação backend de duas versões por workspace, métricas de sucesso/tokens/latência/tools/handoff/guardrails, snapshots sanitizados de configuração e tools, regressões por cenário, endpoints autenticados e guards SQL. A harness não cria jobs, deliveries, Learning Events, chamadas externas, publicação ou promoção. Testes B4 cobrem regressão, sanitização, versões distintas, isolamento e efeitos nulos. Próxima fatia: painel de comparação na área Testes do agente. |
+| 2026-09-13 | Skill `agent-development` adotada como referência obrigatória para criação e evolução de agentes: identidade, acionamento, prompt, modelo, tools least-privilege, guardrails, formato de saída, edge cases e cenários de avaliação. A adaptação usa blueprints, manifestos, versões publicadas, Tool Gateway e Evaluation Harness; não cria runtime de plugin paralelo nem libera permissões ou publicação automática. |
