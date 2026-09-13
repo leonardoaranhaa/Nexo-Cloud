@@ -222,16 +222,16 @@ Transformar capacidades complexas do blueprint em grafos de workflow versionados
 
 **Entrada obrigatória de cada fatia B4:** executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` e aplicar a matriz de fontes de `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md` antes de alterar contrato, código, migration, interface ou testes da harness.
 
-**Status: primeira fatia backend concluída em local/preview; painel de comparação ainda pendente.**
+**Status: backend e painel de comparação concluídos em local/preview; gate formal de promoção permanece pendente.**
 
-**Gate pré-B4:** concluído em 2026-09-12. Foram corrigidos e testados idempotência estável, autorização por versão publicada, snapshots de tool/version/schema/adapter, validação de output, redaction recursiva, readiness de conexões, snapshots de B1, schemas runtime, integridade multi-tenant, ações contextuais do frontend, quota fail-closed, ingestão assíncrona de webhook, monotonicidade/reconciliação de delivery, bloqueio de hosts privados no MCP e tracing de auditoria do Nexo Bot. Os gates finais passaram com 180 testes, typecheck, lint, build, preview, smoke Playwright e `check:auth`. A primeira fatia B4 backend já foi entregue; a próxima execução deve continuar pelo painel de comparação, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD`.
+**Gate pré-B4:** concluído em 2026-09-12. Foram corrigidos e testados idempotência estável, autorização por versão publicada, snapshots de tool/version/schema/adapter, validação de output, redaction recursiva, readiness de conexões, snapshots de B1, schemas runtime, integridade multi-tenant, ações contextuais do frontend, quota fail-closed, ingestão assíncrona de webhook, monotonicidade/reconciliação de delivery, bloqueio de hosts privados no MCP e tracing de auditoria do Nexo Bot. Os gates finais passaram com 180 testes, typecheck, lint, build, preview, smoke Playwright e `check:auth`. O backend e o painel B4 já foram entregues; a próxima execução deve tratar o gate formal de promoção, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD`.
 
 **Objetivo**  
 Criar suite de avaliação reutilizável que combina cenários do blueprint + métricas de qualidade, custo e robustez.
 
 **Primeira fatia implementada:** `runEvaluationHarness` compara duas versões draft/publicadas do mesmo agente usando o mesmo conjunto de cenários, o pipeline determinístico de decisão e a recuperação RAG somente leitura. A migration `0050_agent_evaluation_harness.sql` persiste snapshots sanitizados de configuração e tools, métricas por versão e diferenças/regressões por cenário, com guards de integridade multi-tenant. Endpoints autenticados permitem executar, listar e consultar runs. A harness não grava Learning Events, não cria jobs, não envia mensagens, não chama adapters, não publica e não promove candidatos.
 
-**Aplicação da skill agent-development:** a próxima tela e as próximas fatias de avaliação devem apresentar e validar, no contexto do agente, propósito, condições de acionamento, versão do prompt/modelo, tools autorizadas, guardrails, formato de saída e cenários B1/B4. Nenhum agente deve ser considerado pronto apenas por possuir uma resposta plausível.
+**Aplicação da skill agent-development:** o painel de comparação apresenta e valida, no contexto do agente, propósito e acionamento via cenários, versão do prompt/modelo, tools autorizadas, guardrails, formato de saída e resultados B1/B4. Nenhum agente deve ser considerado pronto apenas por possuir uma resposta plausível.
 
 **Instruções de construção para a IA**
 
@@ -244,14 +244,15 @@ Criar suite de avaliação reutilizável que combina cenários do blueprint + m�
    - handoff_rate
    - guardrail_violation_count
 3. Criar comando/job que executa a suite completa de um blueprint/versão e grava snapshot comparável.
-4. Expor no console (rota futura `/agents/:id/evaluations`) os resultados e comparação entre versões.
+4. Expor no console os resultados e comparação entre versões. **Concluído na área Testes do Studio (`/agents/:id?tab=tests`)**, sem criar rota paralela.
 
-**Próxima fatia B4:** expor a consulta de runs na área **Testes** do agente, com seleção contextual de versões, estados vazio/carregando/erro, comparação legível dos contratos da skill e smoke Playwright. O painel não poderá publicar, promover ou executar efeitos externos.
+**Próxima fatia B4:** implementar o gate formal de promoção, com critérios objetivos, aprovação humana quando necessária, publicação explícita e trilha de auditoria. O painel desta fatia não publica, promove nem executa efeitos externos.
 
 **Critérios de aceite**
 - Uma execução de avaliação produz snapshot completo e versionado
 - É possível comparar duas versões lado a lado
 - Testes de regressão da harness
+- O console apresenta estados vazio, carregando e erro e mantém o escopo por workspace
 
 ---
 

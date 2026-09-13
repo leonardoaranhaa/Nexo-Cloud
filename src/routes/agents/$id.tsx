@@ -3,6 +3,7 @@ import { Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AgentEditor } from "@/components/agent-editor";
 import { AgentTestPanel } from "@/components/agent-test-panel";
+import { EvaluationHarnessPanel } from "@/components/evaluation-harness-panel";
 import { AppShell } from "@/components/app-shell";
 import { FlowCanvas } from "@/components/flow-canvas";
 import { PublishPanel } from "@/components/publish-panel";
@@ -204,7 +205,7 @@ function AgentStudioPage() {
 
       {tab === "knowledge" && <AgentEditor agent={agent} section="knowledge" focusNode={focusNode} />}
       {tab === "tools" && <AgentEditor agent={agent} section="tools" focusNode={focusNode} />}
-      {tab === "tests" && <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"><AgentEditor agent={agent} section="tests" onRunScenario={(scenario) => { void send(scenario); toast("Cenário enviado para o Agent Runtime"); }} /><AgentTestPanel agent={agent} messages={messages} busy={busy} onSend={(t, k) => void send(t, k)} onClear={clear} /></div>}
+      {tab === "tests" && <div className="flex flex-col gap-8"><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"><AgentEditor agent={agent} section="tests" onRunScenario={(scenario) => { void send(scenario); toast("Cenário enviado para o Agent Runtime"); }} /><AgentTestPanel agent={agent} messages={messages} busy={busy} onSend={(t, k) => void send(t, k)} onClear={clear} /></div><EvaluationHarnessPanel agent={agent} /></div>}
       {tab === "versions" && <PublishPanel agent={agent} mode="versions" />}
       {tab === "publication" && <PublishPanel agent={agent} mode="publication" />}
     </AppShell>

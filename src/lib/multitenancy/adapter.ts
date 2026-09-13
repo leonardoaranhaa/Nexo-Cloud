@@ -47,6 +47,7 @@ export function agentRecordToUi(record: AgentRecord): Agent {
     maxTokens: record.maxTokens,
     memoryWindow: record.memoryWindow,
     template: asText(metadata.template) || record.agentType,
+    ...(record.developmentBlueprintId ? { developmentBlueprintId: record.developmentBlueprintId } : {}),
     developmentBlueprint: record.developmentBlueprint
       ? {
           objectives: Array.isArray(record.developmentBlueprint.objectives) ? record.developmentBlueprint.objectives : [],

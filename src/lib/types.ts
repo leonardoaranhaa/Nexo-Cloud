@@ -41,6 +41,7 @@ export type Agent = {
   systemPrompt: string;
   language: "pt" | "en" | "es";
   connectionId: string | null;
+  developmentBlueprintId?: string;
   status: AgentStatus;
   temperature: number;
   maxTokens: number;

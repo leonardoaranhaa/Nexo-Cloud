@@ -50,6 +50,7 @@ export type AgentRecord = {
   knowledge: JsonObject;
   tools: JsonObject;
   metadata: JsonObject;
+  developmentBlueprintId: string | null;
   developmentBlueprint: AgentDevelopmentBlueprint | null;
   createdAt: string;
   updatedAt: string;
@@ -332,6 +333,7 @@ export async function listAgents(sql: Sql, userId: string, workspaceId: string):
       agents.knowledge,
       agents.tools,
       agents.metadata,
+      adb.id as "developmentBlueprintId",
       case when adb.id is null then null else json_build_object(
         'agentType', adb.agent_type,
         'objectives', adb.objectives,
