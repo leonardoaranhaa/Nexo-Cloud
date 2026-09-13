@@ -1,6 +1,6 @@
 # Instrução de auditoria com fontes recomendadas — Nexo Cloud
 
-**Status:** auditoria concluída após resolução dos achados acionáveis; documento metodológico e registro de evidências da varredura iniciada em 2026-09-12.
+**Status:** auditoria contínua; varredura inicial resolvida em 2026-09-12 e confrontação agressiva `agent-development` registrada em 2026-09-13 com bloqueadores P0/P1 ainda abertos.
 
 ## Objetivo
 
@@ -127,4 +127,58 @@ Quota desativada agora bloqueia o runtime e aparece como blocker de readiness. O
 | Preview | **pass** | preview local reiniciado em `http://127.0.0.1:8081/` |
 | Browser smoke | **pass no gate** | desktop/mobile, rotas críticas sem console/page errors ou overflow reportado |
 
-Esta evidência continua sendo local/preview. Não há validação de produção, canal Meta/Evolution real, servidor MCP real, PostgreSQL gerenciado, AWS Secrets Manager, RLS, egress, IAM, rotação de secrets, retenção, alertas ou tracing externo. A B4 está liberada para a próxima sessão, que deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar a harness.
+Esta evidência continua sendo local/preview. Não há validação de produção, canal Meta/Evolution real, servidor MCP real, PostgreSQL gerenciado, AWS Secrets Manager, RLS, egress, IAM, rotação de secrets, retenção, alertas ou tracing externo. A B4 backend + painel foi implementada, mas a confrontação agressiva abaixo reabre o gate de produção e impede declarar os agentes prontos para venda.
+
+
+## Confrontação agressiva `agent-development` — 2026-09-13
+
+### Veredito executivo
+
+**O Nexo Cloud não está pronto para vender ou operar agentes com efeitos comerciais.** A base é promissora para sandbox/local/preview, mas não há evidência suficiente para produção. A auditoria encontrou dois bloqueadores **P0** confirmados e múltiplos riscos **P1** que quebram a promessa de versão publicada, least privilege, avaliação e operação segura.
+
+A suíte de 186 testes passantes não altera esse veredito. Ela cobre principalmente caminhos sequenciais, mocks, persistência e isolamento. Não prova comportamento do provider/modelo real, concorrência de workers, autorização negativa, avaliação não manipulável, handoff/approval ponta a ponta ou efeitos externos.
+
+### Bloqueadores confirmados
+
+| Severidade | Achado | Evidência | Impacto |
+|---|---|---|---|
+| P0 | Agente `active` sem versão `published`. | `src/lib/multitenancy/server.ts:400-463` aceita `status=live` e converte para `active`; `src/lib/agent-runtime/runtime.ts:205-216` faz join opcional da versão publicada; `toAgent` usa campos editáveis como fallback. | Um draft ou configuração mutável pode receber tráfego real. |
+| P0 | Publicação não depende de Harness aprovada. | `src/lib/multitenancy/server.ts:606-627` exige apenas canal saudável e uma string não vazia em `test_scenarios`; não executa cenários, não exige threshold e não consulta o resultado da Harness. | Um placeholder pode publicar uma versão não testada, regressiva ou com guardrail violado. |
+
+### Riscos altos confirmados ou diretamente testáveis
+
+| Domínio | Evidência | Consequência |
+|---|---|---|
+| Autorização de tools | `src/lib/agent-runtime/runtime.ts:616-665` executa CRM, qualificação, atribuição e follow-up depois da decisão, sem verificar `authorizedTools`. `allowedScopes` é persistido em `tools-server.ts:22-29`, mas não é carregado pelo runtime. | Agente sem ferramenta publicada pode produzir writes comerciais; uma ferramenta permitida pode atingir recurso fora do escopo. |
+| Risco e aprovação | `runtime.ts:405-409` só exige aprovação quando `requireApproval` está configurado. Não há regra global que force aprovação para toda tool `write` ou `destructive`. `tools-server.ts:85-90` muda o status, mas não retoma o job nem executa o adapter após aprovação. | A aprovação pode ser opcional para ações perigosas ou pode registrar sucesso sem a ação ocorrer. |
+| Provider e modelo | `server.ts:636-650` grava `modelProvider/modelName`; `runtime.ts:235-283` usa somente xAI e `NEXO_AGENT_MODEL`. | A execução, o custo e o envio de conteúdo podem divergir do contrato publicado. |
+| Handoff | `runtime.ts:293-298` responde ao pedido determinístico de handoff sem persistir a transição. `evolution-handler.ts:140-163` procura apenas conversas `open`. | O cliente pode receber promessa de transferência sem atribuição humana e reativar o bot ao enviar nova mensagem. |
+| Workflow e MCP | `tool-gateway.ts:65-71` resolve a versão publicada atual do agente, não a versão congelada no workflow. `tool-gateway.ts:101-106` permite MCP por nome em `allowedTools`, sem risco/schema por ferramenta remota. | Nova publicação pode alterar um workflow antigo; mutação MCP pode ser tratada como leitura. |
+| Conectores e segredos | `server.ts:1093-1118` permite mudar endpoint/status sem invalidar `health_status`; `evolution-messaging.ts` resolve o segredo para o endpoint atual. | Um endpoint redirecionado pode receber o segredo do workspace; health/readiness fica falso. |
+| Fila, quota e webhooks | `queue.ts:48-65` não demonstra claim com fencing/heartbeat; `quota.ts:67-98` faz reservas separadas; trigger público em `server/routes/api/hooks/workflows/[workspaceSlug]/[triggerToken].ts:14-27` aceita token sem HMAC/rate limit/idempotência obrigatória. | Lease expirado, retry ou replay pode duplicar CRM/mensagens/runs; quota pode ser subcontada; token vazado pode causar abuso. |
+| Avaliação e RAG | `runtime.ts:327-363` usa modelo fake na avaliação; `harness.ts:102-126` calcula médias simples; a decisão aceita evidência lexical fraca; guardrails do blueprint não chegam como política executável. | A Harness não prova comportamento real, grounding, citação, prompt injection, guardrail ou custo. |
+| Governança de produto | `marketplace/server.ts:411-428` filtra customização, mas `updateAgent` aceita campos protegidos; `nexo-bot/server.ts:87-99` não exige ID/hash de proposta persistida para confirmação. | Protected components e confirmação podem ser contornados por chamadas server-side autorizadas. |
+
+### Suposições rejeitadas
+
+A confrontação rejeitou as seguintes suposições: `active/live` não significa `published`; um cenário textual não é evidência de qualidade; `requireApproval` não é aprovação efetiva; `allowedScopes` persistido não é escopo aplicado; provider/modelo declarado não é provider/modelo executado; `health_status=healthy` não prova o endpoint atual; uma chave idempotente de job não garante exatamente uma vez no provider; blueprint guardrails não são políticas sem compilação e enforcement; um chunk recuperado não é prova de entailment; dados de avaliação sintéticos não são evidência de produção; e 186 testes passantes não equivalem a prontidão comercial.
+
+### Pontos fortes preservados
+
+O projeto possui isolamento por workspace em diversas queries e `requireWorkspaceAccess`, integrity guards em partes críticas, Tool Gateway com validação de schemas, snapshots de tools, redaction limitada, timeout e idempotência em caminhos específicos, fila durável, HMAC na Meta, Secret Resolver server-side, Harness sem efeitos externos e histórico de versões. Esses controles são uma base válida. O problema é que existem caminhos paralelos e contratos declarativos que ainda escapam dessas fronteiras.
+
+### Ordem obrigatória de resolução
+
+1. **State machine de publicação:** remover `live` do update comum; exigir versão `published` para `active`, ingress, claim e runtime; eliminar fallback editável e testar draft, pausa e arquivamento.
+2. **Policy Engine único:** bloquear por default; aplicar capability, `allowedScopes`, recurso/alvo, risco e approval antes de cada CRM write, tool e dispatch; preencher provenance completa.
+3. **Gate de promoção:** ligar publish e rollback, transacionalmente, ao hash exato de prompt, blueprint, modelo, tools, permissões e knowledge; exigir cenários estruturados não-vacuous, holdout, negativos, guardrails, thresholds e Harness aprovada.
+4. **Handoff e approval:** persistir transição, bloquear `pending/human_active`, vincular aprovação ao hash da ação e input, pausar e retomar o job exatamente uma vez.
+5. **Snapshots e conectores:** congelar `agent_version_id` em workflows, versionar risco/schema/escopo de MCP, validar contrato remoto, invalidar health por mudança de fingerprint e impor egress anti-SSRF.
+6. **Operação externa:** corrigir claim/reclaim com heartbeat/fencing, quota atômica, HMAC/nonce/rate limit/outbox para webhooks e idempotência do provider; fail-closed para auth, `DATABASE_URL` e secrets de produção.
+7. **Qualidade dos agentes:** compilar objetivos/capacidades/guardrails, adicionar citação/entailment/abstenção, PII/secret scanner, prompt-injection probes, idiomas, timezone, memória e output schema; impedir que fixtures sintéticas contaminem o Learning RAG.
+
+Nenhuma nova integração, feature comercial, abertura do Marketplace ou validação de canal real deve ultrapassar essa ordem. A auditoria não implementou código; as correções devem nascer como fatias verticais TDD, com teste de falha antes da implementação, revisão de diff, gates locais e atualização do plano mestre.
+
+### Evidência da confrontação
+
+Foram auditados em paralelo cinco domínios: runtime/identidade/decisão; tools/conectores/MCP/workflows; RAG/avaliação/learning; multi-tenancy/APIs/persistência/produção; e produto/testes/prontidão. O estado Git estava limpo antes da auditoria. A confrontação foi somente leitura no código; nesta sessão foram atualizados apenas este documento e o plano mestre para registrar o veredito e reabrir o gate.

@@ -2,7 +2,7 @@
 
 **Status do documento:** fonte de verdade operacional do repositório.
 
-**Última consolidação:** 2026-09-13 — skill `agent-development` adotada; primeira fatia B4 backend concluída; painel pendente.
+**Última consolidação:** 2026-09-13 — skill `agent-development` adotada; B4 backend + painel concluídos; confrontação agressiva reabriu o gate de promoção e produção.
 
 **Regra principal:** toda IA, agente de código ou pessoa que iniciar uma sessão de desenvolvimento deve ler este arquivo antes de analisar, planejar, editar ou executar qualquer alteração. Depois da leitura, deve subdividir a próxima etapa em uma menor fatia vertical, comparar o plano com o estado real do repositório e somente então continuar. A partir da B4 e em qualquer fatia posterior, também deve executar `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` conforme `FONTES-RECOMENDADAS-DESENVOLVIMENTO-NEXO.md`.
 
@@ -43,7 +43,7 @@ O Nexo Cloud deve permitir que um usuário:
 - disponibilize agentes para outras pessoas quando o modelo comercial e a governança permitirem;
 - acompanhar qualidade, conversão, custo, uso, segurança e evolução.
 
-Os agentes próprios do Nexo devem ser tratados como produtos de alto valor, não como exemplos descartáveis. Cada produto deve possuir contrato de capacidade, manifesto, versão, oferta, entitlement, instalação, customização, métricas, política de atualização e mecanismo de rollback.
+Os agentes próprios do Nexo devem ser tratados como produtos de alto valor, não como exemplos descartáveis. Cada produto deve possuir contrato de capacidade, manifesto, versão, oferta, entitlement, instalação, customização, métricas, política de atualização e mecanismo de rollback. Nenhum produto deve ser vendido como pronto enquanto os gates P0/P1 da seção 8.3 permanecerem abertos.
 
 ## 2. Camadas do produto
 
@@ -103,7 +103,7 @@ Na área **Ferramentas**, cada capacidade deve ser apresentada como recurso cont
 
 A área **Conhecimento** segue o mesmo contrato para suas fontes: notas internas e FAQ publicada possuem estado próprio, dependências explícitas, escopo de consumo pelo runtime, risco e ação de configuração. FAQs incompletas ficam em `Configuração pendente` e não devem ser tratadas como fonte pronta para uso.
 
-A área **Publicação** deve funcionar como uma superfície de readiness operacional. Canal, cenários de teste, handoff e versão candidata são cards independentes, com estados, dependências, escopo, risco e ações próprias. A publicação deve ser bloqueada quando os requisitos mínimos — canal conectado e cenário de teste configurado — não estiverem atendidos.
+A área **Publicação** deve funcionar como uma superfície de readiness operacional. Canal, cenários de teste, handoff e versão candidata são cards independentes, com estados, dependências, escopo, risco e ações próprias. A publicação deve ser bloqueada quando os requisitos mínimos — canal conectado, cenários estruturados, avaliação aprovada para o snapshot exato e ausência de regressão crítica — não estiverem atendidos.
 
 O fluxo ponta a ponta deve possuir um único gate de publicação: ações globais do agente levam à área **Publicação** para revisão contextual, e somente o comando de publicação dessa área executa a criação da versão. Nenhum atalho deve contornar os requisitos ou criar uma publicação silenciosamente.
 
@@ -147,11 +147,11 @@ Ainda faltam ingestão assíncrona completa, upload de arquivos pela interface, 
 
 ### 5.5 Tool Registry, conectores e MCP
 
-**Estado: governança, execução multi-round e hardening pré-B4 concluídos para o núcleo local/preview.**
+**Estado: fundação, execução multi-round e hardening parcial concluídos; autorização de agentes ainda bloqueada por achados adversariais.**
 
 Existem catálogo, schemas, risco, permissões por versão publicada, Tool Gateway, Secret Resolver, MCP Runtime, aprovações, idempotência do runtime nativo, auditoria e integração de tool calling no runtime. O hardening pré-B4 agora exige workflow publicado, agente publicado, permissão ativa da tool na versão publicada, snapshot imutável de tool/version/schema/adapter, conexão saudável e aprovação persistida quando requerida; também aplica output schema, redaction recursiva, idempotência estável e vínculo workspace-scoped antes do adapter.
 
-A ferramenta `lead.create_or_update` já é executável pelo runtime quando autorizada. O ciclo multi-round foi fechado para o núcleo nativo com protocolo estruturado: o primeiro round recebe as ferramentas publicadas, o servidor executa chamadas autorizadas, e o segundo round recebe a mensagem assistant com `tool_calls` e resultados `tool`, sem novas ferramentas disponíveis. Cada resultado retorna estado sanitizado de sucesso, aprovação, falha ou bloqueio; retries reutilizam a execução idempotente; falhas do segundo round preservam a resposta inicial segura. CRM, handoff, follow-up e agenda possuem registros nativos no Tool Registry, incluindo `calendar.book_slot`, contratos de entrada/saída versionados e validação dos resultados antes do retorno ao modelo. O hardening também cobre output schema, redaction recursiva, idempotência estável, conexão saudável, reconciliação de delivery e bloqueio de hosts privados no MCP; ainda faltam adapters externos de produção, circuit breaker, quota/rate limit de tokens/custo e tracing distribuído externo.
+A ferramenta `lead.create_or_update` possui caminho multi-round e idempotência quando efetivamente autorizada, mas a auditoria confirmou que writes comerciais determinísticos em `runtime.ts` ainda podem ocorrer fora dessa fronteira, que `allowedScopes` não é aplicado e que `riskLevel` não torna aprovação obrigatória por padrão. O Gateway também precisa congelar a versão do agente no workflow, governar risco por ferramenta MCP e invalidar health quando o endpoint da conexão mudar. A fundação continua válida para local/preview, mas não sustenta ainda uma alegação de least privilege ou produção segura.
 
 ### 5.6 Workflows e automação
 
@@ -173,11 +173,11 @@ As instalações agora possuem lista geral em `/marketplace/installed`, revisão
 
 ### 5.8 Nexo Learning RAG e Improvement Lab
 
-**Estado: fundação, avaliação, casos, laboratório, harness comparável e painel operacional implementados; promoção pendente.**
+**Estado: fundação, avaliação, casos, laboratório, harness comparável e painel operacional implementados; promoção bloqueada por dois P0 confirmados.**
 
 Existem eventos sanitizados, consentimento, mascaramento, avaliações, casos, chunks de engenharia, recuperação interna, candidatos versionados, revisão e a primeira harness offline comparável. Dados privados de clientes não entram no aprendizado global por padrão.
 
-A primeira Evaluation Harness offline agora compara duas versões do mesmo agente, calcula `success_rate`, tokens médios, latência média, taxa de erro de tool, taxa de handoff e violações de guardrail, persiste snapshots sanitizados e marca regressões por cenário. O painel operacional na área Testes do Studio permite seleção contextual de versões, execução offline, histórico de runs e inspeção de métricas, contratos de prompt/modelo/tools, guardrails e diferenças por cenário. Ainda faltam gate formal de promoção, publicação gradual, A/B testing e eventual separação física do Learning Store.
+A primeira Evaluation Harness offline agora compara duas versões do mesmo agente, calcula `success_rate`, tokens médios, latência média, taxa de erro de tool, taxa de handoff e violações de guardrail, persiste snapshots sanitizados e marca regressões por cenário. O painel operacional na área Testes do Studio permite seleção contextual de versões, execução offline, histórico de runs e inspeção de métricas, contratos de prompt/modelo/tools, guardrails e diferenças por cenário. A confrontação confirmou que o Harness não chama o modelo/provider real, aceita cenários vacuous e não é consultado pelo publish; portanto o gate formal de promoção permanece bloqueado até existir avaliação obrigatória, não manipulável e ligada ao snapshot exato.
 
 ### 5.9 Experiência principal
 
@@ -189,13 +189,13 @@ Ainda faltam configurações server-side completas, governança por papel, confi
 
 ### 5.10 Ambiente de desenvolvimento assistido por IA
 
-**Estado: blueprint persistido, avaliações offline, propostas governadas de tools e geração de workflows draft implementados; padrão de engenharia de agentes adotado.**
+**Estado: blueprint persistido, avaliações offline, propostas governadas de tools e geração de workflows draft implementados; padrão de engenharia adotado, porém contratos críticos ainda não são todos enforced.**
 
 O wizard `/create` agora transforma o briefing do usuário em um blueprint inicial revisável, contendo tipo de agente, persona, prompt, objetivos, capacidades, limites, FAQs, notas e cenários de teste. O blueprint é persistido por workspace e pode ser editado na configuração do agente, com autosave dos objetivos, capacidades e guardrails. A fatia B1 adicionou cenários estruturados, endpoint server-side autenticado, execução offline reutilizando decisão e RAG, expectativas de resposta/handoff/tools, persistência de resultados em tabelas próprias e snapshots sanitizados no Learning RAG. A fatia B2 adicionou geração determinística de propostas de tools nativas confirmadas, schemas preservados do Tool Registry, risco e aprovação derivados server-side, tools workspace-scoped em `review`, propostas `draft`, idempotência e endpoint de listagem. A fatia B3 adicionou vínculo idempotente entre blueprint e workflow, geração de grafo compilável em `draft`, preservação de versões publicadas, capacidades pendentes e materialização condicional de tools aprovadas, autorizadas e compatíveis com adapters do executor.
 
 As avaliações B1, a geração B2, a geração B3 e a harness B4 não criam jobs de produção, mensagens, deliveries, chamadas externas ou publicação automática. Tools B2 não recebem permissões de agente e não podem ser resolvidas pelo runtime enquanto estiverem em `review`. Workflows B3 não criam runs e somente incluem tools quando há proposta aprovada, tool ativa, permissão habilitada na versão draft e adapter de workflow confirmado. A B4 agora compara versões no backend e no console, persiste métricas, snapshots sanitizados e regressões por cenário; ainda faltam indexação de documentos e sistemas, gate formal de promoção e testes automatizados de qualidade antes da publicação.
 
-Toda evolução de agente deve aplicar a matriz da skill `agent-development`: identidade, propósito e condições de acionamento, prompt estruturado, modelo, tools mínimas, guardrails, formato de saída, casos-limite e cenários de avaliação. A skill é adaptada aos blueprints, manifestos, versões publicadas, Tool Gateway e Evaluation Harness do Nexo; não cria um runtime de plugin paralelo nem autoriza acesso amplo a ferramentas.
+Toda evolução de agente deve aplicar a matriz da skill `agent-development`: identidade, propósito e condições de acionamento, prompt estruturado, modelo, tools mínimas, guardrails, formato de saída, casos-limite e cenários de avaliação. A confrontação agressiva confirmou lacunas em cada contrato: `modelProvider/modelName` persistidos não governam o provider efetivo, `objectives/capabilities/guardrails` não chegam como políticas executáveis ao runtime, o formato de saída do agente não é validado e cenários textuais sem assertions podem habilitar publicação. A skill é adaptada aos blueprints, manifestos, versões publicadas, Tool Gateway e Evaluation Harness do Nexo; não cria um runtime de plugin paralelo nem autoriza acesso amplo a ferramentas.
 
 ### 5.11 Nexo Bot
 
@@ -203,7 +203,7 @@ Toda evolução de agente deve aplicar a matriz da skill `agent-development`: id
 
 O Nexo Bot está disponível na Home como assistente contextual. Ele consulta o Claude server-side com contexto mínimo do workspace, responde em linguagem natural e pode propor navegação, criação de agente ou provisionamento de horário. Escritas exigem confirmação explícita e passam por nova autorização server-side antes da execução. A rota `/nexo-bot/audit` registra consultas, propostas, confirmações, sucessos e falhas com sanitização, filtros por workspace e timeline operacional.
 
-Ainda faltam memória persistente do assistente, streaming, quotas próprias, mais ações com políticas de aprovação, retenção configurável e integração com o Learning RAG. Eventos de chat e ações agora possuem `trace_id` correlacionável. Publicação, exclusão, credenciais, permissões, billing e chamadas externas permanecem bloqueados nesta fase.
+Ainda faltam memória persistente do assistente, streaming, quotas próprias, mais ações com políticas de aprovação, retenção configurável e integração com o Learning RAG. A auditoria encontrou que a confirmação server-side ainda aceita uma ação client-supplied sem exigir ID/hash de uma proposta persistida; até corrigir isso, criação e provisionamento via Nexo Bot devem permanecer tratados como superfície de risco. Eventos de chat e ações agora possuem `trace_id` correlacionável. Publicação, exclusão, credenciais, permissões, billing e chamadas externas permanecem bloqueados nesta fase.
 
 ### 5.12 AWS, billing e produção
 
@@ -235,7 +235,7 @@ As rotas principais são:
 /marketplace/installed/:installationId
 ```
 
-A validação técnica consolidada inclui typecheck, lint sem erros e sem warnings, build, preview local e suíte automatizada com **186 testes aprovados e 0 falhas**. A matriz Playwright desktop/mobile validou as rotas críticas sem erros de console/page ou overflow reportado pelo gate. O smoke não substitui testes autenticados nem validação de canal real.
+A validação técnica consolidada inclui typecheck, lint sem erros e sem warnings, build, preview local e suíte automatizada com **186 testes aprovados e 0 falhas**. A confrontação mostrou que essa suíte não cobre concorrência, provider/modelo efetivo, autorização negativa de writes, publicação sem versão, gate de Harness, handoff/approval de ponta a ponta, prompt injection ou efeitos externos. A matriz Playwright e o smoke não substituem testes autenticados, adversariais nem validação de canal real.
 
 Commit de referência desta consolidação de código:
 
@@ -305,11 +305,11 @@ Z-API não é prioridade desta sequência, porque acrescenta principalmente outr
 
 ### Learning RAG
 
-**Status: fundação, primeira harness comparável, laboratório e painel operacional implementados; gate de promoção pendente.**
+**Status: fundação, primeira harness comparável, laboratório e painel operacional implementados; promoção bloqueada por dois P0 confirmados.**
 
 Retomar depois do fechamento do núcleo de vendas, ferramentas e Marketplace interno.
 
-O hardening pré-B4 foi concluído. A Evaluation Harness compara versões offline sem efeitos externos e a superfície de comparação já está disponível na área Testes do Studio, mantendo Tool Gateway único, snapshots sanitizados, validação runtime, isolamento e gates de lint, testes e Playwright. A próxima fatia deve tratar do gate formal de promoção, sem transformar avaliação em publicação automática.
+O hardening pré-B4 e o painel foram concluídos localmente, mas a confrontação agressiva reabriu o gate. A Evaluation Harness compara versões offline sem efeitos externos e a superfície de comparação está disponível na área Testes do Studio, mantendo Tool Gateway único, snapshots sanitizados, validação runtime, isolamento e gates de lint, testes e Playwright. Antes do gate formal de promoção, a próxima fatia deve corrigir os dois P0: impedir `active` sem versão publicada e impedir publish/rollback sem Harness aprovada para o snapshot exato.
 
 ### AWS e infraestrutura permanente
 
@@ -327,31 +327,51 @@ Não simular compra, assinatura ou locação. Implementar após definir entitlem
 
 A próxima execução deve seguir esta ordem, sem iniciar Ads, billing, Marketplace aberto ou AWS permanente antes de concluir o ciclo abaixo:
 
-1. completar o ciclo multi-round de tool calling; **concluído para o núcleo nativo**;
+1. completar o ciclo multi-round de tool calling; **concluído para o núcleo nativo, mas sujeito ao hardening de autorização reaberto**;
 2. expor CRM, handoff e follow-up como ferramentas nativas autorizáveis; **concluído para o núcleo nativo**;
 3. implementar agenda e disponibilidade como conector ou ferramenta controlada;
 4. fechar atualização e rollback de instalações do Marketplace;
 5. criar `marketplace/installed` e a operação de Minhas Instalações;
 6. criar e validar templates prontos de Atendimento e Vendas; **concluído e revalidado com os produtos próprios, manifestos, permissões, instalação, customização, isolamento, atualização e rollback**;
 7. executar validação com conexão Meta ou Evolution real;
-8. revisar observabilidade, quotas e readiness de produção; **relatório server-side, painel visual em `/metrics` e checklist explícita de aprovação para produção implementados no preview, agregando conexões, jobs, quotas, logs e critérios manuais; observabilidade externa e alertas seguem pendentes**;
+8. revisar observabilidade, quotas e readiness de produção; **relatório server-side, painel visual em `/metrics` e checklist explícita de aprovação para produção implementados no preview, mas a confrontação abriu correções P0/P1 de publicação, fila, quota, health e autorização antes da aprovação**;
 9. retomar AWS somente após o núcleo demonstrável passar pelos critérios de aceite.
 
 ### 8.1 Prioridade interna durante a postergação de conexões reais
 
-Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas e a B4 backend + painel está concluída em modo offline/evaluation. A próxima execução interna deve tratar do gate formal de promoção, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar a implementação. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
+Enquanto host, Docker e credenciais reais não estiverem disponíveis, a execução deve concentrar-se na construção da plataforma em local/preview. As fatias B1, B2 e B3 estão concluídas e a B4 backend + painel está concluída em modo offline/evaluation. A próxima execução interna deve tratar primeiro do hardening P0/P1 identificado na confrontação `agent-development`, aplicando `APLICAR_FONTES_RECOMENDADAS NEXO_CLOUD` antes de planejar cada fatia. Só depois desse hardening deve ser implementado o gate formal de promoção. Essas fatias não podem disparar chamadas externas reais, publicar versões automaticamente ou transformar fixtures em evidência de produção.
 
 A validação real de Meta/Evolution permanece registrada como pendência operacional e deverá ser retomada quando o host estiver preparado. Nenhuma sessão deve tentar contornar essa dependência criando credenciais no repositório, simulando healthcheck saudável ou tratando o preview como canal de produção.
 
 ### 8.2 Gate de refatoração identificado pela auditoria
 
-**Status: hardening concluído em 2026-09-12; B4 backend + painel concluídos em 2026-09-13.**
+**Status: reaberto em 2026-09-13 após confrontação agressiva da skill `agent-development`.**
 
-A varredura completa com as fontes recomendadas foi convertida em fatias verticais e resolvida antes da B4. O Tool Gateway exige workflow/agente publicados, permissão ativa da tool, aprovação persistida quando requerida, snapshot imutável de tool/version/schema/adapter, conexão saudável, output schema, redaction recursiva e idempotência estável antes do adapter. A execução grava `agent_id`, `agent_version_id`, `approval_id`, `approved_by`, `trace_id` e provider request id quando disponível.
+A varredura inicial com as fontes recomendadas foi convertida em fatias verticais e entregou hardening pré-B4, B4 backend e painel. A confrontação agressiva posterior encontrou dois bloqueadores P0 confirmados: `updateAgent` pode converter `live` em `active` sem versão publicada, e `publishAgent` aceita apenas canal saudável + texto de cenário, sem executar ou exigir uma Evaluation Harness aprovada. O Tool Gateway possui controles importantes, mas ainda não é uma fronteira completa porque o runtime conversacional executa writes comerciais fora dele, `allowedScopes` não é aplicado, aprovação não retoma o job, workflows resolvem a versão publicada atual e MCP não carrega risco por ferramenta remota.
 
-Também foram resolvidos: B1 agora seleciona versão/contexto e persiste snapshots; server functions críticas usam schemas Zod; o banco possui integrity guards multi-tenant; o store limpa estado contextual; o wizard persiste vínculo de conexão; duplicação e runs usam ações server-side idempotentes; o lint está limpo; a matriz Playwright está integrada ao projeto; quota disabled bloqueia runtime; webhook Meta somente ingere/enfileira; delivery Meta é monotônico e reconciliável; MCP bloqueia hosts privados por padrão; e auditoria do Nexo Bot possui `trace_id`.
+Também permanecem válidos: B1 seleciona versão/contexto e persiste snapshots; server functions críticas usam schemas Zod; o banco possui integrity guards multi-tenant; o store limpa estado contextual; o wizard persiste vínculo de conexão; duplicação e runs usam ações server-side idempotentes; o lint está limpo; a matriz Playwright está integrada ao projeto; quota disabled bloqueia runtime; webhook Meta somente ingere/enfileira; delivery Meta é monotônico e reconciliável; MCP bloqueia hosts privados por padrão; e auditoria do Nexo Bot possui `trace_id`. Esses controles não anulam os bloqueadores novos, pois os testes atuais não exercitam suas condições de falha.
 
-Os gates finais da fatia passaram: 186 testes, typecheck, lint sem erros/warnings, build, preview e smoke desktop/mobile. A instrução `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` permanece aplicável; a próxima execução deve implementar o gate formal de promoção, sem declarar conexão real Meta/Evolution, MCP real ou produção validados.
+Os gates técnicos locais passaram: 186 testes, typecheck, lint sem erros/warnings, build, preview e smoke desktop/mobile. Eles não autorizam publicação comercial. A instrução `INSTRUCAO-AUDITORIA-FONTES-RECOMENDADAS-NEXO.md` permanece aplicável; a próxima execução deve corrigir primeiro o bloqueio de `active` sem published e o gate de publish sem Harness, depois revalidar least privilege, handoff, approval e snapshots. Não declarar conexão real Meta/Evolution, MCP real ou produção validados.
+
+### 8.3 Confrontação agressiva `agent-development` — 2026-09-13
+
+**Veredito:** o Nexo Cloud não está pronto para vender ou operar agentes com efeitos comerciais. Pode ser utilizado somente em sandbox/local/preview controlado, sem tráfego de clientes e sem alegação de prontidão de produção.
+
+| Severidade | Achado confirmado | Evidência principal | Impacto operacional |
+|---|---|---|---|
+| P0 | Agente `active` sem versão `published` | `src/lib/multitenancy/server.ts:400-463` aceita `status=live`; `src/lib/agent-runtime/runtime.ts:205-216` faz join opcional e `toAgent` usa fallback dos campos editáveis. | Draft ou configuração mutável pode atender tráfego real. |
+| P0 | Publicação não depende de avaliação aprovada | `src/lib/multitenancy/server.ts:606-627` exige canal saudável e uma string não vazia em `test_scenarios`; não consulta Harness nem threshold. | Um placeholder pode liberar uma versão não testada, com regressão ou guardrail violado. |
+| P1 | Writes CRM fora da autorização da versão | `src/lib/agent-runtime/runtime.ts:616-665` executa lead, qualificação, atribuição e follow-up após decisão, sem gate por `authorizedTools`. | Agente sem tool publicada pode produzir efeitos comerciais. |
+| P1 | `allowedScopes` e approval de risco não são enforced no runtime | `src/lib/connectors/tools-server.ts:22-29,101-125` persiste/omite escopos; `runtime.ts:375-409` valida key/schema e só usa `requireApproval` configurado. | Tool pode atingir recurso fora do escopo ou escrever sem aprovação obrigatória. |
+| P1 | Provider/modelo configurado pode divergir do efetivo | `src/lib/multitenancy/server.ts:636-650` persiste provider/modelo; `src/lib/agent-runtime/runtime.ts:235-283` usa xAI e `NEXO_AGENT_MODEL` globais. | Conteúdo, custo e comportamento podem ir para um provider diferente do declarado. |
+| P1 | Handoff e approval não completam a transição | `runtime.ts:293-298` responde handoff sem persistir a transição; `tools-server.ts:85-90` altera approval, mas não retoma job; `evolution-handler.ts:140-163` ignora conversas `pending`. | Cliente pode não chegar ao humano; nova mensagem pode reativar o bot; ação aprovada pode nunca ocorrer. |
+| P1 | Workflow/MCP não têm autorização remanescente estável | `tool-gateway.ts:65-71` resolve a versão publicada atual; `:101-106` trata MCP por allowlist nominal. | Nova publicação pode alterar workflow antigo; mutação MCP pode passar como leitura. |
+| P1 | Conector saudável pode ser redirecionado sem invalidar health | `src/lib/multitenancy/server.ts:1093-1118` permite mudar endpoint/status sem limpar health; dispatcher resolve o segredo no endpoint atual. | Segredo pode ser enviado a endpoint controlado por atacante. |
+| P1 | Fila, quota e triggers aceitam condições de replay/concorrência | `queue.ts:48-65`, `quota.ts:67-98` e `server/routes/api/hooks/workflows/[workspaceSlug]/[triggerToken].ts:14-27`. | Workers podem duplicar efeitos; webhook token pode gerar runs sem idempotência/rate limit; quota pode ser subcontada. |
+| P1 | Harness não observa modelo real nem prova grounding | `src/lib/agent-runtime/runtime.ts:327-363` usa `model.generate` fake; `harness.ts:102-126` mede médias simples; RAG desbloqueia resposta com evidência lexical fraca. | Agente pode parecer aprovado e falhar em provider, tool calling, citação, prompt injection ou custo reais. |
+| P1 | Marketplace/blueprint/Nexo Bot possuem contratos declarativos parcialmente decorativos | `marketplace/server.ts:411-428`, `server.ts:472-515` e `nexo-bot/server.ts:87-99`. | Protected components, guardrails e confirmation podem ser contornados por chamadas server-side válidas. |
+
+**Próxima ordem obrigatória:** (1) state machine e fail-closed para `active/published`; (2) Policy Engine único para capability, scope, risco, approval e writes; (3) gate transacional de publish/rollback ligado ao snapshot e Harness aprovado; (4) handoff/approval com resume idempotente; (5) snapshots de workflow/MCP/provider e health fingerprint; (6) concorrência, quota, webhook e produção fail-closed; (7) grounding, guardrails, dados sintéticos e testes adversariais. Nenhuma nova integração ou feature comercial deve ultrapassar essa fila.
 
 Cada item deve ser executado como uma fatia vertical independente, com migration apenas quando necessária, contrato server-side, teste de isolamento, teste de integração, typecheck, build e preview.
 
@@ -418,3 +438,4 @@ Os documentos especializados complementam este plano. Em caso de conflito, este 
 | 2026-09-12 | Primeira fatia B4 implementada: `0050_agent_evaluation_harness.sql`, comparação backend de duas versões por workspace, métricas de sucesso/tokens/latência/tools/handoff/guardrails, snapshots sanitizados de configuração e tools, regressões por cenário, endpoints autenticados e guards SQL. A harness não cria jobs, deliveries, Learning Events, chamadas externas, publicação ou promoção. Testes B4 cobrem regressão, sanitização, versões distintas, isolamento e efeitos nulos. Próxima fatia: painel de comparação na área Testes do agente. |
 | 2026-09-13 | Skill `agent-development` adotada como referência obrigatória para criação e evolução de agentes: identidade, acionamento, prompt, modelo, tools least-privilege, guardrails, formato de saída, edge cases e cenários de avaliação. A adaptação usa blueprints, manifestos, versões publicadas, Tool Gateway e Evaluation Harness; não cria runtime de plugin paralelo nem libera permissões ou publicação automática. |
 | 2026-09-13 | Painel B4 concluído na área Testes do Studio: `developmentBlueprintId` persistido no carregamento de agentes, seleção contextual de baseline/candidata, execução offline, histórico e detalhe por cenário com métricas, contratos sanitizados de prompt/modelo/tools e guardrails do blueprint. Nenhuma migration nova ou ação externa foi introduzida. Suíte passou com 186 testes, typecheck, lint, build, preview e smoke Playwright. Próxima fatia: gate formal de promoção. |
+| 2026-09-13 | Confrontação agressiva com a matriz `agent-development` em cinco domínios confirmou dois P0: `active` pode existir sem versão `published` e publish não exige Harness aprovada. Também foram confirmados riscos P1 em writes CRM fora da autorização, scopes/approval, provider/modelo, handoff, snapshots de workflows/MCP, health de conectores, concorrência, webhooks e qualidade do Harness. A próxima fatia foi reordenada para hardening P0/P1 antes do gate formal de promoção; nenhum código foi alterado pela auditoria. |
