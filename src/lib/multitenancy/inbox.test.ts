@@ -20,6 +20,7 @@ async function fixture() {
     "0006_webhook_delivery_states.sql",
     "0007_agent_runtime_jobs.sql",
     "0008_conversation_handoff.sql",
+    "0052_whatsapp_safety_limits.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";
@@ -62,6 +63,11 @@ test("handoff transitions are persisted and cross-workspace access is denied", a
     await updateConversationHandoff(sql, "operator", { workspaceId: "ws", conversationId: "conversation", action: "resume" });
     const resumed = await pg.query<{ status: string; assigned_to: string | null }>("select status, assigned_to from conversations where id = 'conversation'");
     assert.deepEqual(resumed.rows[0], { status: "open", assigned_to: null });
+    await updateConversationHandoff(sql, "operator", { workspaceId: "ws", conversationId: "conversation", action: "close" });
+    await assert.rejects(
+      updateConversationHandoff(sql, "operator", { workspaceId: "ws", conversationId: "conversation", action: "resume" }),
+      /HANDOFF_INVALID_TRANSITION/,
+    );
     await assert.rejects(
       listConversationMessages(sql, "operator", { workspaceId: "other", conversationId: "conversation" }),
       /WORKSPACE|CONVERSATION/i,

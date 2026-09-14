@@ -32,6 +32,7 @@ async function fixture(baseUrl: string) {
     "0015_internal_events.sql",
     "0016_workflow_wait_resume.sql",
     "0017_meta_webhook_security.sql",
+    "0052_whatsapp_safety_limits.sql",
     "0018_agent_marketplace.sql",
     "0019_agent_decision_protocol.sql",
     "0020_knowledge_rag.sql",

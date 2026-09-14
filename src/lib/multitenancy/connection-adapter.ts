@@ -16,6 +16,7 @@ export function connectionRecordToUi(record: ConnectionRecord): Connection {
     phone: record.phone ?? undefined,
     instance: record.instance ?? undefined,
     phoneNumberId: record.phoneNumberId ?? undefined,
+    accountId: record.accountId ?? undefined,
     baseUrl: record.baseUrl ?? undefined,
     connectorDefinitionKey: record.connectorDefinitionKey ?? undefined,
     healthStatus: record.healthStatus,

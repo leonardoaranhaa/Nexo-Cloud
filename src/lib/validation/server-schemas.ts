@@ -14,6 +14,7 @@ export const workspaceBlueprintListInput = z.object({ workspaceId, blueprintId }
 export const evaluationHarnessInput = z.object({ workspaceId, agentId, blueprintId, baselineVersionId: versionId, candidateVersionId: versionId }).strict();
 export const evaluationHarnessListInput = z.object({ workspaceId, agentId: agentId.optional(), blueprintId: blueprintId.optional() }).strict();
 export const evaluationHarnessRunInput = z.object({ workspaceId, runId: z.string().trim().min(1).max(120) }).strict();
+export const evaluationHarnessApprovalInput = z.object({ workspaceId, runId: z.string().trim().min(1).max(120), note: z.string().trim().max(500).optional() }).strict();
 export const reviewToolProposalInput = z.object({
   workspaceId,
   proposalId: z.string().trim().min(1).max(120),

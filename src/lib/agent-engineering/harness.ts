@@ -257,12 +257,23 @@ export async function runEvaluationHarness(
 
 export async function listEvaluationHarnessRuns(sql: Sql, userId: string, input: { workspaceId: string; agentId?: string; blueprintId?: string }): Promise<JsonObject[]> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
-  return sql.query<JsonObject>(`select id, workspace_id as "workspaceId", agent_id as "agentId", blueprint_id as "blueprintId", baseline_version_id as "baselineVersionId", candidate_version_id as "candidateVersionId", status, scenario_count as "scenarioCount", regression_count as "regressionCount", baseline_metrics as "baselineMetrics", candidate_metrics as "candidateMetrics", duration_ms as "durationMs", created_at as "createdAt", completed_at as "completedAt" from agent_evaluation_harness_runs where workspace_id = $1 and ($2::text is null or agent_id = $2) and ($3::text is null or blueprint_id = $3) order by created_at desc limit 50`, [input.workspaceId, input.agentId ?? null, input.blueprintId ?? null]);
+  return sql.query<JsonObject>(`select id, workspace_id as "workspaceId", agent_id as "agentId", blueprint_id as "blueprintId", baseline_version_id as "baselineVersionId", candidate_version_id as "candidateVersionId", status, scenario_count as "scenarioCount", regression_count as "regressionCount", approved_by as "approvedBy", approved_at as "approvedAt", approval_note as "approvalNote", baseline_metrics as "baselineMetrics", candidate_metrics as "candidateMetrics", duration_ms as "durationMs", created_at as "createdAt", completed_at as "completedAt" from agent_evaluation_harness_runs where workspace_id = $1 and ($2::text is null or agent_id = $2) and ($3::text is null or blueprint_id = $3) order by created_at desc limit 50`, [input.workspaceId, input.agentId ?? null, input.blueprintId ?? null]);
+}
+export async function approveEvaluationHarnessRun(sql: Sql, userId: string, input: { workspaceId: string; runId: string; note?: string }): Promise<JsonObject> {
+  await requireWorkspaceAccess(sql, userId, input.workspaceId, "publish");
+  const rows = await sql.query<JsonObject>(`update agent_evaluation_harness_runs
+    set approved_by = $1, approved_at = current_timestamp, approval_note = $2
+    where id = $3 and workspace_id = $4 and status = 'succeeded' and regression_count = 0
+      and coalesce((candidate_metrics->>'successRate')::numeric, 0) >= coalesce((baseline_metrics->>'successRate')::numeric, 0)
+      and coalesce((candidate_metrics->>'guardrailViolationCount')::numeric, 0) <= coalesce((baseline_metrics->>'guardrailViolationCount')::numeric, 0)
+    returning id, workspace_id as "workspaceId", agent_id as "agentId", candidate_version_id as "candidateVersionId", approved_by as "approvedBy", approved_at as "approvedAt", approval_note as "approvalNote"`, [userId, String(input.note ?? "").trim().slice(0, 500) || null, input.runId, input.workspaceId]);
+  if (!rows[0]) throw new Error("HARNESS_NOT_APPROVABLE");
+  return rows[0];
 }
 
 export async function getEvaluationHarnessRun(sql: Sql, userId: string, input: { workspaceId: string; runId: string }): Promise<JsonObject | null> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "read");
-  const runs = await sql.query<JsonObject>(`select id, workspace_id as "workspaceId", agent_id as "agentId", blueprint_id as "blueprintId", baseline_version_id as "baselineVersionId", candidate_version_id as "candidateVersionId", status, scenario_count as "scenarioCount", regression_count as "regressionCount", baseline_snapshot as "baselineSnapshot", candidate_snapshot as "candidateSnapshot", baseline_metrics as "baselineMetrics", candidate_metrics as "candidateMetrics", duration_ms as "durationMs", created_at as "createdAt", completed_at as "completedAt" from agent_evaluation_harness_runs where id = $1 and workspace_id = $2 limit 1`, [input.runId, input.workspaceId]);
+  const runs = await sql.query<JsonObject>(`select id, workspace_id as "workspaceId", agent_id as "agentId", blueprint_id as "blueprintId", baseline_version_id as "baselineVersionId", candidate_version_id as "candidateVersionId", status, scenario_count as "scenarioCount", regression_count as "regressionCount", approved_by as "approvedBy", approved_at as "approvedAt", approval_note as "approvalNote", baseline_snapshot as "baselineSnapshot", candidate_snapshot as "candidateSnapshot", baseline_metrics as "baselineMetrics", candidate_metrics as "candidateMetrics", duration_ms as "durationMs", created_at as "createdAt", completed_at as "completedAt" from agent_evaluation_harness_runs where id = $1 and workspace_id = $2 limit 1`, [input.runId, input.workspaceId]);
   if (!runs[0]) return null;
   const results = await sql.query<JsonObject>(`select scenario_id as "scenarioId", scenario_name as "scenarioName", baseline_result as "baseline", candidate_result as "candidate", regression, differences from agent_evaluation_harness_results where run_id = $1 and workspace_id = $2 order by scenario_id`, [input.runId, input.workspaceId]);
   return { ...runs[0], comparisons: results };

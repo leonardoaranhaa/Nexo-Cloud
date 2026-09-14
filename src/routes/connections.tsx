@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Copy, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { CreateConnectionDialog } from "@/components/create-connection-dialog";
-import { QrPanel } from "@/components/qr-panel";
+import { EvolutionQrConnect } from "@/components/evolution-qr-connect";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import { CONNECTION_STATUS_LABEL } from "@/lib/labels";
 import { useNexo } from "@/lib/store";
 import { PROVIDER_HINT, PROVIDER_LABEL } from "@/lib/types";
 import { copyText, formatPhone, formatRelative } from "@/lib/utils";
-import { simulatedPhone, webhookUrl } from "@/lib/webhooks";
+import { webhookUrl } from "@/lib/webhooks";
 import {
   archiveWorkspaceConnection,
   updateWorkspaceConnection,
@@ -41,7 +41,6 @@ function ConnectionsPage() {
   const agents = useNexo((s) => s.agents);
   const updateConnection = useNexo((s) => s.updateConnection);
   const removeConnection = useNexo((s) => s.removeConnection);
-  const log = useNexo((s) => s.log);
   const workspaceId = useNexo((s) => s.workspaceId);
   const backendReady = useNexo((s) => s.backendReady);
   const { refresh } = useWorkspaceData();
@@ -62,6 +61,7 @@ function ConnectionsPage() {
           ...(patch.name !== undefined ? { name: patch.name } : {}),
           ...(patch.instance !== undefined ? { instance: patch.instance } : {}),
           ...(patch.phoneNumberId !== undefined ? { phoneNumberId: patch.phoneNumberId } : {}),
+          ...(patch.accountId !== undefined ? { accountId: patch.accountId } : {}),
           ...(patch.status !== undefined ? { status: patch.status === "qr" ? "disconnected" : patch.status } : {}),
           ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
         },
@@ -218,6 +218,12 @@ function ConnectionsPage() {
                   />
                 </div>
               )}
+              {(selected.provider === "instagram" || selected.provider === "messenger") && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="sel-account">{selected.provider === "instagram" ? "Instagram Professional account ID" : "Facebook Page ID"}</Label>
+                  <Input id="sel-account" value={selected.accountId ?? ""} onChange={(e) => patchConnection(selected.id, { accountId: e.target.value })} />
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label>Webhook</Label>
                 <button
@@ -233,24 +239,8 @@ function ConnectionsPage() {
               </div>
             </div>
 
-            {(selected.status === "qr" || selected.status === "disconnected") &&
-              selected.provider !== "meta" && (
-                <div className="mt-5">
-                  <QrPanel
-                    seed={selected.id + (selected.instance ?? "")}
-                    onConfirm={() => {
-                      const phone = simulatedPhone(selected.id);
-                      patchConnection(selected.id, {
-                        status: "connected",
-                        phone,
-                        lastEventAt: Date.now(),
-                      });
-                      log("connection", `${selected.name} pareada via QR`);
-                      toast("Número pareado no preview");
-                    }}
-                  />
-                </div>
-              )}
+            {(selected.status === "qr" || selected.status === "disconnected" || selected.status === "error") &&
+              selected.provider === "evolution" && backendReady && <EvolutionQrConnect connection={selected} />}
 
             {readiness && (
               <p className="mt-4 rounded-md border border-border bg-bg px-3 py-2 text-xs text-muted">
@@ -273,7 +263,7 @@ function ConnectionsPage() {
               </div>
             )}
 
-            {backendReady && selected.provider === "meta" && (
+            {backendReady && (selected.provider === "meta" || selected.provider === "instagram" || selected.provider === "messenger") && (
               <div className="mt-3">
                 <MetaCredentialDialog connection={selected} />
               </div>

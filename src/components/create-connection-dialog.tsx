@@ -22,6 +22,7 @@ export function CreateConnectionDialog({
   const [name, setName] = useState("");
   const [instance, setInstance] = useState("");
   const [phoneNumberId, setPhoneNumberId] = useState("");
+  const [accountId, setAccountId] = useState("");
   const addConnection = useNexo((s) => s.addConnection);
   const workspaceId = useNexo((s) => s.workspaceId);
   const backendReady = useNexo((s) => s.backendReady);
@@ -37,6 +38,7 @@ export function CreateConnectionDialog({
         provider,
         instance: instance.trim() || undefined,
         phoneNumberId: phoneNumberId.trim() || undefined,
+        accountId: accountId.trim() || undefined,
         baseUrl: undefined,
       };
       const id = backendReady && workspaceId
@@ -47,6 +49,7 @@ export function CreateConnectionDialog({
       setName("");
       setInstance("");
       setPhoneNumberId("");
+      setAccountId("");
       if (onCreated) {
         onCreated(id);
         return;
@@ -66,10 +69,10 @@ export function CreateConnectionDialog({
       </DialogTrigger>
       <DialogContent title="Nova conexão">
         <p className="mt-1 mb-4 text-sm text-muted">
-          O middleware que transforma o WhatsApp em API. Evolution lê QR; Meta é a via oficial.
+          Para começar rápido, escolha Evolution: depois de salvar a credencial, o Nexo gera o QR Code e acompanha o pareamento automaticamente.
         </p>
         <div className="grid grid-cols-3 gap-2">
-          {(["evolution", "meta", "zapi"] as Provider[]).map((p) => (
+          {(["evolution", "meta", "instagram", "messenger", "zapi"] as Provider[]).map((p) => (
             <button
               key={p}
               type="button"
@@ -96,12 +99,12 @@ export function CreateConnectionDialog({
           </div>
           {provider !== "meta" && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="conn-instance">Instância</Label>
+                <Label htmlFor="conn-instance">Nome da instância <span className="text-muted">(opcional)</span></Label>
               <Input
                 id="conn-instance"
                 value={instance}
                 onChange={(e) => setInstance(e.target.value)}
-                placeholder="aurora-loja"
+                placeholder="Gerado automaticamente se ficar vazio"
               />
             </div>
           )}
@@ -114,6 +117,12 @@ export function CreateConnectionDialog({
                 onChange={(e) => setPhoneNumberId(e.target.value)}
                 placeholder="10987…"
               />
+            </div>
+          )}
+          {(provider === "instagram" || provider === "messenger") && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="conn-account">{provider === "instagram" ? "Instagram Professional account ID" : "Facebook Page ID"} <span className="text-muted">(opcional)</span></Label>
+              <Input id="conn-account" value={accountId} onChange={(e) => setAccountId(e.target.value)} placeholder="Você poderá preencher no onboarding" />
             </div>
           )}
         </div>

@@ -1,4 +1,4 @@
-export type Provider = "evolution" | "meta" | "zapi";
+export type Provider = "evolution" | "meta" | "instagram" | "messenger" | "zapi";
 
 export type ConnectionStatus = "connected" | "qr" | "disconnected" | "error";
 
@@ -12,6 +12,7 @@ export type Connection = {
   phone?: string;
   instance?: string;
   phoneNumberId?: string;
+  accountId?: string;
   baseUrl?: string;
   connectorDefinitionKey?: string;
   healthStatus?: "unknown" | "healthy" | "degraded" | "unhealthy";
@@ -102,11 +103,15 @@ export type FlowNodeId =
 export const PROVIDER_LABEL: Record<Provider, string> = {
   evolution: "Evolution API",
   meta: "Meta Cloud API",
+  instagram: "Instagram Messaging API",
+  messenger: "Messenger Platform",
   zapi: "Z-API",
 };
 
 export const PROVIDER_HINT: Record<Provider, string> = {
   evolution: "QR Code · auto-hospedada · Baileys",
   meta: "Oficial · por conversa · verificação Meta",
+  instagram: "Oficial · Instagram Professional · webhooks Meta",
+  messenger: "Oficial · Página Facebook · webhooks Meta",
   zapi: "Instância pronta · token HTTP",
 };

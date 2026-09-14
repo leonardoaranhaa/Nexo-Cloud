@@ -4,6 +4,7 @@ import { requireWorkspaceAccess, type ConnectionProvider, type JsonObject } from
 import { createSecretResolver, type SecretProvider } from "../connectors/secrets.ts";
 import { EvolutionTextDispatcher, evolutionConfig } from "../connectors/evolution-messaging.ts";
 import { MetaTextDispatcher } from "../connectors/meta-messaging.ts";
+import { policyFromConnectionConfig, reserveWhatsAppOutbound } from "../connectors/whatsapp-safety.ts";
 
 type DeliveryStatus = "sent" | "failed" | "unknown";
 
@@ -117,7 +118,7 @@ async function dispatchTextMessageInternal(
   }
   if (target.agent_status !== "active") throw new Error("AGENT_NOT_ACTIVE");
   if (target.connection_status === "revoked") throw new Error("CONNECTION_REVOKED");
-  if (target.provider !== "evolution" && target.provider !== "meta") throw new Error("PROVIDER_DISPATCH_NOT_IMPLEMENTED");
+  if (!["evolution", "meta", "instagram", "messenger"].includes(target.provider)) throw new Error("PROVIDER_DISPATCH_NOT_IMPLEMENTED");
   if (!target.secret_ref) throw new Error("CONNECTION_SECRET_REF_MISSING");
 
   let conversationId = input.conversationId?.trim() || "";
@@ -184,6 +185,20 @@ async function dispatchTextMessageInternal(
     throw error;
   }
 
+  if (target.provider === "evolution") {
+    const safety = await reserveWhatsAppOutbound(sql, {
+      workspaceId: input.workspaceId,
+      connectionId,
+      policy: policyFromConnectionConfig(target.config),
+    });
+    if (!safety.allowed) {
+      const message = `Envio pausado pela proteção anti-banimento. Tente novamente em ${Math.ceil(safety.retryAfterMs / 1000)}s.`;
+      await sql.query(`update message_deliveries set status = 'unknown', last_error_code = $2, last_error_message = $3, next_attempt_at = current_timestamp + ($4::int * interval '1 millisecond'), updated_at = current_timestamp where id = $1 and workspace_id = $5`, [deliveryId, safety.code, message, safety.retryAfterMs, input.workspaceId]);
+      await sql.query(`update messages set status = 'unknown', error_code = $2, error_message = $3, updated_at = current_timestamp where id = $1 and workspace_id = $4`, [messageId, safety.code, message, input.workspaceId]);
+      return { messageId, deliveryId, status: "unknown", code: safety.code, provider: target.provider, message };
+    }
+  }
+
   const resolveSecret = createSecretResolver(secretProvider);
   const dispatch = target.provider === "evolution"
     ? await new EvolutionTextDispatcher().sendText({ ...evolutionConfig(target.config), recipient, text: content }, {
@@ -193,7 +208,9 @@ async function dispatchTextMessageInternal(
     : await new MetaTextDispatcher().sendText({
       baseUrl: typeof target.config.baseUrl === "string" ? target.config.baseUrl : undefined,
       graphVersion: typeof target.config.graphVersion === "string" ? target.config.graphVersion : undefined,
-      phoneNumberId: typeof target.config.phoneNumberId === "string" ? target.config.phoneNumberId : "",
+      phoneNumberId: typeof target.config.phoneNumberId === "string" ? target.config.phoneNumberId : undefined,
+      accountId: typeof target.config.accountId === "string" ? target.config.accountId : undefined,
+      platform: target.provider === "instagram" || target.provider === "messenger" ? target.provider : "whatsapp",
       recipient, text: content,
     },
     {

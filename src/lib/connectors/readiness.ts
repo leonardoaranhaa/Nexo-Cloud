@@ -15,7 +15,7 @@ type ConnectionRow = {
   provider: ConnectionProvider;
   secret_ref: string | null;
   health_status: "healthy" | "degraded" | "unhealthy" | "unknown" | null;
-  config: { instance?: string | null; phoneNumberId?: string | null; baseUrl?: string | null };
+  config: { instance?: string | null; phoneNumberId?: string | null; accountId?: string | null; baseUrl?: string | null; graphVersion?: string | null };
 };
 
 export async function assessConnectionReadiness(
@@ -45,8 +45,8 @@ export async function assessConnectionReadiness(
   }
 
   const providerConfig = row.config as Record<string, unknown>;
-  const configMissing = row.provider === "meta"
-    ? typeof providerConfig.phoneNumberId !== "string" || typeof providerConfig.graphVersion !== "string"
+  const configMissing = ["meta", "instagram", "messenger"].includes(row.provider)
+    ? (row.provider === "meta" ? typeof providerConfig.phoneNumberId !== "string" : typeof providerConfig.accountId !== "string") || typeof providerConfig.graphVersion !== "string"
     : !row.config?.instance || !row.config?.baseUrl;
   if (configMissing) {
     return {
@@ -58,14 +58,14 @@ export async function assessConnectionReadiness(
     };
   }
 
-  if (row.provider === "evolution" || row.provider === "meta") {
+  if (["evolution", "meta", "instagram", "messenger"].includes(row.provider)) {
     if (row.health_status === "healthy") {
       return {
         connectionId: row.id,
         provider: row.provider,
         status: "ready",
         code: "healthcheck_healthy",
-        message: `${row.provider === "meta" ? "Meta Cloud API" : "Evolution"} respondeu ao último healthcheck; a conexão está pronta para uso contextual.`,
+        message: `${row.provider === "evolution" ? "Evolution" : row.provider === "instagram" ? "Instagram Messaging API" : row.provider === "messenger" ? "Messenger Platform" : "Meta Cloud API"} respondeu ao último healthcheck; a conexão está pronta para uso contextual.`,
       };
     }
     if (row.health_status === "unhealthy" || row.health_status === "degraded") {
@@ -82,7 +82,7 @@ export async function assessConnectionReadiness(
       provider: row.provider,
       status: "not_checked",
       code: "healthcheck_required",
-      message: `${row.provider === "meta" ? "Meta Cloud API" : "Evolution"} configurada, mas ainda não foi validada por healthcheck.`,
+      message: `${row.provider === "evolution" ? "Evolution" : row.provider === "instagram" ? "Instagram Messaging API" : row.provider === "messenger" ? "Messenger Platform" : "Meta Cloud API"} configurada, mas ainda não foi validada por healthcheck.`,
     };
   }
 

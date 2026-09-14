@@ -28,8 +28,9 @@ async function fixture() {
   await pg.query("insert into organizations (id,name,slug,created_by) values ('org','Org','org','builder')");
   await pg.query("insert into workspaces (id,organization_id,name,slug,created_by) values ('ws','org','Workspace','ws','builder'), ('other','org','Other','other','other-user')");
   await pg.query("insert into workspace_memberships (workspace_id,user_id,role) values ('ws','builder','workspace_admin'), ('other','other-user','workspace_admin')");
-  await pg.query("insert into agents (id,workspace_id,name,slug,status,system_prompt,created_by,updated_by) values ('agent','ws','Agent','agent','active','Seja objetivo.','builder','builder'), ('other-agent','other','Other','other-agent','active','Ajude.','other-user','other-user')");
+  await pg.query("insert into agents (id,workspace_id,name,slug,status,system_prompt,created_by,updated_by) values ('agent','ws','Agent','agent','draft','Seja objetivo.','builder','builder'), ('other-agent','other','Other','other-agent','draft','Ajude.','other-user','other-user')");
   await pg.query("insert into agent_versions (id,agent_id,version_number,status,config,created_by) values ('agent-published','agent',1,'published','{}','builder'), ('agent-draft','agent',2,'draft','{}','builder'), ('other-published','other-agent',1,'published','{}','other-user')");
+  await pg.query("update agents set status = 'active' where id in ('agent','other-agent')");
   await pg.query("insert into connections (id,workspace_id,name,provider,status,secret_ref,config,health_status,last_healthcheck_at,created_by) values ('conn','ws','Evolution','evolution','connected','nexo/ws/conn/api_key',$1::jsonb,'healthy',current_timestamp,'builder')", [JSON.stringify({ baseUrl: "http://127.0.0.1:1", instance: "store" })]);
   await pg.query("insert into tools (id,workspace_id,key,name,description,input_schema,output_schema,risk_level,status,version) values ('tool-send','ws','evolution.send_text','Send text','Send text',$1::jsonb,$2::jsonb,'write','active',1)", [JSON.stringify({ type: "object", required: ["connectionId", "recipient", "text"] }), JSON.stringify({ type: "object" })]);
   return { pg, sql };

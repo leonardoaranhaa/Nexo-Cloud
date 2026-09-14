@@ -3,11 +3,12 @@ import type { Sql } from "@/lib/db";
 import { connectorDefinitionForProvider } from "../connectors/registry.ts";
 import type { SecretProvisioner } from "../connectors/secrets.ts";
 import { validateEvolutionBaseUrl, validateEvolutionCredential, validateEvolutionInstance, validateEvolutionWebhookSecret } from "../connectors/evolution.ts";
+import { pauseWhatsAppAgent, policyFromConnectionConfig } from "../connectors/whatsapp-safety.ts";
 
 export type OrganizationRole = "owner" | "admin" | "member" | "billing";
 export type WorkspaceRole = "workspace_admin" | "builder" | "operator" | "analyst" | "viewer";
 export type WorkspacePermission = "read" | "write" | "publish" | "operate" | "manage";
-export type ConnectionProvider = "evolution" | "meta" | "zapi";
+export type ConnectionProvider = "evolution" | "meta" | "instagram" | "messenger" | "zapi";
 export type JsonValue =
   | string
   | number
@@ -77,6 +78,7 @@ export type ConnectionRecord = {
   phone: string | null;
   instance: string | null;
   phoneNumberId: string | null;
+  accountId: string | null;
   baseUrl: string | null;
   lastEventAt: string | null;
   createdAt: string;
@@ -425,6 +427,14 @@ export async function updateAgent(
   if (target[0].workspace_id !== input.workspaceId) throw new WorkspaceAccessError();
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
   const status = input.status === "live" ? "active" : input.status;
+  if (status === "active") {
+    const published = await sql.query<{ id: string }>(
+      `select av.id from agent_versions av
+        where av.agent_id = $1 and av.status = 'published' limit 1`,
+      [input.id],
+    );
+    if (!published[0]) throw new Error("AGENT_ACTIVE_REQUIRES_PUBLISHED_VERSION");
+  }
   await sql.query(
     `update agents set
       name = $2,
@@ -460,6 +470,17 @@ export async function updateAgent(
       input.workspaceId,
     ],
   );
+  const next = await sql.query<{ version_number: number }>(
+    `select coalesce(max(version_number), 0) + 1 as version_number from agent_versions where agent_id = $1`,
+    [input.id],
+  );
+  const draftId = randomUUID();
+  await sql.query(
+    `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
+     values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
+    [draftId, input.id, Number(next[0]?.version_number ?? 1), JSON.stringify({ name: input.name, persona: input.persona, welcomeMessage: input.welcomeMessage, systemPrompt: input.systemPrompt, language: input.language, temperature: input.temperature, maxTokens: input.maxTokens, memoryWindow: input.memoryWindow, knowledge: input.knowledge, tools: input.tools, metadata: input.metadata ?? {} }), userId],
+  );
+  await copyLatestAgentToolPermissions(sql, input.workspaceId, input.id, draftId);
 }
 
 function boundedBlueprintList(value: unknown, maxItems: number, maxLength: number): string[] {
@@ -602,6 +623,26 @@ export async function publishAgent(
     [input.agentId, input.workspaceId],
   );
   if (!agent[0]) throw new Error("AGENT_NOT_FOUND");
+  if (!agent[0].model_provider.trim() || !agent[0].model_name.trim()) throw new Error("PUBLISH_MODEL_CONFIGURATION_REQUIRED");
+  const published = await sql.query<{ id: string }>(
+    `select id from agent_versions where agent_id = $1 and status = 'published' limit 1`,
+    [input.agentId],
+  );
+  const latestDraft = await sql.query<{ id: string }>(
+    `select id from agent_versions where agent_id = $1 and status = 'draft' order by version_number desc limit 1`,
+    [input.agentId],
+  );
+  if (published[0]) {
+    if (!latestDraft[0]) throw new Error("PUBLISH_HARNESS_REQUIRED");
+    const approved = await sql.query<{ id: string }>(
+      `select id from agent_evaluation_harness_runs
+        where workspace_id = $1 and agent_id = $2 and candidate_version_id = $3
+          and status = 'succeeded' and regression_count = 0 and approved_at is not null
+        order by approved_at desc limit 1`,
+      [input.workspaceId, input.agentId, latestDraft[0].id],
+    );
+    if (!approved[0]) throw new Error("PUBLISH_HARNESS_REQUIRED");
+  }
 
   const readiness = await sql.query<{
     connection_status: string | null;
@@ -626,13 +667,7 @@ export async function publishAgent(
   }
   if (scenarios.length === 0) throw new Error("PUBLISH_READINESS_TESTS_REQUIRED");
 
-  const next = await sql.query<{ version_number: number }>(
-    `select coalesce(max(version_number), 0) + 1 as version_number
-       from agent_versions where agent_id = $1`,
-    [input.agentId],
-  );
-  const versionId = randomUUID();
-  const versionNumber = Number(next[0]?.version_number ?? 1);
+  const versionId = latestDraft[0]?.id ?? randomUUID();
   const config = JSON.stringify({
     name: agent[0].name,
     persona: agent[0].persona,
@@ -650,12 +685,18 @@ export async function publishAgent(
     metadata: agent[0].metadata,
   });
 
-  await sql.query(
-    `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
-     values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
-    [versionId, input.agentId, versionNumber, config, userId],
-  );
-  await copyLatestAgentToolPermissions(sql, input.workspaceId, input.agentId, versionId);
+  if (!latestDraft[0]) {
+    const next = await sql.query<{ version_number: number }>(
+      `select coalesce(max(version_number), 0) + 1 as version_number from agent_versions where agent_id = $1`,
+      [input.agentId],
+    );
+    await sql.query(
+      `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
+       values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
+      [versionId, input.agentId, Number(next[0]?.version_number ?? 1), config, userId],
+    );
+    await copyLatestAgentToolPermissions(sql, input.workspaceId, input.agentId, versionId);
+  }
   await sql.query(
     `update agent_versions
         set status = 'retired', retired_at = current_timestamp
@@ -919,12 +960,12 @@ export async function updateConversationHandoff(
 ): Promise<{ status: "pending" | "open" | "closed" }> {
   if (userId) await requireWorkspaceAccess(sql, userId, input.workspaceId, "operate");
   const status = input.action === "assign" ? "pending" : input.action === "close" ? "closed" : "open";
-  const conversation = await sql.query<{ id: string }>(
-    `select id from conversations where id = $1 and workspace_id = $2 limit 1`,
+  const conversation = await sql.query<{ id: string; connection_id: string }>(
+    `select id, connection_id from conversations where id = $1 and workspace_id = $2 limit 1`,
     [input.conversationId, input.workspaceId],
   );
   if (!conversation[0]) throw new Error("CONVERSATION_NOT_FOUND");
-  await sql.query(
+  const updated = await sql.query<{ status: "pending" | "open" | "closed" }>(
     `update conversations set
        status = $3,
        assigned_to = case when $4 = 'assign' then $2 when $4 in ('release', 'resume', 'close') then null else assigned_to end,
@@ -932,10 +973,31 @@ export async function updateConversationHandoff(
        handoff_at = case when $4 = 'assign' then current_timestamp else handoff_at end,
        closed_at = case when $4 = 'close' then current_timestamp when $4 = 'resume' then null else closed_at end,
        updated_at = current_timestamp
-     where id = $1 and workspace_id = $6`,
+     where id = $1 and workspace_id = $6
+       and (($4 = 'assign' and status in ('open', 'pending'))
+         or ($4 = 'release' and status = 'pending')
+         or ($4 = 'resume' and status = 'pending')
+         or ($4 = 'close' and status in ('pending', 'open')))
+     returning status`,
     [input.conversationId, userId, status, input.action, input.reason?.trim() ?? "", input.workspaceId],
   );
-  return { status };
+  if (!updated[0]) throw new Error("HANDOFF_INVALID_TRANSITION");
+  const connection = await sql.query<{ config: Record<string, unknown> | null }>(
+    `select config from connections where id = $1 and workspace_id = $2 limit 1`,
+    [conversation[0].connection_id, input.workspaceId],
+  );
+  if (connection[0]) {
+    if (input.action === "assign") {
+      await pauseWhatsAppAgent(sql, {
+        workspaceId: input.workspaceId,
+        connectionId: conversation[0].connection_id,
+        pauseMinutes: policyFromConnectionConfig(connection[0].config).handoffPauseMinutes,
+      });
+    } else if (input.action === "resume" || input.action === "release") {
+      await sql.query(`update connections set agent_pause_until = null, updated_at = current_timestamp where id = $1 and workspace_id = $2`, [conversation[0].connection_id, input.workspaceId]);
+    }
+  }
+  return updated[0];
 }
 
 export async function assertConversationAccess(
@@ -1027,6 +1089,7 @@ function connectionSelect() {
       c.config->>'phone' as phone,
       c.config->>'instance' as instance,
       c.config->>'phoneNumberId' as "phoneNumberId",
+      c.config->>'accountId' as "accountId",
       c.config->>'baseUrl' as "baseUrl",
       c.last_healthcheck_at as "lastEventAt",
       c.created_at as "createdAt"
@@ -1051,6 +1114,7 @@ export async function createConnection(
     provider: ConnectionProvider;
     instance?: string;
     phoneNumberId?: string;
+    accountId?: string;
     baseUrl?: string;
   },
 ): Promise<{ id: string }> {
@@ -1063,9 +1127,13 @@ export async function createConnection(
     validateEvolutionInstance(input.instance);
   }
   const id = randomUUID();
+  const instance = input.provider === "evolution"
+    ? (input.instance?.trim() || `${slugify(name)}-${id.slice(0, 8)}`)
+    : input.instance?.trim();
   const config = JSON.stringify({
-    instance: input.instance?.trim().slice(0, 160) || null,
+    instance: instance?.slice(0, 160) || null,
     phoneNumberId: input.phoneNumberId?.trim().slice(0, 160) || null,
+    accountId: input.accountId?.trim().slice(0, 160) || null,
     baseUrl: input.baseUrl?.trim().slice(0, 240) || null,
   });
   await sql.query(
@@ -1085,6 +1153,7 @@ export async function updateConnection(
     name?: string;
     instance?: string;
     phoneNumberId?: string;
+    accountId?: string;
     baseUrl?: string;
     status?: ConnectionRecord["status"];
     phone?: string;
@@ -1104,6 +1173,7 @@ export async function updateConnection(
     ...(current[0].config ?? {}),
     ...(input.instance !== undefined ? { instance: input.instance.trim().slice(0, 160) || null } : {}),
     ...(input.phoneNumberId !== undefined ? { phoneNumberId: input.phoneNumberId.trim().slice(0, 160) || null } : {}),
+    ...(input.accountId !== undefined ? { accountId: input.accountId.trim().slice(0, 160) || null } : {}),
     ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl.trim().slice(0, 240) || null } : {}),
     ...(input.phone !== undefined ? { phone: input.phone.trim().slice(0, 80) || null } : {}),
   };

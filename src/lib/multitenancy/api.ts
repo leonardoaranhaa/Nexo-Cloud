@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { JsonObject } from "./server";
 import {
   blueprintInput,
+  evaluationHarnessApprovalInput,
   evaluationHarnessInput,
   evaluationHarnessListInput,
   evaluationHarnessRunInput,
@@ -122,6 +123,15 @@ export const getWorkspaceAgentEvaluationHarnessRun = createServerFn({ method: "G
     return getEvaluationHarnessRun(await getSql(), context.userId, data);
   });
 
+export const approveWorkspaceAgentEvaluationHarnessRun = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input) => evaluationHarnessApprovalInput.parse(input))
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { approveEvaluationHarnessRun } = await import("@/lib/agent-engineering/harness");
+    return approveEvaluationHarnessRun(await getSql(), context.userId, data);
+  });
+
 export const generateWorkspaceAgentToolProposals = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input) => workspaceBlueprintInput.parse(input))
@@ -219,9 +229,10 @@ export const createWorkspaceConnection = createServerFn({ method: "POST" })
   .validator((input: {
     workspaceId: string;
     name: string;
-    provider: "evolution" | "meta" | "zapi";
+    provider: "evolution" | "meta" | "instagram" | "messenger" | "zapi";
     instance?: string;
     phoneNumberId?: string;
+    accountId?: string;
     baseUrl?: string;
   }) => input)
   .handler(async ({ context, data }) => {
@@ -238,6 +249,7 @@ export const updateWorkspaceConnection = createServerFn({ method: "POST" })
     name?: string;
     instance?: string;
     phoneNumberId?: string;
+    accountId?: string;
     baseUrl?: string;
     status?: "pending" | "connected" | "disconnected" | "error" | "revoked";
     phone?: string;
@@ -288,6 +300,24 @@ export const runWorkspaceConnectionHealthcheck = createServerFn({ method: "POST"
       ...data,
       traceId: randomUUID(),
     });
+  });
+
+export const startWorkspaceEvolutionQr = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; connectionId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { startEvolutionQr } = await import("@/lib/connectors/evolution-onboarding");
+    return startEvolutionQr(await getSql(), context.userId, data);
+  });
+
+export const getWorkspaceEvolutionConnectionState = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; connectionId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getEvolutionConnectionState } = await import("@/lib/connectors/evolution-onboarding");
+    return getEvolutionConnectionState(await getSql(), context.userId, data);
   });
 
 export const provisionEvolutionConnectionCredential = createServerFn({ method: "POST" })
@@ -347,7 +377,7 @@ export const provisionEvolutionWebhookCredential = createServerFn({ method: "POS
 
 export const provisionMetaConnectionCredential = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: { workspaceId: string; connectionId: string; accessToken: string; appSecret: string; verifyToken: string; phoneNumberId: string; graphVersion: string; baseUrl?: string }) => input)
+  .validator((input: { workspaceId: string; connectionId: string; accessToken: string; appSecret: string; verifyToken: string; phoneNumberId?: string; accountId?: string; graphVersion: string; baseUrl?: string }) => input)
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
     const { awsSecretsManagerProvisioner, unavailableSecretProvisioner } = await import("@/lib/connectors/secrets");
@@ -357,6 +387,15 @@ export const provisionMetaConnectionCredential = createServerFn({ method: "POST"
       : unavailableSecretProvisioner();
     await provisionMetaCredential(await getSql(), context.userId, data, provisioner);
     return { ok: true as const };
+  });
+
+export const getWorkspaceMetaConnectionState = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: { workspaceId: string; connectionId: string }) => input)
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getMetaConnectionState } = await import("./meta-onboarding");
+    return getMetaConnectionState(await getSql(), context.userId, data);
   });
 
 export const listWorkspaceConversations = createServerFn({ method: "GET" })

@@ -9,6 +9,7 @@ import test from "node:test";
 import { memorySecretProvider } from "../connectors/secrets.ts";
 import { handleEvolutionWebhook } from "../webhooks/evolution-handler.ts";
 import { runNextAgentRuntimeJob } from "./runtime.ts";
+import { dispatchTextMessageAsRuntime } from "../messaging/router.ts";
 import type { Sql } from "../db";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../../");
@@ -29,7 +30,7 @@ async function fixture(baseUrl: string) {
     "0029_agent_improvement_lab.sql", "0030_tool_execution_domain.sql", "0031_agent_development_blueprints.sql",
     "0035_workspace_integrations.sql",
     "0038_agent_runtime_quotas.sql",
-    "0039_native_commercial_tool_contracts.sql",
+    "0039_native_commercial_tool_contracts.sql", "0052_whatsapp_safety_limits.sql",
   ]) await pg.exec(await readFile(join(root, "migrations", file), "utf8"));
   const sql = (async <T = Record<string, unknown>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> => {
     let text = strings[0] ?? "";
@@ -42,7 +43,7 @@ async function fixture(baseUrl: string) {
   await pg.query("insert into workspace_memberships (workspace_id,user_id,role) values ('ws','user','workspace_admin')");
   await pg.query(
     "insert into connections (id,workspace_id,name,provider,status,secret_ref,webhook_secret_ref,config,created_by) values ('conn','ws','Evolution','evolution','connected','nexo/ws/conn/api_key','nexo/ws/conn/webhook_jwt',$1::jsonb,'user')",
-    [JSON.stringify({ baseUrl, instance: "loja" })],
+    [JSON.stringify({ baseUrl, instance: "loja", whatsappDailyMessageLimit: 1 })],
   );
   await pg.query(
     "insert into agents (id,workspace_id,name,slug,status,language,system_prompt,knowledge,tools,created_by,updated_by) values ('agent','ws','Agent','agent','active','pt','Seja objetivo.',$1::jsonb,$2::jsonb,'user','user')",
@@ -105,12 +106,18 @@ test("Evolution inbound flows through queue, runtime, dispatch and operational h
     }, secrets);
     assert.equal(result.status, "succeeded");
     assert.equal(dispatched, 1);
+    const limited = await dispatchTextMessageAsRuntime(sql, {
+      workspaceId: "ws", agentId: "agent", connectionId: "conn",
+      recipient: "5511999999999", text: "Segunda mensagem", idempotencyKey: "second-message", actor: "agent", traceId: "trace-second",
+    }, secrets);
+    assert.equal(limited.code, "WHATSAPP_DAILY_LIMIT");
+    assert.equal(dispatched, 1);
 
     const messages = await pg.query<{ direction: string; status: string; content: { text?: string } }>(
       "select direction, status, content from messages where workspace_id = 'ws' order by created_at",
     );
     assert.equal(messages.rows.filter((row) => row.direction === "inbound").length, 1);
-    assert.equal(messages.rows.filter((row) => row.direction === "outbound").length, 1);
+    assert.equal(messages.rows.filter((row) => row.direction === "outbound").length, 2);
     assert.equal(messages.rows.find((row) => row.direction === "outbound")?.status, "sent");
     assert.equal(messages.rows.find((row) => row.direction === "outbound")?.content.text, "Resposta operacional");
 

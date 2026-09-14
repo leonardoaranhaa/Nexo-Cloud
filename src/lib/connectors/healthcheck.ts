@@ -24,7 +24,7 @@ type ConnectionRow = {
 
 function adapterForProvider(provider: ConnectionProvider) {
   if (provider === "evolution") return new EvolutionApiAdapter();
-  if (provider === "meta") return new MetaCloudApiAdapter();
+  if (provider === "meta" || provider === "instagram" || provider === "messenger") return new MetaCloudApiAdapter();
   // Provider-specific adapters will be added after their exact contracts are verified.
   return new HttpHealthcheckAdapter();
 }

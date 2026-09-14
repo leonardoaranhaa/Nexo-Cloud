@@ -59,6 +59,13 @@ function object(value: unknown): JsonRecord {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
 }
 
+function toolScopeAllows(tool: RuntimeAuthorizedTool, scope: string): boolean {
+  const scopes = tool.allowedScopes ?? {};
+  if (!(scope in scopes)) return true;
+  const value = scopes[scope];
+  return value === true || (Array.isArray(value) && value.some((item) => item === "write" || item === "*"));
+}
+
 async function finalizeNativeToolOutput(
   sql: Sql,
   tool: RuntimeAuthorizedTool,
@@ -376,6 +383,10 @@ async function executeAuthorizedRuntimeTools(
     const tool = context.authorizedTools.find((item) => item.key === call.name);
     if (!tool) {
       results.push({ id: call.id, name: call.name, status: "denied", output: { code: "RUNTIME_TOOL_NOT_AUTHORIZED", message: "A ferramenta não está autorizada nesta versão publicada." } });
+      continue;
+    }
+    if (tool.key.startsWith("lead.") && !toolScopeAllows(tool, "crm.write")) {
+      results.push({ id: call.id, name: call.name, status: "denied", output: { code: "RUNTIME_TOOL_SCOPE_DENIED", message: "A ferramenta CRM não possui o scope de escrita autorizado nesta versão publicada." } });
       continue;
     }
     const idempotencyKey = `runtime:${context.job.id}:tool:${call.id}`;

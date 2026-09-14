@@ -1,4 +1,4 @@
-export type ConnectorProvider = "evolution" | "meta" | "zapi";
+export type ConnectorProvider = "evolution" | "meta" | "instagram" | "messenger" | "zapi";
 
 export type ConnectorDefinition = {
   id: string;
@@ -32,6 +32,22 @@ export const CONNECTOR_DEFINITIONS: readonly ConnectorDefinition[] = [
     name: "WhatsApp · Z-API",
     provider: "zapi",
     capabilities: ["healthcheck", "webhook", "qr"],
+    requiresSecret: true,
+  },
+  {
+    id: "connector_def_instagram",
+    key: "instagram_messaging",
+    name: "Instagram · Messaging API",
+    provider: "instagram",
+    capabilities: ["healthcheck", "webhook", "messaging", "handoff"],
+    requiresSecret: true,
+  },
+  {
+    id: "connector_def_messenger",
+    key: "messenger_platform",
+    name: "Messenger · Platform API",
+    provider: "messenger",
+    capabilities: ["healthcheck", "webhook", "messaging", "handoff"],
     requiresSecret: true,
   },
 ];
