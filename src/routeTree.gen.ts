@@ -15,6 +15,7 @@ import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as GuideRouteImport } from './routes/guide'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as MetricsRouteImport } from './routes/metrics'
 import { Route as RunsRouteImport } from './routes/runs'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -55,6 +56,11 @@ const GuideRoute = GuideRouteImport.update({
 const InboxRoute = InboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MetricsRoute = MetricsRouteImport.update({
@@ -123,6 +129,7 @@ export interface FileRoutesByFullPath {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/login': typeof LoginRoute
   '/metrics': typeof MetricsRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/login': typeof LoginRoute
   '/metrics': typeof MetricsRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/create': typeof CreateRoute
   '/guide': typeof GuideRoute
   '/inbox': typeof InboxRoute
+  '/login': typeof LoginRoute
   '/metrics': typeof MetricsRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/login'
     | '/metrics'
     | '/runs'
     | '/settings'
@@ -202,6 +212,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/login'
     | '/metrics'
     | '/runs'
     | '/settings'
@@ -221,6 +232,7 @@ export interface FileRouteTypes {
     | '/create'
     | '/guide'
     | '/inbox'
+    | '/login'
     | '/metrics'
     | '/runs'
     | '/settings'
@@ -241,6 +253,7 @@ export interface RootRouteChildren {
   CreateRoute: typeof CreateRoute
   GuideRoute: typeof GuideRoute
   InboxRoute: typeof InboxRoute
+  LoginRoute: typeof LoginRoute
   MetricsRoute: typeof MetricsRoute
   RunsRoute: typeof RunsRoute
   SettingsRoute: typeof SettingsRoute
@@ -296,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/metrics': {
@@ -385,6 +405,7 @@ const rootRouteChildren: RootRouteChildren = {
   CreateRoute: CreateRoute,
   GuideRoute: GuideRoute,
   InboxRoute: InboxRoute,
+  LoginRoute: LoginRoute,
   MetricsRoute: MetricsRoute,
   RunsRoute: RunsRoute,
   SettingsRoute: SettingsRoute,
