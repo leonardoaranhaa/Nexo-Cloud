@@ -24,6 +24,7 @@ import { Route as AgentsIndexRouteImport } from './routes/agents/index'
 import { Route as AgentsIdRouteImport } from './routes/agents/$id'
 import { Route as MarketplaceIndexRouteImport } from './routes/marketplace/index'
 import { Route as NexoBotAuditRouteImport } from './routes/nexo-bot/audit'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as MarketplaceAgentsProductIdRouteImport } from './routes/marketplace/agents/$productId'
 import { Route as MarketplaceInstalledIndexRouteImport } from './routes/marketplace/installed/index'
 import { Route as MarketplaceInstalledInstallationIdRouteImport } from './routes/marketplace/installed/$installationId'
@@ -103,6 +104,11 @@ const NexoBotAuditRoute = NexoBotAuditRouteImport.update({
   path: '/nexo-bot/audit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MarketplaceAgentsProductIdRoute =
   MarketplaceAgentsProductIdRouteImport.update({
     id: '/marketplace/agents/$productId',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/nexo-bot/audit': typeof NexoBotAuditRoute
   '/agents/': typeof AgentsIndexRoute
   '/marketplace/': typeof MarketplaceIndexRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
   '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
   '/marketplace/installed/': typeof MarketplaceInstalledIndexRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/nexo-bot/audit': typeof NexoBotAuditRoute
   '/agents': typeof AgentsIndexRoute
   '/marketplace': typeof MarketplaceIndexRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
   '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
   '/marketplace/installed': typeof MarketplaceInstalledIndexRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/nexo-bot/audit': typeof NexoBotAuditRoute
   '/agents/': typeof AgentsIndexRoute
   '/marketplace/': typeof MarketplaceIndexRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/marketplace/agents/$productId': typeof MarketplaceAgentsProductIdRoute
   '/marketplace/installed/$installationId': typeof MarketplaceInstalledInstallationIdRoute
   '/marketplace/installed/': typeof MarketplaceInstalledIndexRoute
@@ -201,6 +210,7 @@ export interface FileRouteTypes {
     | '/nexo-bot/audit'
     | '/agents/'
     | '/marketplace/'
+    | '/api/auth/$'
     | '/marketplace/agents/$productId'
     | '/marketplace/installed/$installationId'
     | '/marketplace/installed/'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/nexo-bot/audit'
     | '/agents'
     | '/marketplace'
+    | '/api/auth/$'
     | '/marketplace/agents/$productId'
     | '/marketplace/installed/$installationId'
     | '/marketplace/installed'
@@ -241,6 +252,7 @@ export interface FileRouteTypes {
     | '/nexo-bot/audit'
     | '/agents/'
     | '/marketplace/'
+    | '/api/auth/$'
     | '/marketplace/agents/$productId'
     | '/marketplace/installed/$installationId'
     | '/marketplace/installed/'
@@ -262,6 +274,7 @@ export interface RootRouteChildren {
   NexoBotAuditRoute: typeof NexoBotAuditRoute
   AgentsIndexRoute: typeof AgentsIndexRoute
   MarketplaceIndexRoute: typeof MarketplaceIndexRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   MarketplaceAgentsProductIdRoute: typeof MarketplaceAgentsProductIdRoute
   MarketplaceInstalledInstallationIdRoute: typeof MarketplaceInstalledInstallationIdRoute
   MarketplaceInstalledIndexRoute: typeof MarketplaceInstalledIndexRoute
@@ -374,6 +387,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NexoBotAuditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/marketplace/agents/$productId': {
       id: '/marketplace/agents/$productId'
       path: '/marketplace/agents/$productId'
@@ -414,6 +434,7 @@ const rootRouteChildren: RootRouteChildren = {
   NexoBotAuditRoute: NexoBotAuditRoute,
   AgentsIndexRoute: AgentsIndexRoute,
   MarketplaceIndexRoute: MarketplaceIndexRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
   MarketplaceAgentsProductIdRoute: MarketplaceAgentsProductIdRoute,
   MarketplaceInstalledInstallationIdRoute:
     MarketplaceInstalledInstallationIdRoute,
