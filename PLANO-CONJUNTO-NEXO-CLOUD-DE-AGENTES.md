@@ -215,7 +215,7 @@ A postergação é temporária e não remove AWS do roadmap. Ela não deve bloqu
 
 ## 6. Migrations, rotas e validação atual
 
-O repositório possui migrations até `0050_agent_evaluation_harness.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria correlacionável do Nexo Bot, workflows de erro, produtos próprios do Nexo, propostas governadas de tools, vínculos de workflows gerados, snapshots de avaliação, integridade multi-tenant em banco e comparação de versões.
+O repositório possui migrations até `0053_meta_social_connectors.sql`, cobrindo Marketplace, protocolo de decisão, RAG, CRM, Learning, Improvement Lab, domínio de execuções de ferramentas, blueprints persistidos, avaliações offline, disponibilidade e reserva de agenda, contratos de ferramentas comerciais, revisões de instalação, quotas diárias do runtime, auditoria correlacionável do Nexo Bot, workflows de erro, produtos próprios do Nexo, propostas governadas de tools, vínculos de workflows gerados, snapshots de avaliação, integridade multi-tenant em banco, comparação de versões, hardening de promoção, limites de segurança do WhatsApp e definições de conectores sociais da Meta.
 
 As rotas principais são:
 
@@ -235,12 +235,12 @@ As rotas principais são:
 /marketplace/installed/:installationId
 ```
 
-A validação técnica consolidada inclui typecheck, lint sem erros e sem warnings, build, preview local e suíte automatizada com **186 testes aprovados e 0 falhas**. A confrontação mostrou que essa suíte não cobre concorrência, provider/modelo efetivo, autorização negativa de writes, publicação sem versão, gate de Harness, handoff/approval de ponta a ponta, prompt injection ou efeitos externos. A matriz Playwright e o smoke não substituem testes autenticados, adversariais nem validação de canal real.
+A validação técnica consolidada do estado sincronizado inclui typecheck, lint sem erros e sem warnings, build, preview local e suíte automatizada com **189 testes aprovados e 0 falhas**. A matriz adicional cobre ativação sem versão publicada, publicação com Harness aprovada, onboarding Evolution, limites de segurança do WhatsApp e carga multiagente. Ainda permanecem necessárias validações autenticadas, adversariais, de concorrência em ambiente real, de provider/modelo efetivo e de canal real; a matriz Playwright e o smoke não substituem essas validações.
 
 Commit de referência desta consolidação de código:
 
 ```text
-e0ac5bd feat: enforce published workflow tool authorization
+df1aef0 feat: harden multi-channel connection platform
 ```
 
 ## 7. Roadmap oficial atualizado
