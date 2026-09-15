@@ -207,9 +207,9 @@ Ainda faltam memória persistente do assistente, streaming, quotas próprias, ma
 
 ### 5.12 AWS, billing e produção
 
-**Estado: billing conceitualmente modelado; infraestrutura AWS e cobrança automática postergadas.**
+**Estado: aplicação publicada permanentemente na Vercel; infraestrutura AWS, banco gerenciado, cobrança automática e operação externa completa ainda postergados.**
 
-A documentação IaC e AWS existe, mas a implantação permanente não está ativa. O preview local utiliza PGlite e assets empacotados. Não existe ainda infraestrutura permanente com banco gerenciado, workers, filas, storage, secrets, alertas, custo por uso e billing. O modelo de precificação v1 separa plano base, consumo medido, capacidades provisionadas, quotas operacionais, budgets, entitlements, custos de terceiros e ofertas de compromisso; nenhum preço provisório foi codificado como preço de produção.
+A documentação IaC e AWS existe. O runtime web TanStack Start/Nitro está publicado na Vercel, vinculado ao repositório GitHub `leonardoaranhaa/Nexo-Cloud`, branch `main`, projeto `nexo-cloud`, com alias permanente `https://nexo-cloud-eight.vercel.app`. Essa publicação comprova o site e o runtime web, mas não significa que banco gerenciado, workers, filas, storage, secrets reais, alertas, custo por uso, billing ou canais externos estejam operacionais em produção. O modelo de precificação v1 separa plano base, consumo medido, capacidades provisionadas, quotas operacionais, budgets, entitlements, custos de terceiros e ofertas de compromisso; nenhum preço provisório foi codificado como preço de produção.
 
 A postergação é temporária e não remove AWS do roadmap. Ela não deve bloquear o fechamento do núcleo funcional local. Como primeira fatia de readiness operacional, o Agent Runtime agora aplica quotas diárias server-side por workspace e por agente, com consumo persistido e isolamento por workspace.
 
