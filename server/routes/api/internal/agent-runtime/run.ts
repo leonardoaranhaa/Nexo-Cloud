@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { defineEventHandler } from "h3";
 import { getSql } from "../../../../../src/lib/db";
-import { awsSecretsManagerProvider, unavailableSecretProvider } from "../../../../../src/lib/connectors/secrets";
+import { configuredSecretProvider } from "../../../../../src/lib/connectors/secrets";
 import { runNextAgentRuntimeJob } from "../../../../../src/lib/agent-runtime/runtime";
 import { reconcilePendingDeliveries } from "../../../../../src/lib/messaging/router";
 
@@ -33,9 +33,7 @@ export default defineEventHandler(async (event) => {
   if (request.method !== "POST") return json({ ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
   try {
     const sql = await getSql();
-    const provider = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-      ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
-      : unavailableSecretProvider();
+    const provider = configuredSecretProvider(sql);
     const reconciledDeliveries = await reconcilePendingDeliveries(sql, 100);
     const batch = Math.min(Math.max(Number(process.env.NEXO_RUNTIME_MAX_BATCH ?? 5), 1), 10);
     const results = [];

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evaluationHarnessInput, reviewToolProposalInput, updateAgentInput, workspaceBlueprintInput } from "./server-schemas.ts";
+import { evaluationHarnessInput, reviewToolProposalInput, updateAgentInput, updateUserPreferencesInput, updateUserProfileInput, workspaceBlueprintInput } from "./server-schemas.ts";
 
 test("server schemas reject missing workspace and cross-boundary identifiers", () => {
   assert.throws(() => workspaceBlueprintInput.parse({ workspaceId: "", agentId: "agent", blueprintId: "blueprint" }));
@@ -25,4 +25,12 @@ test("evaluation harness schema requires explicit version identifiers", () => {
   });
   assert.throws(() => evaluationHarnessInput.parse({ workspaceId: "ws", agentId: "agent", blueprintId: "blueprint", baselineVersionId: "base" }));
   assert.throws(() => evaluationHarnessInput.parse({ workspaceId: "ws", agentId: "agent", blueprintId: "blueprint", baselineVersionId: "base", candidateVersionId: "candidate", secret: "never" }));
+});
+
+test("account schemas reject unbounded or unknown profile and preference fields", () => {
+  assert.deepEqual(updateUserProfileInput.parse({ name: "Leonardo" }), { name: "Leonardo" });
+  assert.throws(() => updateUserProfileInput.parse({ name: "" }));
+  assert.throws(() => updateUserPreferencesInput.parse({ defaultTemperature: 2 }));
+  assert.throws(() => updateUserPreferencesInput.parse({ appearance: "neon" }));
+  assert.throws(() => updateUserPreferencesInput.parse({ notifyFailures: true, secret: "never" }));
 });

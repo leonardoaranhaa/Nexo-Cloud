@@ -1,6 +1,6 @@
 import { defineEventHandler, getRouterParam, readRawBody } from "h3";
 import { getSql } from "../../../../../src/lib/db";
-import { awsSecretsManagerProvider, unavailableSecretProvider } from "../../../../../src/lib/connectors/secrets";
+import { configuredSecretProvider } from "../../../../../src/lib/connectors/secrets";
 import { handleMetaWebhook, WebhookRequestError } from "../../../../../src/lib/webhooks/meta-handler";
 
 function json(body: Record<string, unknown>, status = 200): Response {
@@ -8,12 +8,6 @@ function json(body: Record<string, unknown>, status = 200): Response {
     status,
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
-}
-
-function secretProvider() {
-  return process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-    ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
-    : unavailableSecretProvider();
 }
 
 export default defineEventHandler(async (event) => {
@@ -39,7 +33,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const sql = await getSql();
-    const provider = secretProvider();
+    const provider = configuredSecretProvider(sql);
     const outcome = await handleMetaWebhook(sql, request, { connectionId, secretProvider: provider });
 
     if (method === "GET") {

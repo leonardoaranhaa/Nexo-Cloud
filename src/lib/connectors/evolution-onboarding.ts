@@ -68,7 +68,7 @@ async function connection(sql: Sql, userId: string, input: { workspaceId: string
   const baseUrl = text(row.config?.baseUrl);
   const instance = text(row.config?.instance);
   if (!baseUrl || !instance) throw new Error("EVOLUTION_CONNECTION_CONFIGURATION_REQUIRED");
-  const apiKey = await createSecretResolver(secretProvider ?? configuredSecretProvider())(row.secret_ref ?? "", { workspaceId: input.workspaceId, connectionId: row.id });
+  const apiKey = await createSecretResolver(secretProvider ?? configuredSecretProvider(sql))(row.secret_ref ?? "", { workspaceId: input.workspaceId, connectionId: row.id });
   return { row, apiKey, baseUrl, instance };
 }
 

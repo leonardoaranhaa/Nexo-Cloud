@@ -31,7 +31,7 @@ O núcleo local/preview do Nexo já possui organizações, workspaces, agentes, 
 
 O fechamento comercial ainda requer agenda, adapters conversacionais adicionais, tool calling multi-round, atualização completa de instalações do Marketplace, RAG semântico/híbrido, executor universal de nós de workflow, observabilidade de produção, AWS permanente e billing. Ads, tráfego e Marketplace aberto são fases posteriores.
 
-O último ciclo validado possui typecheck, build, preview e suíte com 119 testes aprovados. O plano mestre contém o status detalhado e a ordem obrigatória de continuidade.
+O último ciclo validado possui typecheck, build, preview e suíte automatizada; o plano mestre contém o status detalhado e a ordem obrigatória de continuidade.
 
 ## Requisitos
 
@@ -61,6 +61,10 @@ npm run build
 
 O build pode ser executado sem banco externo; as migrations são ignoradas quando `DATABASE_URL` não está configurada. O fallback PGlite é utilizado no ambiente local/preview.
 
+### Produção hospedada
+
+Para habilitar o console autenticado, configure `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` e `VITE_AUTH_ENABLED=true` no ambiente de produção. Execute o fluxo oficial de migrations antes do primeiro cadastro. Em Railway/Vercel, use `NEXO_SECRETS_BACKEND=database` e uma `NEXO_SECRETS_ENCRYPTION_KEY` forte, armazenada somente no secret manager do provedor. O cofre grava apenas material AES-256-GCM cifrado; a API key da Evolution, tokens Meta e segredos de webhook nunca são retornados ao navegador.
+
 ## Segurança
 
 - Nunca faça commit de `.env`, tokens, chaves privadas ou credenciais.
@@ -68,4 +72,5 @@ O build pode ser executado sem banco externo; as migrations são ignoradas quand
 - Recursos de negócio devem ser isolados por organização e workspace.
 - O agente de produção deve executar versões publicadas, não a configuração editável.
 - Ferramentas devem passar pelo Tool Gateway e respeitar schema, risco, idempotência, timeout e aprovação.
+- O provisionamento de credenciais exige papel administrativo no workspace e grava os segredos somente no cofre server-side; um erro de autorização deve ser corrigido no contexto de conta/workspace, não contornado no frontend.
 - Consulte o plano mestre e o comando interno antes de iniciar qualquer alteração estrutural.

@@ -42,8 +42,8 @@ function existingExecutionError(row: { error_code: string | null; error_message:
   return new Error(row.error_code || row.error_message || "TOOL_EXECUTION_PREVIOUSLY_FAILED");
 }
 
-export function defaultSecretProvider(): SecretProvider {
-  return configuredSecretProvider();
+export function defaultSecretProvider(sql?: Sql): SecretProvider {
+  return configuredSecretProvider(sql);
 }
 
 export async function executeWorkflowTool(
@@ -51,8 +51,9 @@ export async function executeWorkflowTool(
   node: WorkflowNode,
   input: JsonObject,
   run: ClaimedWorkflowRun,
-  secretProvider: SecretProvider = defaultSecretProvider(),
+  secretProvider?: SecretProvider,
 ): Promise<JsonObject> {
+  const resolvedSecretProvider = secretProvider ?? defaultSecretProvider(sql);
   const toolKey = text(node.config?.toolKey);
   if (!toolKey) throw new Error("WORKFLOW_TOOL_CONFIG_REQUIRED");
   const agentId = text(node.config?.agentId);
@@ -102,7 +103,7 @@ export async function executeWorkflowTool(
       const mcpToolName = text(node.config?.mcpToolName);
       const allowedTools = Array.isArray(config.allowedTools) ? config.allowedTools.filter((item): item is string => typeof item === "string") : [];
       if (!mcpToolName || !allowedTools.includes(mcpToolName)) throw new Error("MCP_TOOL_NOT_ALLOWED");
-      const runtime = new McpRuntime({ url: text(config.url), secretRef: connection[0].secret_ref, workspaceId: run.workspace_id, connectionId: connection[0].id, timeoutMs: snapshot.timeoutMs, getSecret: async () => "" }, secretProvider);
+      const runtime = new McpRuntime({ url: text(config.url), secretRef: connection[0].secret_ref, workspaceId: run.workspace_id, connectionId: connection[0].id, timeoutMs: snapshot.timeoutMs, getSecret: async () => "" }, resolvedSecretProvider);
       const result = await runtime.callTool(mcpToolName, object(node.config?.arguments ?? input));
       await runtime.close();
       const output = redacted(result);
@@ -111,7 +112,7 @@ export async function executeWorkflowTool(
       return output;
     }
     if (snapshot.key !== "evolution.send_text" || connection[0].provider !== "evolution") throw new Error("TOOL_ADAPTER_UNAVAILABLE");
-    const connectorContext: ConnectorContext = { workspaceId: run.workspace_id, connectionId: connection[0].id, traceId: run.correlation_id, getSecret: (name) => secretProvider.resolve(connection[0].secret_ref, { workspaceId: run.workspace_id, connectionId: connection[0].id }).then((value) => name === "api_key" ? value : value) };
+    const connectorContext: ConnectorContext = { workspaceId: run.workspace_id, connectionId: connection[0].id, traceId: run.correlation_id, getSecret: (name) => resolvedSecretProvider.resolve(connection[0].secret_ref, { workspaceId: run.workspace_id, connectionId: connection[0].id }).then((value) => name === "api_key" ? value : value) };
     const result = await new EvolutionTextDispatcher().sendText({ baseUrl: text(config.baseUrl), instance: text(config.instance), recipient: text(node.config?.recipient ?? input.recipient), text: text(node.config?.text ?? input.text), timeoutMs: snapshot.timeoutMs }, connectorContext);
     if (result.status !== "sent") throw new Error(`TOOL_${result.code.toUpperCase()}`);
     const output: JsonObject = { status: result.status, latencyMs: result.latencyMs };

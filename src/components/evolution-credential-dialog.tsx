@@ -39,8 +39,15 @@ export function EvolutionCredentialDialog({ connection }: { connection: Connecti
       setApiKey("");
       setOpen(false);
       toast("Credencial Evolution provisionada no cofre.");
-    } catch {
-      toast("Não foi possível provisionar a credencial. Verifique o backend de secrets e sua permissão administrativa.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("WORKSPACE_PERMISSION_DENIED") || message.includes("Workspace permission denied")) {
+        toast("Sua conta precisa ser administradora deste workspace para gravar credenciais.");
+      } else if (message.includes("SECRET_PROVIDER_UNAVAILABLE")) {
+        toast("O cofre server-side ainda não está configurado neste ambiente.");
+      } else {
+        toast("Não foi possível provisionar. Confira a URL, a instância e o acesso administrativo do workspace.");
+      }
     } finally {
       setBusy(false);
     }
@@ -55,7 +62,7 @@ export function EvolutionCredentialDialog({ connection }: { connection: Connecti
       </DialogTrigger>
       <DialogContent title="Credencial Evolution API">
         <p className="mt-1 mb-4 text-sm text-muted">
-          A API key é enviada uma vez ao backend e armazenada somente no AWS Secrets Manager. Ela não fica no navegador nem no banco do Nexo.
+          A API key é enviada uma vez ao backend e armazenada no cofre server-side cifrado. Ela não fica no navegador nem é retornada pela API.
         </p>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">

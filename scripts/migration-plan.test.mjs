@@ -112,6 +112,7 @@ test("the auth schema copy and app migrations are discoverable", () => {
       { name: "0051_promotion_hardening.sql", path: "0051_promotion_hardening.sql" },
       { name: "0052_whatsapp_safety_limits.sql", path: "0052_whatsapp_safety_limits.sql" },
       { name: "0053_meta_social_connectors.sql", path: "0053_meta_social_connectors.sql" },
+      { name: "0054_account_preferences_and_secret_vault.sql", path: "0054_account_preferences_and_secret_vault.sql" },
     ]);
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });

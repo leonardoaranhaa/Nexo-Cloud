@@ -1,6 +1,6 @@
 import { defineEventHandler, getRouterParam, readRawBody } from "h3";
 import { getSql } from "../../../../../src/lib/db";
-import { awsSecretsManagerProvider, unavailableSecretProvider } from "../../../../../src/lib/connectors/secrets";
+import { configuredSecretProvider } from "../../../../../src/lib/connectors/secrets";
 import { handleEvolutionWebhook, WebhookRequestError } from "../../../../../src/lib/webhooks/evolution-handler";
 
 function response(body: Record<string, unknown>, status = 200): Response {
@@ -23,10 +23,9 @@ export default defineEventHandler(async (event) => {
       else if (Array.isArray(value)) headers.set(key, value.join(", "));
     }
     const request = new Request("https://nexo.internal/webhook", { method: "POST", headers, body: rawBody });
-    const secretProvider = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-      ? awsSecretsManagerProvider({ region: process.env.AWS_REGION })
-      : unavailableSecretProvider();
-    const outcome = await handleEvolutionWebhook(await getSql(), request, {
+    const sql = await getSql();
+    const secretProvider = configuredSecretProvider(sql);
+    const outcome = await handleEvolutionWebhook(sql, request, {
       instance: getRouterParam(event, "instance"),
       secretProvider,
     });

@@ -60,3 +60,22 @@ export const workspaceRunInput = z.object({
   input: jsonObject.optional(),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
 }).strict();
+
+export const updateUserProfileInput = z.object({
+  name: z.string().trim().min(1).max(120),
+}).strict();
+
+export const updateUserPreferencesInput = z.object({
+  appearance: z.enum(["system", "light", "dark"]).optional(),
+  compactNavigation: z.boolean().optional(),
+  reduceMotion: z.boolean().optional(),
+  autoRefreshSeconds: z.union([z.literal(5), z.literal(15), z.literal(30), z.literal(60)]).optional(),
+  defaultMemoryWindow: z.number().int().min(2).max(100).optional(),
+  defaultTemperature: z.number().finite().min(0).max(1).optional(),
+  notifyHandoffs: z.boolean().optional(),
+  notifyFailures: z.boolean().optional(),
+  notifyDeployments: z.boolean().optional(),
+  confirmHighRiskTools: z.boolean().optional(),
+  allowLocalFallback: z.boolean().optional(),
+  defaultEnvironment: z.enum(["development", "staging", "production"]).optional(),
+}).strict();

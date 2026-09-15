@@ -9,12 +9,44 @@ import {
   evaluationHarnessListInput,
   evaluationHarnessRunInput,
   reviewToolProposalInput,
+  updateUserPreferencesInput,
+  updateUserProfileInput,
   updateAgentInput,
   workspaceBlueprintInput,
   workspaceBlueprintListInput,
   workspaceOnlyInput,
   workspaceRunInput,
 } from "../validation/server-schemas";
+
+export const getCurrentUserAccount = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { getSql } = await import("@/lib/db");
+    const { getUserAccount, getUserPreferences } = await import("@/lib/auth/account-server");
+    const sql = await getSql();
+    return {
+      user: await getUserAccount(sql, context.userId),
+      preferences: await getUserPreferences(sql, context.userId),
+    };
+  });
+
+export const updateCurrentUserProfile = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input) => updateUserProfileInput.parse(input))
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { updateUserProfile } = await import("@/lib/auth/account-server");
+    return updateUserProfile(await getSql(), context.userId, data.name);
+  });
+
+export const updateCurrentUserPreferences = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input) => updateUserPreferencesInput.parse(input))
+  .handler(async ({ context, data }) => {
+    const { getSql } = await import("@/lib/db");
+    const { updateUserPreferences } = await import("@/lib/auth/account-server");
+    return updateUserPreferences(await getSql(), context.userId, data);
+  });
 
 export const getWorkspaceContext = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -331,12 +363,11 @@ export const provisionEvolutionConnectionCredential = createServerFn({ method: "
   }) => input)
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
-    const { awsSecretsManagerProvisioner, unavailableSecretProvisioner } = await import("@/lib/connectors/secrets");
+    const { configuredSecretProvisioner } = await import("@/lib/connectors/secrets");
     const { provisionEvolutionCredential } = await import("./server");
-    const provisioner = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-      ? awsSecretsManagerProvisioner({ region: process.env.AWS_REGION })
-      : unavailableSecretProvisioner();
-    await provisionEvolutionCredential(await getSql(), context.userId, data, provisioner);
+    const sql = await getSql();
+    const provisioner = configuredSecretProvisioner(sql);
+    await provisionEvolutionCredential(sql, context.userId, data, provisioner);
     return { ok: true as const };
   });
 
@@ -357,8 +388,9 @@ export const dispatchWorkspaceTextMessage = createServerFn({ method: "POST" })
     const { getSql } = await import("@/lib/db");
     const { configuredSecretProvider } = await import("@/lib/connectors/secrets");
     const { dispatchTextMessage } = await import("@/lib/messaging/router");
-    const provider = configuredSecretProvider();
-    return dispatchTextMessage(await getSql(), context.userId, data, provider);
+    const sql = await getSql();
+    const provider = configuredSecretProvider(sql);
+    return dispatchTextMessage(sql, context.userId, data, provider);
   });
 
 export const provisionEvolutionWebhookCredential = createServerFn({ method: "POST" })
@@ -366,12 +398,11 @@ export const provisionEvolutionWebhookCredential = createServerFn({ method: "POS
   .validator((input: { workspaceId: string; connectionId: string; secret: string }) => input)
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
-    const { awsSecretsManagerProvisioner, unavailableSecretProvisioner } = await import("@/lib/connectors/secrets");
+    const { configuredSecretProvisioner } = await import("@/lib/connectors/secrets");
     const { provisionEvolutionWebhookCredential } = await import("./server");
-    const provisioner = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-      ? awsSecretsManagerProvisioner({ region: process.env.AWS_REGION })
-      : unavailableSecretProvisioner();
-    await provisionEvolutionWebhookCredential(await getSql(), context.userId, data, provisioner);
+    const sql = await getSql();
+    const provisioner = configuredSecretProvisioner(sql);
+    await provisionEvolutionWebhookCredential(sql, context.userId, data, provisioner);
     return { ok: true as const };
   });
 
@@ -380,12 +411,11 @@ export const provisionMetaConnectionCredential = createServerFn({ method: "POST"
   .validator((input: { workspaceId: string; connectionId: string; accessToken: string; appSecret: string; verifyToken: string; phoneNumberId?: string; accountId?: string; graphVersion: string; baseUrl?: string }) => input)
   .handler(async ({ context, data }) => {
     const { getSql } = await import("@/lib/db");
-    const { awsSecretsManagerProvisioner, unavailableSecretProvisioner } = await import("@/lib/connectors/secrets");
+    const { configuredSecretProvisioner } = await import("@/lib/connectors/secrets");
     const { provisionMetaCredential } = await import("./meta-onboarding");
-    const provisioner = process.env.NEXO_SECRETS_BACKEND === "aws" && process.env.AWS_REGION
-      ? awsSecretsManagerProvisioner({ region: process.env.AWS_REGION })
-      : unavailableSecretProvisioner();
-    await provisionMetaCredential(await getSql(), context.userId, data, provisioner);
+    const sql = await getSql();
+    const provisioner = configuredSecretProvisioner(sql);
+    await provisionMetaCredential(sql, context.userId, data, provisioner);
     return { ok: true as const };
   });
 
@@ -446,7 +476,7 @@ export const sendWorkspaceConversationMessage = createServerFn({ method: "POST" 
     const { dispatchTextMessage } = await import("@/lib/messaging/router");
     const sql = await getSql();
     const target = await assertConversationAccess(sql, context.userId, data);
-    const provider = configuredSecretProvider();
+    const provider = configuredSecretProvider(sql);
     return dispatchTextMessage(sql, context.userId, {
       workspaceId: data.workspaceId,
       agentId: target.agentId,

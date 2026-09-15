@@ -679,7 +679,7 @@ export async function runNextAgentRuntimeJob(
     }
     steps.push({ name: result.reason, status: result.reason === "handoff" || result.reason === "outside_hours" ? "skip" : "ok" });
     if (result.reply) {
-      const provider = secretProvider ?? configuredSecretProvider();
+      const provider = secretProvider ?? configuredSecretProvider(sql);
       await dispatchTextMessageAsRuntime(sql, {
         workspaceId: job.workspace_id,
         agentId: context.agent.id,

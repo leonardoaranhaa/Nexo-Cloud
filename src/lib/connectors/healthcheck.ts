@@ -33,7 +33,7 @@ export async function runConnectionHealthcheck(
   sql: Sql,
   userId: string,
   input: { workspaceId: string; connectionId: string; traceId: string },
-  secretProvider: SecretProvider = configuredSecretProvider(),
+  secretProvider?: SecretProvider,
 ): Promise<HealthcheckRun> {
   await requireWorkspaceAccess(sql, userId, input.workspaceId, "write");
   const rows = await sql.query<ConnectionRow>(
@@ -47,7 +47,7 @@ export async function runConnectionHealthcheck(
   if (!connection) throw new Error("CONNECTION_NOT_FOUND");
 
   const adapter = adapterForProvider(connection.provider);
-  const resolveSecret = createSecretResolver(secretProvider);
+  const resolveSecret = createSecretResolver(secretProvider ?? configuredSecretProvider(sql));
   const result = await adapter.healthcheck(
     {
       id: connection.id,

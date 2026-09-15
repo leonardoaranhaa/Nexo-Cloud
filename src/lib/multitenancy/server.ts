@@ -1230,6 +1230,7 @@ export async function provisionEvolutionCredential(
   await provisioner.put(secretRef, validated.apiKey, {
     workspaceId: input.workspaceId,
     connectionId: input.connectionId,
+    actorId: userId,
   });
   const config = {
     ...(connection[0].config ?? {}),
@@ -1270,6 +1271,7 @@ export async function provisionEvolutionWebhookCredential(
   await provisioner.put(secretRef, secret, {
     workspaceId: input.workspaceId,
     connectionId: input.connectionId,
+    actorId: userId,
   });
   await sql.query(
     `update connections set webhook_secret_ref = $2, updated_at = current_timestamp
