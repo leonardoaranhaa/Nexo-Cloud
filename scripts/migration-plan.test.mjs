@@ -56,9 +56,10 @@ test("non-.sql entries are dropped (readdir also yields the auth/ directory)", (
   assert.deepEqual(pendingMigrations(["auth", "README.md"], []), []);
 });
 
-test("the auth schema stays nested while app migrations are discoverable", () => {
+test("the auth schema copy and app migrations are discoverable", () => {
   const migrationsDir = join(projectRoot(), "migrations");
   assert.deepEqual(pendingMigrations(readdirSync(migrationsDir), []), [
+    { name: "0001_auth.sql", path: "0001_auth.sql" },
     { name: "0002_multi_tenant_core.sql", path: "0002_multi_tenant_core.sql" },
     { name: "0003_connector_registry.sql", path: "0003_connector_registry.sql" },
     { name: "0004_messaging_dispatch.sql", path: "0004_messaging_dispatch.sql" },
