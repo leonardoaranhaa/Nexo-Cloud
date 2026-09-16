@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { authClient, authEnabled } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
@@ -55,19 +56,51 @@ export type CurrentUserState = {
  * call keeps a stable hook order across every render of a given component.
  */
 export function useCurrentUserState(): CurrentUserState {
-  if (!authEnabled) return { user: DEV_USER, isPending: false };
-  const { data, isPending } = authClient.useSession();
-  const user = data?.user;
+  const [state, setState] = useState<CurrentUserState>(() => ({
+    user: authEnabled ? null : DEV_USER,
+    isPending: authEnabled,
+  }));
+
+  useEffect(() => {
+    if (!authEnabled) return;
+
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      if (active) setState({ user: null, isPending: false });
+    }, 8000);
+
+    void authClient
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        const sessionUser = data?.user;
+        setState({
+          user: sessionUser
+            ? {
+                id: sessionUser.id,
+                displayName: sessionUser.name ?? null,
+                primaryEmail: sessionUser.email ?? null,
+                profileImageUrl: sessionUser.image ?? null,
+                isDevFallback: false,
+              }
+            : null,
+          isPending: false,
+        });
+      })
+      .catch(() => {
+        if (active) setState({ user: null, isPending: false });
+      })
+      .finally(() => window.clearTimeout(timeout));
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  const { user, isPending } = state;
   return {
-    user: user
-      ? {
-          id: user.id,
-          displayName: user.name ?? null,
-          primaryEmail: user.email ?? null,
-          profileImageUrl: user.image ?? null,
-          isDevFallback: false,
-        }
-      : null,
+    user,
     isPending,
   };
 }
