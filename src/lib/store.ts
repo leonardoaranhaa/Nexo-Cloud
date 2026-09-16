@@ -64,6 +64,7 @@ type NexoState = {
   setHydrated: (v: boolean) => void;
   setWorkspaceSnapshot: (workspaceId: string, agents: Agent[]) => void;
   setWorkspaceContext: (active: WorkspaceContext, workspaces: WorkspaceContext[]) => void;
+  clearWorkspaceContext: () => void;
   setConnectionSnapshot: (connections: Connection[]) => void;
   setTrace: (agentId: string, steps: TraceStep[]) => void;
   clearTrace: () => void;
@@ -120,6 +121,7 @@ export const useNexo = create<NexoState>()(
         backendReady: true,
         ...(state.workspaceId === active.id ? {} : { inbox: {}, events: [], activeTrace: null }),
       })),
+      clearWorkspaceContext: () => set({ workspaceId: null, organizationId: null, organizationName: null, environment: "development", workspaces: [], backendReady: false, connections: [], agents: [], inbox: {}, events: [], activeTrace: null }),
       setConnectionSnapshot: (connections) => set({ connections }),
       setTrace: (agentId, steps) => set({ activeTrace: { agentId, steps } }),
       clearTrace: () => set({ activeTrace: null }),

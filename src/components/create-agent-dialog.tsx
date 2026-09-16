@@ -16,6 +16,9 @@ import { PROVIDER_LABEL } from "@/lib/types";
 import { bindWorkspaceAgentConnection, createWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 import { guidanceForWorkspaceGoal, type WorkspaceGoal } from "@/lib/workspace-goal";
+import { authEnabled } from "@/lib/auth/client";
+import { canUseWorkspaceAction, resolveAuthAccess } from "@/lib/auth/access";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLabel?: string }) {
   const [open, setOpen] = useState(false);
@@ -33,12 +36,20 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
   const guidance = guidanceForWorkspaceGoal(workspaceGoal as WorkspaceGoal);
   const navigate = useNavigate();
   const { refresh } = useWorkspaceData();
+  const { user, isPending: authPending } = useCurrentUserState();
+  const access = resolveAuthAccess({ isPending: authPending, hasUser: Boolean(user) });
+  const canPersist = canUseWorkspaceAction({ access, workspaceId, backendReady }) || (!authEnabled && access === "authenticated");
 
   useEffect(() => {
     if (open && guidance) setTemplate(guidance.recommendedTemplate);
   }, [open, guidance]);
 
   async function persistOrCreate(draft: typeof AGENT_TEMPLATES[number]["draft"], nextName: string) {
+    if (authEnabled && !canPersist) {
+      toast("Entre ou crie uma conta para criar um agente.");
+      void navigate({ to: "/login" });
+      throw new Error("Authentication required");
+    }
     if (backendReady && workspaceId) {
       const created = await createWorkspaceAgent({
         data: {
@@ -76,6 +87,15 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
       return created.id;
     }
     return addAgent({ ...draft, name: nextName, status: "draft", connectionId: connectionId || null });
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen && !authPending && !user) {
+      toast("Entre ou crie uma conta para criar um agente.");
+      void navigate({ to: "/login" });
+      return;
+    }
+    setOpen(nextOpen);
   }
 
   async function fromTemplate() {
@@ -129,7 +149,7 @@ export function CreateAgentDialog({ triggerLabel = "Novo agente" }: { triggerLab
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button>{triggerLabel}</Button>
       </DialogTrigger>

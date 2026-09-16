@@ -36,7 +36,7 @@ function Home() {
   ];
 
   return (
-    <AppShell title="Visão geral">
+    <AppShell title="Visão geral" allowAnonymous>
       <section className="relative overflow-hidden rounded-2xl border border-border bg-surface p-6 md:p-8">
         <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative max-w-3xl">

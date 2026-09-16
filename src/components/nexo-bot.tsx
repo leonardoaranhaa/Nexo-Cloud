@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { chatNexoBot, executeNexoBotAction } from "@/lib/multitenancy/api";
 import type { NexoBotAction } from "@/lib/nexo-bot/server";
 import { useNexo } from "@/lib/store";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 type Message = { id: string; role: "bot" | "user"; text: string; action?: NexoBotAction; actionState?: "pending" | "executing" | "completed" | "failed" };
 
@@ -22,6 +23,8 @@ export function NexoBot() {
   const navigate = useNavigate();
   const workspaceId = useNexo((state) => state.workspaceId);
   const backendReady = useNexo((state) => state.backendReady);
+  const { user, isPending: authPending } = useCurrentUserState();
+  const anonymous = !authPending && !user;
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,6 +37,10 @@ export function NexoBot() {
     const history = [...messages, userMessage].map((message) => ({ role: message.role === "bot" ? "assistant" as const : "user" as const, content: message.text }));
     setMessages((current) => [...current, userMessage]);
     setInput("");
+    if (anonymous) {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "bot", text: "Posso orientar você dentro do workspace depois do login. Entre ou crie sua conta para conversar comigo e executar ações." }]);
+      return;
+    }
     if (!workspaceId || !backendReady) {
       setMessages((current) => [...current, { id: crypto.randomUUID(), role: "bot", text: "O workspace ainda está carregando. Tente novamente em instantes." }]);
       return;
@@ -51,6 +58,16 @@ export function NexoBot() {
 
   async function runAction(action: NexoBotAction) {
     if (action.requiresConfirmation) return;
+    if (anonymous && action.route === "/marketplace") {
+      setOpen(false);
+      void navigate({ to: "/marketplace" });
+      return;
+    }
+    if (anonymous && action.route !== "/marketplace") {
+      setMessages((current) => [...current, { id: crypto.randomUUID(), role: "bot", text: "Essa ação precisa de uma conta e de um workspace. Vou abrir o login para você continuar." }]);
+      void navigate({ to: "/login" });
+      return;
+    }
     if (!workspaceId || !backendReady || loading) return;
     setLoading(true);
     try {
@@ -69,6 +86,7 @@ export function NexoBot() {
   }
 
   async function confirmAction(messageId: string, action: NexoBotAction) {
+    if (anonymous) return;
     if (!workspaceId || !backendReady || !action.requiresConfirmation || loading) return;
     setMessages((current) => current.map((message) => message.id === messageId ? { ...message, actionState: "executing" } : message));
     setLoading(true);
