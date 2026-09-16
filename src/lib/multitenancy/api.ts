@@ -367,8 +367,15 @@ export const provisionEvolutionConnectionCredential = createServerFn({ method: "
     const { provisionEvolutionCredential } = await import("./server");
     const sql = await getSql();
     const provisioner = configuredSecretProvisioner(sql);
-    await provisionEvolutionCredential(sql, context.userId, data, provisioner);
-    return { ok: true as const };
+    try {
+      await provisionEvolutionCredential(sql, context.userId, data, provisioner);
+      return { ok: true as const };
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error
+        ? String((error as { code?: unknown }).code ?? "EVOLUTION_PROVISION_FAILED")
+        : error instanceof Error ? error.message.slice(0, 120) : "EVOLUTION_PROVISION_FAILED";
+      return { ok: false as const, code };
+    }
   });
 
 export const dispatchWorkspaceTextMessage = createServerFn({ method: "POST" })

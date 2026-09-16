@@ -26,7 +26,7 @@ export function EvolutionCredentialDialog({ connection }: { connection: Connecti
     }
     setBusy(true);
     try {
-      await provisionEvolutionConnectionCredential({
+      const result = await provisionEvolutionConnectionCredential({
         data: {
           workspaceId,
           connectionId: connection.id,
@@ -35,6 +35,7 @@ export function EvolutionCredentialDialog({ connection }: { connection: Connecti
           instance,
         },
       });
+      if (!result.ok) throw new Error(result.code);
       await refresh(workspaceId);
       setApiKey("");
       setOpen(false);
