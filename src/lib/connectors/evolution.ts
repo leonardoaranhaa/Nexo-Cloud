@@ -58,7 +58,10 @@ export function validateEvolutionBaseUrl(value: unknown): string {
   }
   let url: URL;
   try {
-    url = new URL(value.trim());
+    const input = value.trim();
+    // Hosted Evolution URLs are commonly copied without the scheme.
+    // Treat a bare host as HTTPS while still rejecting explicit insecure URLs.
+    url = new URL(input.includes("://") ? input : `https://${input}`);
   } catch {
     throw new EvolutionConfigError("base_url_invalid", "Evolution base URL must be an absolute URL");
   }

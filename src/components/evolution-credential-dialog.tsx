@@ -45,6 +45,14 @@ export function EvolutionCredentialDialog({ connection }: { connection: Connecti
         toast("Sua conta precisa ser administradora deste workspace para gravar credenciais.");
       } else if (message.includes("SECRET_PROVIDER_UNAVAILABLE")) {
         toast("O cofre server-side ainda não está configurado neste ambiente.");
+      } else if (message.includes("base_url_insecure") || message.includes("must use HTTPS")) {
+        toast("A URL Evolution precisa usar HTTPS. Ex.: https://seu-host.up.railway.app");
+      } else if (message.includes("base_url_invalid") || message.includes("absolute URL")) {
+        toast("Informe o host da Evolution. O protocolo HTTPS será acrescentado automaticamente se faltar.");
+      } else if (message.includes("instance_invalid")) {
+        toast("O nome da instância só pode conter letras, números, ponto, hífen ou sublinhado.");
+      } else if (message.includes("api_key_invalid")) {
+        toast("A API key Evolution parece inválida. Confira se foi copiada sem espaços.");
       } else {
         toast("Não foi possível provisionar. Confira a URL, a instância e o acesso administrativo do workspace.");
       }

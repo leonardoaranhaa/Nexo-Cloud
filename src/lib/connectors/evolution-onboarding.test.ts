@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Sql } from "../db.ts";
 import { getEvolutionConnectionState, startEvolutionQr } from "./evolution-onboarding.ts";
+import { validateEvolutionBaseUrl } from "./evolution.ts";
 import type { SecretProvider } from "./secrets.ts";
 
 function sqlStub() {
@@ -20,6 +21,13 @@ function sqlStub() {
 }
 
 const secretProvider: SecretProvider = { resolve: async () => "server-only-api-key" };
+
+test("normalizes a bare hosted Evolution URL to HTTPS", () => {
+  assert.equal(
+    validateEvolutionBaseUrl("evolution-api-production-7845d.up.railway.app"),
+    "https://evolution-api-production-7845d.up.railway.app",
+  );
+});
 
 test("starts Evolution instance and returns a real QR payload without exposing the API key", async () => {
   const originalFetch = globalThis.fetch;
