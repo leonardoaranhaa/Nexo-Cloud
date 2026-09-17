@@ -17,7 +17,7 @@ import { useNexo } from "@/lib/store";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { useState } from "react";
 import type { Agent, FlowNodeId } from "@/lib/types";
-import { archiveWorkspaceAgent, bindWorkspaceAgentConnection, createWorkspaceAgent, updateWorkspaceAgent } from "@/lib/multitenancy/api";
+import { archiveWorkspaceAgent, bindWorkspaceAgentConnection, createWorkspaceAgent, updateWorkspaceAgent, upsertWorkspaceAgentDevelopmentBlueprint } from "@/lib/multitenancy/api";
 import { uiAgentToPersisted } from "@/lib/multitenancy/adapter";
 import { useWorkspaceData } from "@/lib/multitenancy/use-workspace-data";
 
@@ -50,6 +50,7 @@ function AgentStudioPage() {
   const { refresh } = useWorkspaceData();
   const { messages, busy, send, clear } = useAgentChat(id);
   const [focusNode, setFocusNode] = useState<FlowNodeId>("agent");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   if (!agent) {
     return (
@@ -62,11 +63,41 @@ function AgentStudioPage() {
     );
   }
 
+  const currentAgent = agent;
+
   const connection = connections.find((c) => c.id === agent.connectionId);
 
   async function persistAgent(next: Agent) {
     if (!backendReady || !workspaceId) return;
-    await updateWorkspaceAgent({ data: { id: next.id, workspaceId, ...uiAgentToPersisted(next) } });
+    await Promise.all([
+      updateWorkspaceAgent({ data: { id: next.id, workspaceId, ...uiAgentToPersisted(next) } }),
+      next.developmentBlueprint
+        ? upsertWorkspaceAgentDevelopmentBlueprint({
+            data: {
+              workspaceId,
+              agentId: next.id,
+              agentType: next.template,
+              objectives: next.developmentBlueprint.objectives,
+              capabilities: next.developmentBlueprint.capabilities,
+              guardrails: next.developmentBlueprint.guardrails,
+              testScenarios: next.developmentBlueprint.testScenarios,
+            },
+          })
+        : Promise.resolve(),
+    ]);
+  }
+
+  async function saveChanges() {
+    setSaveState("saving");
+    try {
+      await persistAgent(currentAgent);
+      setSaveState("saved");
+      toast("Alterações salvas");
+      window.setTimeout(() => setSaveState("idle"), 1800);
+    } catch {
+      setSaveState("error");
+      toast("Não foi possível salvar as alterações.");
+    }
   }
 
   function setTab(next: Tab) {
@@ -82,7 +113,7 @@ function AgentStudioPage() {
     <AppShell
       title={agent.name}
       action={
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           <Button
             size="sm"
             variant="ghost"
@@ -160,7 +191,7 @@ function AgentStudioPage() {
         <span className="text-xs text-muted">{agent.knowledge.faqs.length} FAQs</span>
       </div>
 
-      <div className="mb-6 overflow-x-auto pb-1">
+      <div className="mb-6 min-w-0 max-w-full overflow-x-auto pb-1">
         <Segmented
           value={tab}
           onChange={setTab}
@@ -176,18 +207,20 @@ function AgentStudioPage() {
       </div>
 
       {tab === "configuration" && (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
-          <AgentEditor
-            agent={agent}
-            section="configuration"
-            focusNode={focusNode}
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+            <AgentEditor
+              agent={agent}
+              section="configuration"
+              focusNode={focusNode}
+              onSave={saveChanges}
+              saveState={saveState}
             onRunScenario={(scenario) => {
               setTab("tests");
               void send(scenario);
               toast("Cenário enviado para o Agent Runtime");
             }}
           />
-          <div className="xl:sticky xl:top-20 h-fit">
+            <div className="min-w-0 xl:sticky xl:top-20 h-fit">
             <p className="mb-3 text-xs tracking-wide text-subtle uppercase">Pipeline</p>
             <div className="xl:max-w-full overflow-x-auto">
               <FlowCanvas agent={agent} selected={focusNode} onSelect={setFocusNode} />
@@ -203,9 +236,9 @@ function AgentStudioPage() {
         </div>
       )}
 
-      {tab === "knowledge" && <AgentEditor agent={agent} section="knowledge" focusNode={focusNode} />}
-      {tab === "tools" && <AgentEditor agent={agent} section="tools" focusNode={focusNode} />}
-      {tab === "tests" && <div className="flex flex-col gap-8"><div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"><AgentEditor agent={agent} section="tests" onRunScenario={(scenario) => { void send(scenario); toast("Cenário enviado para o Agent Runtime"); }} /><AgentTestPanel agent={agent} messages={messages} busy={busy} onSend={(t, k) => void send(t, k)} onClear={clear} /></div><EvaluationHarnessPanel agent={agent} /></div>}
+      {tab === "knowledge" && <AgentEditor agent={agent} section="knowledge" focusNode={focusNode} onSave={saveChanges} saveState={saveState} />}
+      {tab === "tools" && <AgentEditor agent={agent} section="tools" focusNode={focusNode} onSave={saveChanges} saveState={saveState} />}
+      {tab === "tests" && <div className="flex min-w-0 flex-col gap-8"><div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"><AgentEditor agent={agent} section="tests" onSave={saveChanges} saveState={saveState} onRunScenario={(scenario) => { void send(scenario); toast("Cenário enviado para o Agent Runtime"); }} /><AgentTestPanel agent={agent} messages={messages} busy={busy} onSend={(t, k) => void send(t, k)} onClear={clear} /></div><EvaluationHarnessPanel agent={agent} /></div>}
       {tab === "versions" && <PublishPanel agent={agent} mode="versions" />}
       {tab === "publication" && <PublishPanel agent={agent} mode="publication" />}
     </AppShell>

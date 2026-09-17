@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Play, Plus, Trash2 } from "lucide-react";
+import { Check, LoaderCircle, Play, Plus, Save, Trash2 } from "lucide-react";
 import type { Agent, FlowNodeId } from "@/lib/types";
 import { PROVIDER_LABEL } from "@/lib/types";
 import { LANGUAGE_LABEL } from "@/lib/labels";
@@ -23,11 +23,15 @@ export function AgentEditor({
   agent,
   focusNode,
   onRunScenario,
+  onSave,
+  saveState = "idle",
   section = "all",
 }: {
   agent: Agent;
   focusNode?: FlowNodeId;
   onRunScenario?: (scenario: string) => void;
+  onSave?: () => Promise<void>;
+  saveState?: "idle" | "saving" | "saved" | "error";
   section?: "all" | "configuration" | "knowledge" | "tools" | "tests";
 }) {
   const connections = useNexo((s) => s.connections);
@@ -98,7 +102,14 @@ export function AgentEditor({
   const show = (target: typeof section) => section === "all" || section === target;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="min-w-0 flex flex-col gap-5">
+      {onSave && <div className="sticky top-[4.5rem] z-10 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface/95 px-3 py-2 shadow-soft backdrop-blur-sm">
+        <div className="min-w-0 text-xs text-muted">As alterações também são salvas automaticamente.</div>
+        <Button type="button" size="sm" variant="secondary" disabled={saveState === "saving"} onClick={() => void onSave()}>
+          {saveState === "saving" ? <LoaderCircle className="size-3.5 animate-spin" /> : saveState === "saved" ? <Check className="size-3.5 text-live" /> : <Save className="size-3.5" />}
+          {saveState === "saving" ? "Salvando…" : saveState === "saved" ? "Salvo" : saveState === "error" ? "Tentar salvar" : "Salvar alterações"}
+        </Button>
+      </div>}
       {show("configuration") && workspaceGuidance && <Card className="border-accent/30 bg-elevated/40 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Direção do workspace</div><div className="mt-1 font-display text-sm font-semibold">{workspaceGuidance.title}</div><p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted">{workspaceGuidance.description}</p></div><span className="rounded-full border border-accent/30 px-2 py-1 text-[10px] font-semibold text-accent">Sugestões contextuais</span></div><div className="mt-3 flex flex-wrap gap-2">{workspaceGuidance.nextSteps.map((nextStep) => <span key={nextStep} className="rounded-full border border-border bg-bg px-2.5 py-1 text-xs text-muted">{nextStep}</span>)}</div></Card>}
       {show("configuration") && <Card className="flex flex-col gap-4 p-4">
         <div className="font-display text-sm font-semibold">Identidade</div>
@@ -446,11 +457,12 @@ function BlueprintListEditor({
       {values.length === 0 && <p className="text-xs text-subtle">Nenhum item definido.</p>}
       <div className="flex flex-col gap-2">
         {values.map((value, index) => (
-          <div key={`${title}-${index}`} className="flex items-center gap-2">
+          <div key={`${title}-${index}`} className="flex min-w-0 items-center gap-2">
             <span className="w-6 shrink-0 text-center font-mono text-xs text-subtle">
               {String(index + 1).padStart(2, "0")}
             </span>
             <Input
+              className="min-w-0 flex-1"
               value={value}
               placeholder={placeholder}
               aria-label={`${title} ${index + 1}`}
