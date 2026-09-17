@@ -77,12 +77,16 @@ export async function startEvolutionQr(sql: Sql, userId: string, input: { worksp
   const resolve = secretProvider ? createSecretResolver(secretProvider) : null;
   const apiKey = resolve ? await resolve(current.row.secret_ref ?? "", { workspaceId: input.workspaceId, connectionId: current.row.id }) : current.apiKey;
   try {
+    let payload: Record<string, unknown>;
     try {
-      await evolutionFetch(current.baseUrl, apiKey, "/instance/create", { method: "POST", body: JSON.stringify({ instanceName: current.instance, integration: "WHATSAPP-BAILEYS", qrcode: true }) });
+      // An instance created in the Evolution Manager must be connected directly.
+      // Creating first can trigger a provider-side 500 on duplicate instances.
+      payload = await evolutionFetch(current.baseUrl, apiKey, `/instance/connect/${encodeURIComponent(current.instance)}`);
     } catch (error) {
-      if (!(error instanceof Error && /EVOLUTION_HTTP_(400|409)/.test(error.message))) throw error;
+      if (!(error instanceof Error && /EVOLUTION_HTTP_404/.test(error.message))) throw error;
+      await evolutionFetch(current.baseUrl, apiKey, "/instance/create", { method: "POST", body: JSON.stringify({ instanceName: current.instance, integration: "WHATSAPP-BAILEYS", qrcode: true }) });
+      payload = await evolutionFetch(current.baseUrl, apiKey, `/instance/connect/${encodeURIComponent(current.instance)}`);
     }
-    const payload = await evolutionFetch(current.baseUrl, apiKey, `/instance/connect/${encodeURIComponent(current.instance)}`);
     const state = stateFrom(payload);
     const qr = qrFrom(payload);
     if (state === "connected") {

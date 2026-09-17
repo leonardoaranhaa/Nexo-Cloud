@@ -33,8 +33,10 @@ test("starts Evolution instance and returns a real QR payload without exposing t
   const originalFetch = globalThis.fetch;
   const requests: Request[] = [];
   globalThis.fetch = async (input, init) => {
-    requests.push(new Request(input, init));
-    if (requests.length === 1) return new Response(JSON.stringify({ error: "already exists" }), { status: 409 });
+    const request = new Request(input, init);
+    requests.push(request);
+    if (requests.length === 1) return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+    if (requests.length === 2) return new Response(JSON.stringify({ instance: { instanceName: "store" } }), { status: 201 });
     return new Response(JSON.stringify({ base64: "data:image/png;base64,QR", status: "connecting" }), { status: 200 });
   };
   try {
@@ -42,7 +44,9 @@ test("starts Evolution instance and returns a real QR payload without exposing t
     const result = await startEvolutionQr(sql, "user", { workspaceId: "workspace", connectionId: "connection" }, secretProvider);
     assert.equal(result.status, "qr");
     assert.equal(result.qr, "data:image/png;base64,QR");
-    assert.equal(requests[0]?.headers.get("apikey"), "server-only-api-key");
+    assert.equal(requests[0]?.url.endsWith("/instance/connect/store"), true);
+    assert.equal(requests[1]?.url.endsWith("/instance/create"), true);
+    assert.equal(requests[2]?.headers.get("apikey"), "server-only-api-key");
     assert.equal(JSON.stringify(result).includes("server-only-api-key"), false);
   } finally {
     globalThis.fetch = originalFetch;
