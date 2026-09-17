@@ -186,7 +186,9 @@ export class EvolutionApiAdapter implements ConnectorAdapter {
         code: response.status >= 500 ? "provider_error" : "network_error",
         httpStatus: response.status,
         latencyMs,
-        message: "Evolution API returned a non-success status",
+        message: response.status >= 500
+          ? `Evolution API returned HTTP ${response.status} while checking the instance. Verify that the instance exists and that the Evolution provider database is healthy.`
+          : `Evolution API returned HTTP ${response.status} for the instance check`,
       };
     } catch (error) {
       const timeout = error instanceof Error && error.name === "AbortError";
