@@ -51,6 +51,8 @@ export type HarnessRunSummaryView = {
   durationMs: number | null;
   createdAt: string;
   completedAt: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
 };
 
 export type HarnessRunDetailView = HarnessRunSummaryView & {
@@ -146,6 +148,8 @@ export function parseHarnessRunSummary(value: unknown): HarnessRunSummaryView | 
     durationMs: source.durationMs === null || source.durationMs === undefined ? null : number(source.durationMs),
     createdAt: text(source.createdAt),
     completedAt: source.completedAt === null || source.completedAt === undefined ? null : text(source.completedAt),
+    approvedBy: source.approvedBy === null || source.approvedBy === undefined ? null : text(source.approvedBy),
+    approvedAt: source.approvedAt === null || source.approvedAt === undefined ? null : text(source.approvedAt),
   };
 }
 

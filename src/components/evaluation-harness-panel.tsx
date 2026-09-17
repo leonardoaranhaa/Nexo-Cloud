@@ -7,6 +7,7 @@ import {
   getWorkspaceAgentEvaluationHarnessRun,
   listWorkspaceAgentEvaluationHarnessRuns,
   listWorkspaceAgentVersions,
+  approveWorkspaceAgentEvaluationHarnessRun,
   runWorkspaceAgentEvaluationHarness,
 } from "@/lib/multitenancy/api";
 import { useNexo } from "@/lib/store";
@@ -50,6 +51,7 @@ export function EvaluationHarnessPanel({ agent }: { agent: Agent }) {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [loadingRunId, setLoadingRunId] = useState<string | null>(null);
+  const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -152,6 +154,22 @@ export function EvaluationHarnessPanel({ agent }: { agent: Agent }) {
     }
   }
 
+  async function approveRun() {
+    if (!workspaceId || !detail || detail.regressionCount > 0 || detail.approvedAt) return;
+    setApproving(true);
+    setError(null);
+    try {
+      await approveWorkspaceAgentEvaluationHarnessRun({ data: { workspaceId, runId: detail.id, note: "Aprovado para publicação pelo Evaluation Harness." } });
+      setDetail({ ...detail, approvedBy: "workspace", approvedAt: new Date().toISOString() });
+      setRuns((current) => current.map((run) => run.id === detail.id ? { ...run, approvedBy: "workspace", approvedAt: new Date().toISOString() } : run));
+      toast("Avaliação aprovada. A publicação foi liberada.");
+    } catch {
+      setError("Esta avaliação não pôde ser aprovada. Ela precisa estar sem regressões e com a candidata igual ou melhor que a baseline.");
+    } finally {
+      setApproving(false);
+    }
+  }
+
   return (
     <section className="flex flex-col gap-4" aria-labelledby="evaluation-harness-title">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -203,7 +221,7 @@ export function EvaluationHarnessPanel({ agent }: { agent: Agent }) {
         </Card>
       )}
 
-      {detail ? <EvaluationDetail agent={agent} detail={detail} versions={versions} /> : <Card className="border-dashed p-5"><p className="text-sm font-medium">Nenhuma avaliação selecionada</p><p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">Execute uma comparação ou abra uma avaliação do histórico para ver métricas, contratos e resultado por cenário.</p></Card>}
+      {detail ? <><EvaluationDetail agent={agent} detail={detail} versions={versions} />{detail.regressionCount === 0 && <Card className="border-live/30 bg-live/5 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-medium">{detail.approvedAt ? "Avaliação aprovada para publicação" : "Avaliação pronta para aprovação"}</div><p className="mt-1 text-xs text-muted">{detail.approvedAt ? "A versão candidata já pode ser publicada na aba Publicação." : "A aprovação registra que a candidata passou pelo gate de engenharia e libera a publicação."}</p></div>{!detail.approvedAt && <Button type="button" variant="live" size="sm" onClick={() => void approveRun()} disabled={approving}>{approving ? <LoaderCircle className="animate-spin" /> : <ShieldCheck />} {approving ? "Aprovando…" : "Aprovar para publicar"}</Button>}</div></Card>}</> : <Card className="border-dashed p-5"><p className="text-sm font-medium">Nenhuma avaliação selecionada</p><p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted">Execute uma comparação ou abra uma avaliação do histórico para ver métricas, contratos e resultado por cenário.</p></Card>}
 
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
