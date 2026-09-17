@@ -470,17 +470,40 @@ export async function updateAgent(
       input.workspaceId,
     ],
   );
-  const next = await sql.query<{ version_number: number }>(
-    `select coalesce(max(version_number), 0) + 1 as version_number from agent_versions where agent_id = $1`,
+  const draft = await sql.query<{ id: string }>(
+    `select id from agent_versions
+      where agent_id = $1 and status = 'draft'
+      order by version_number desc limit 1`,
     [input.id],
   );
-  const draftId = randomUUID();
-  await sql.query(
-    `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
-     values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
-    [draftId, input.id, Number(next[0]?.version_number ?? 1), JSON.stringify({ name: input.name, persona: input.persona, welcomeMessage: input.welcomeMessage, systemPrompt: input.systemPrompt, language: input.language, temperature: input.temperature, maxTokens: input.maxTokens, memoryWindow: input.memoryWindow, knowledge: input.knowledge, tools: input.tools, metadata: input.metadata ?? {} }), userId],
-  );
-  await copyLatestAgentToolPermissions(sql, input.workspaceId, input.id, draftId);
+  const config = JSON.stringify({ name: input.name, persona: input.persona, welcomeMessage: input.welcomeMessage, systemPrompt: input.systemPrompt, language: input.language, temperature: input.temperature, maxTokens: input.maxTokens, memoryWindow: input.memoryWindow, knowledge: input.knowledge, tools: input.tools, metadata: input.metadata ?? {} });
+  const draftId = draft[0]?.id ?? randomUUID();
+  if (draft[0]) {
+    await sql.query(
+      `update agent_versions set config = $2::jsonb, created_by = $3, created_at = current_timestamp
+        where id = $1 and agent_id = $4 and status = 'draft'`,
+      [draftId, config, userId, input.id],
+    );
+    // Any approval belongs to the previous contents of this draft and must
+    // be invalidated when autosave changes the candidate.
+    await sql.query(
+      `update agent_evaluation_harness_runs
+          set approved_by = null, approved_at = null, approval_note = null
+        where candidate_version_id = $1 and workspace_id = $2`,
+      [draftId, input.workspaceId],
+    );
+  } else {
+    const next = await sql.query<{ version_number: number }>(
+      `select coalesce(max(version_number), 0) + 1 as version_number from agent_versions where agent_id = $1`,
+      [input.id],
+    );
+    await sql.query(
+      `insert into agent_versions (id, agent_id, version_number, status, config, created_by)
+       values ($1, $2, $3, 'draft', $4::jsonb, $5)`,
+      [draftId, input.id, Number(next[0]?.version_number ?? 1), config, userId],
+    );
+    await copyLatestAgentToolPermissions(sql, input.workspaceId, input.id, draftId);
+  }
 }
 
 function boundedBlueprintList(value: unknown, maxItems: number, maxLength: number): string[] {
