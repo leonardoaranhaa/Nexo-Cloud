@@ -23,11 +23,11 @@ function json(body: Record<string, unknown>, status = 200): Response {
 }
 
 export default defineEventHandler(async (event) => {
-  const token = process.env.NEXO_RUNTIME_WORKER_TOKEN?.trim();
+  const token = (process.env.NEXO_RUNTIME_WORKER_TOKEN || process.env.CRON_SECRET)?.trim();
   if (!token) return json({ ok: false, error: "RUNTIME_WORKER_NOT_CONFIGURED" }, 503);
   const request = new Request("https://nexo.internal/runtime", {
-    method: event.node?.req.method ?? "POST",
-    headers: Object.fromEntries(Object.entries(event.node?.req.headers ?? {}).map(([key, value]) => [key, Array.isArray(value) ? value.join(",") : value ?? ""])),
+    method: event.req.method ?? "POST",
+    headers: event.req.headers,
   });
   if (!authorized(request, token)) return json({ ok: false, error: "RUNTIME_WORKER_UNAUTHORIZED" }, 401);
   if (request.method !== "POST") return json({ ok: false, error: "METHOD_NOT_ALLOWED" }, 405);
