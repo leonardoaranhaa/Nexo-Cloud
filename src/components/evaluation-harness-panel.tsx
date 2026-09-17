@@ -131,8 +131,16 @@ export function EvaluationHarnessPanel({ agent }: { agent: Agent }) {
       setDetail(parsedDetail);
       setRuns((current) => [parsedSummary, ...current.filter((run) => run.id !== parsedSummary.id)]);
       toast(parsedDetail.regressionCount > 0 ? "Comparação concluída com regressões detectadas." : "Comparação concluída sem regressões.");
-    } catch {
-      setError("A comparação não pôde ser concluída. Verifique se as versões e os cenários estão disponíveis.");
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      const known: Record<string, string> = {
+        BLUEPRINT_NOT_FOUND: "O blueprint de cenários não foi encontrado. Salve novamente os cenários do agente.",
+        BLUEPRINT_SCENARIOS_REQUIRED: "Adicione pelo menos um cenário com uma mensagem preenchida.",
+        AGENT_VERSION_NOT_FOUND: "Uma das versões selecionadas não pertence mais a este agente. Atualize a lista de versões.",
+        EVALUATION_VERSIONS_MUST_DIFFER: "Escolha duas versões diferentes para comparar.",
+        WORKSPACE_ACCESS_DENIED: "Você não possui permissão para executar a avaliação neste workspace.",
+      };
+      setError(known[code] ?? "A comparação falhou no servidor. Atualize as versões e confirme que os cenários foram salvos.");
     } finally {
       setRunning(false);
     }

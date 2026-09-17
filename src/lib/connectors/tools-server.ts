@@ -122,7 +122,8 @@ export async function listPublishedAgentTools(sql: Sql, workspaceId: string, age
 }
 
 export async function listAgentToolsForVersion(sql: Sql, workspaceId: string, agentVersionId: string): Promise<RuntimeAuthorizedTool[]> {
-  return sql.query<RuntimeAuthorizedTool>(`select t.id, t.key, t.name, t.description,
+  try {
+    return await sql.query<RuntimeAuthorizedTool>(`select t.id, t.key, t.name, t.description,
           t.input_schema as "inputSchema", t.output_schema as "outputSchema",
           t.risk_level as "riskLevel", p.require_approval as "requireApproval", p.allowed_scopes as "allowedScopes"
      from agent_versions v
@@ -131,4 +132,8 @@ export async function listAgentToolsForVersion(sql: Sql, workspaceId: string, ag
      join tools t on t.id = p.tool_id and (t.workspace_id = $1 or t.workspace_id is null) and t.status = 'active'
     where v.id = $2
     order by t.key`, [workspaceId, agentVersionId]);
+  } catch (error) {
+    if (error instanceof Error && /agent_tool_permissions|relation .* does not exist/i.test(error.message)) return [];
+    throw error;
+  }
 }
