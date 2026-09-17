@@ -111,7 +111,14 @@ export type RuntimeAuthorizedTool = {
 };
 
 export async function listPublishedAgentTools(sql: Sql, workspaceId: string, agentId: string): Promise<RuntimeAuthorizedTool[]> {
-  return sql.query<RuntimeAuthorizedTool>(`select t.id, t.key, t.name, t.description, t.input_schema as "inputSchema", t.output_schema as "outputSchema", t.risk_level as "riskLevel", p.require_approval as "requireApproval", p.allowed_scopes as "allowedScopes" from agent_versions v join agents a on a.id = v.agent_id and a.workspace_id = $1 join agent_tool_permissions p on p.agent_version_id = v.id and p.workspace_id = $1 and p.enabled = true join tools t on t.id = p.tool_id and (t.workspace_id = $1 or t.workspace_id is null) and t.status = 'active' where v.agent_id = $2 and v.status = 'published' order by t.key`, [workspaceId, agentId]);
+  try {
+    return await sql.query<RuntimeAuthorizedTool>(`select t.id, t.key, t.name, t.description, t.input_schema as "inputSchema", t.output_schema as "outputSchema", t.risk_level as "riskLevel", p.require_approval as "requireApproval", p.allowed_scopes as "allowedScopes" from agent_versions v join agents a on a.id = v.agent_id and a.workspace_id = $1 join agent_tool_permissions p on p.agent_version_id = v.id and p.workspace_id = $1 and p.enabled = true join tools t on t.id = p.tool_id and (t.workspace_id = $1 or t.workspace_id is null) and t.status = 'active' where v.agent_id = $2 and v.status = 'published' order by t.key`, [workspaceId, agentId]);
+  } catch (error) {
+    // A partially migrated workspace must still be able to answer text messages;
+    // without this optional table, run the agent with no authorized tools.
+    if (error instanceof Error && /agent_tool_permissions|relation .* does not exist/i.test(error.message)) return [];
+    throw error;
+  }
 }
 
 export async function listAgentToolsForVersion(sql: Sql, workspaceId: string, agentVersionId: string): Promise<RuntimeAuthorizedTool[]> {

@@ -200,15 +200,14 @@ async function loadContext(sql: Sql, job: AgentRuntimeJob): Promise<RuntimeConte
             ac.connection_id,
             c.external_contact_id as recipient,
             m.content->>'text' as inbound_text,
-            c.commercial_state,
+            'new'::text as commercial_state,
             av.config as version_config,
-            ai.product_id
+            null::text as product_id
        from agent_runtime_jobs j
        join agents a on a.id = j.agent_id and a.workspace_id = j.workspace_id and a.deleted_at is null
        join conversations c on c.id = j.conversation_id and c.workspace_id = j.workspace_id
        join messages m on m.id = j.inbound_message_id and m.workspace_id = j.workspace_id and m.direction = 'inbound'
        join agent_connections ac on ac.agent_id = a.id and ac.connection_id = c.connection_id and ac.is_primary = true
-       left join agent_installations ai on ai.agent_id = a.id and ai.workspace_id = j.workspace_id and ai.status in ('draft', 'staging', 'active')
        left join lateral (
          select config from agent_versions
           where agent_id = a.id and status = 'published'
@@ -635,7 +634,10 @@ export async function runNextAgentRuntimeJob(
   try {
     const context = await loadContext(sql, job);
     const steps: ExecutionStep[] = [{ name: "load_context", status: "ok" }];
-    const runtimeModel = model ?? xaiModel();
+    // The inbound worker must use the same provider selection as the editor and
+    // workflow runtime. Previously this path always selected xAI, so a Claude
+    // key configured in production was silently ignored for WhatsApp messages.
+    const runtimeModel = model ?? (process.env.ANTHROPIC_API_KEY ? anthropicModel() : xaiModel());
     let result = await executeAgentRuntime(context, runtimeModel);
     await persistAgentDecision(sql, {
       workspaceId: job.workspace_id,
