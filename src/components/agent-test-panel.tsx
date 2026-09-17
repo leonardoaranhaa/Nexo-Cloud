@@ -9,6 +9,13 @@ import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { CodeBlock } from "./code-block";
 
+const QUICK_TRIGGERS = [
+  { label: "Saudação", text: "Olá, preciso de ajuda." },
+  { label: "Perguntar preço", text: "Qual é o preço e o prazo de entrega?" },
+  { label: "Dúvida de atendimento", text: "Como vocês podem me atender?" },
+  { label: "Pedir humano", text: "Quero falar com uma pessoa do time." },
+];
+
 export function AgentTestPanel({
   agent,
   messages,
@@ -73,31 +80,34 @@ export function AgentTestPanel({
             onSend={onSend}
             onClear={onClear}
           />
-          {agent.knowledge.faqs.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {agent.knowledge.faqs.slice(0, 4).map((faq) => (
+          <div className="rounded-lg border border-accent/30 bg-elevated/40 p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-accent">Acionadores de teste</div>
+            <p className="mt-1 text-xs leading-relaxed text-muted">Execute uma chamada agora no Agent Runtime. O resultado aparece no telefone ao lado e no rastreamento do fluxo.</p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {QUICK_TRIGGERS.map((trigger) => (
+                <button
+                  key={trigger.label}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onSend(trigger.text)}
+                  className="rounded-full border border-border bg-surface px-2.5 py-1.5 text-xs text-muted hover:border-accent/50 hover:text-fg disabled:opacity-40"
+                >
+                  {trigger.label}
+                </button>
+              ))}
+              {agent.knowledge.faqs.slice(0, 4).map((faq) => faq.q.trim() && (
                 <button
                   key={faq.id}
                   type="button"
                   disabled={busy}
                   onClick={() => onSend(faq.q)}
-                  className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted hover:text-fg disabled:opacity-40"
+                  className="rounded-full border border-border bg-surface px-2.5 py-1.5 text-xs text-muted hover:border-accent/50 hover:text-fg disabled:opacity-40"
                 >
-                  {faq.q}
+                  FAQ: {faq.q}
                 </button>
               ))}
-              {agent.tools.handoff && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onSend("Quero falar com um humano")}
-                  className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted hover:text-fg disabled:opacity-40"
-                >
-                  Pedir humano
-                </button>
-              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

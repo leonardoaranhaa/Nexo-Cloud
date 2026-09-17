@@ -454,7 +454,7 @@ function BlueprintListEditor({
           Adicionar
         </Button>
       </div>
-      {values.length === 0 && <p className="text-xs text-subtle">Nenhum item definido.</p>}
+      {values.length === 0 && <div className="rounded-lg border border-dashed border-border bg-bg/60 p-3"><p className="text-xs text-muted">Nenhum item definido.</p>{onRun && <p className="mt-1 text-xs text-subtle">Adicione um cenário para habilitar a execução individual pelo botão de play.</p>}</div>}
       <div className="flex flex-col gap-2">
         {values.map((value, index) => (
           <div key={`${title}-${index}`} className="flex min-w-0 items-center gap-2">
