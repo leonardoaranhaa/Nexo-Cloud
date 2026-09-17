@@ -51,6 +51,25 @@ async function grokChat(opts: {
   return { ok: true as const, text: body.choices?.[0]?.message?.content ?? "" };
 }
 
+async function anthropicChat(opts: { messages: ChatTurn[]; maxTokens: number; temperature: number }) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  const system = opts.messages.find((message) => message.role === "system")?.content ?? "";
+  const messages = opts.messages.filter((message) => message.role !== "system");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({ model: process.env.NEXO_AGENT_MODEL || "claude-sonnet-4-5-20250929", system, messages, max_tokens: opts.maxTokens, temperature: opts.temperature }),
+  });
+  if (!res.ok) return { ok: false as const, error: `Anthropic API error ${res.status}` };
+  const body = await res.json() as { content?: { type?: string; text?: string }[] };
+  return { ok: true as const, text: (body.content ?? []).filter((item) => item.type === "text").map((item) => item.text ?? "").join(" ") };
+}
+
+async function aiChat(opts: { messages: ChatTurn[]; maxTokens: number; temperature: number }) {
+  return process.env.ANTHROPIC_API_KEY ? (await anthropicChat(opts)) ?? { ok: false as const, error: "AI_UNAVAILABLE" as const } : grokChat(opts);
+}
+
 function extractJson(text: string) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = (fenced?.[1] ?? text).trim();
@@ -77,7 +96,7 @@ export const chatAgent = createServerFn({ method: "POST" })
     const maxTokens = Math.min(Math.max(data.maxTokens, 80), 400);
     const temperature = Math.min(Math.max(data.temperature, 0), 1);
     const history = data.messages.slice(-16);
-    return grokChat({
+    return aiChat({
       temperature,
       maxTokens,
       messages: [
@@ -93,7 +112,7 @@ export const generateAgent = createServerFn({ method: "POST" })
     const brief = data.brief.trim().slice(0, 1200);
     if (brief.length < 8) return { ok: false, error: "Briefing curto demais." };
 
-    const result = await grokChat({
+    const result = await aiChat({
       temperature: 0.5,
       maxTokens: 900,
       messages: [

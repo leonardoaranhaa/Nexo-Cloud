@@ -239,6 +239,45 @@ async function loadContext(sql: Sql, job: AgentRuntimeJob): Promise<RuntimeConte
   return { job, agent, connectionId: row.connection_id, recipient: row.recipient, inboundText: text(row.inbound_text), history, commercialState: row.commercial_state ?? "new", ragEvidence, productId: row.product_id ?? undefined, authorizedTools, crmConfig };
 }
 
+function anthropicModel(): RuntimeModel {
+  return {
+    async generate(input) {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) return { usedAi: false };
+      const messages: Array<Record<string, unknown>> = [...input.history];
+      if (input.toolRound) {
+        messages.push({
+          role: "assistant",
+          content: input.toolRound.calls.map((call) => ({ id: call.id, type: "tool_use", name: call.name, input: call.arguments })),
+        });
+        messages.push({
+          role: "user",
+          content: input.toolRound.results.map((result) => ({ type: "tool_result", tool_use_id: result.id, content: JSON.stringify({ status: result.status, ...result.output }) })),
+        });
+      }
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: process.env.NEXO_AGENT_MODEL || "claude-sonnet-4-5-20250929",
+          system: input.systemPrompt,
+          messages,
+          ...(input.tools?.length && !input.toolRound ? { tools: input.tools.map((tool) => ({ name: tool.function.name, description: tool.function.description, input_schema: tool.function.parameters })) } : {}),
+          max_tokens: input.maxTokens,
+          temperature: input.temperature,
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!response.ok) throw new Error(`AI_PROVIDER_${response.status}`);
+      const body = await response.json() as { content?: { type?: string; text?: string; id?: string; name?: string; input?: unknown }[] };
+      const content = body.content ?? [];
+      const toolCalls = content.filter((item) => item.type === "tool_use" && item.name).map((item) => ({ id: text(item.id, randomUUID()), name: text(item.name), arguments: object(item.input) }));
+      const textContent = content.filter((item) => item.type === "text").map((item) => item.text ?? "").join(" ").trim();
+      return { text: textContent.slice(0, 4096), usedAi: true, toolCalls };
+    },
+  };
+}
+
 function xaiModel(): RuntimeModel {
   return {
     async generate(input) {
@@ -294,7 +333,7 @@ function xaiModel(): RuntimeModel {
 
 export async function executeAgentRuntime(
   context: RuntimeContext,
-  model: RuntimeModel = xaiModel(),
+  model: RuntimeModel = process.env.ANTHROPIC_API_KEY ? anthropicModel() : xaiModel(),
 ): Promise<{ reply?: string; usedAi: boolean; reason: string; decision: AgentDecision; toolCalls?: RuntimeToolCall[] }> {
   const { agent, inboundText } = context;
   const decision = decideAgentTurn(agent, { text: inboundText, currentState: context.commercialState, ragEvidence: context.ragEvidence });
@@ -748,8 +787,8 @@ export async function runNextAgentRuntimeJob(
         await finishRuntimeExecution(sql, executionId, {
           status: "succeeded",
           reason: result.reason,
-          aiProvider: result.usedAi ? "xai" : "local",
-          modelName: result.usedAi ? process.env.NEXO_AGENT_MODEL || "grok-4.5" : "fallback",
+          aiProvider: result.usedAi ? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "xai") : "local",
+          modelName: result.usedAi ? process.env.NEXO_AGENT_MODEL || (process.env.ANTHROPIC_API_KEY ? "claude-sonnet-4-5-20250929" : "grok-4.5") : "fallback",
           durationMs: Date.now() - startedAt,
           historyCount: context.history.length,
           inputChars: context.inboundText.length,
@@ -787,7 +826,7 @@ export type { RuntimeContext, RuntimeModel };
 export async function executeWorkflowAgentNode(
   sql: Sql,
   input: { workspaceId: string; agentId: string; prompt: string },
-  model: RuntimeModel = xaiModel(),
+  model: RuntimeModel = process.env.ANTHROPIC_API_KEY ? anthropicModel() : xaiModel(),
 ): Promise<{ text: string; usedAi: boolean }> {
   const rows = await sql.query<{ system_prompt: string; persona: string; version_config: unknown }>(
     `select a.system_prompt, a.persona, av.config as version_config
