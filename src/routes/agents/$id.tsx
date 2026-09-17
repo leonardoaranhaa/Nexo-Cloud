@@ -100,13 +100,24 @@ function AgentStudioPage() {
     }
   }
 
-  function setTab(next: Tab) {
-    void navigate({
-      to: "/agents/$id",
-      params: { id },
-      search: { tab: next },
-      replace: true,
-    });
+  async function setTab(next: Tab) {
+    // Mobile users commonly tap the next tab immediately after editing a
+    // scenario. Do not rely on AgentEditor's debounced autosave in that case:
+    // unmounting the editor cancels its pending timer.
+    if (backendReady && workspaceId) {
+      try {
+        await persistAgent(currentAgent);
+      } catch {
+        toast("Não foi possível salvar o cenário antes de avançar.");
+        return;
+      }
+    }
+    await navigate({
+        to: "/agents/$id",
+        params: { id },
+        search: { tab: next },
+        replace: true,
+      });
   }
 
   return (
@@ -215,9 +226,12 @@ function AgentStudioPage() {
               onSave={saveChanges}
               saveState={saveState}
             onRunScenario={(scenario) => {
-              setTab("tests");
-              void send(scenario);
-              toast("Cenário enviado para o Agent Runtime");
+              void (async () => {
+                await saveChanges();
+                await setTab("tests");
+                await send(scenario);
+                toast("Cenário enviado para o Agent Runtime");
+              })();
             }}
           />
             <div className="min-w-0 xl:sticky xl:top-20 h-fit">
@@ -238,7 +252,7 @@ function AgentStudioPage() {
 
       {tab === "knowledge" && <AgentEditor agent={agent} section="knowledge" focusNode={focusNode} onSave={saveChanges} saveState={saveState} />}
       {tab === "tools" && <AgentEditor agent={agent} section="tools" focusNode={focusNode} onSave={saveChanges} saveState={saveState} />}
-      {tab === "tests" && <div className="flex min-w-0 flex-col gap-8"><div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"><AgentEditor agent={agent} section="tests" onSave={saveChanges} saveState={saveState} onRunScenario={(scenario) => { void send(scenario); toast("Cenário enviado para o Agent Runtime"); }} /><AgentTestPanel agent={agent} messages={messages} busy={busy} onSend={(t, k) => void send(t, k)} onClear={clear} /></div><EvaluationHarnessPanel agent={agent} /></div>}
+      {tab === "tests" && <div className="flex min-w-0 flex-col gap-8"><div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]"><AgentEditor agent={agent} section="tests" onSave={saveChanges} saveState={saveState} onRunScenario={(scenario) => { void (async () => { await saveChanges(); await send(scenario); toast("Cenário enviado para o Agent Runtime"); })(); }} /><AgentTestPanel agent={agent} messages={messages} busy={busy} onSend={(t, k) => void send(t, k)} onClear={clear} /></div><EvaluationHarnessPanel agent={agent} /></div>}
       {tab === "versions" && <PublishPanel agent={agent} mode="versions" />}
       {tab === "publication" && <PublishPanel agent={agent} mode="publication" />}
     </AppShell>

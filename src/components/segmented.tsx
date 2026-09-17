@@ -17,7 +17,7 @@ export function Segmented<T extends string>({
         "grid gap-1 rounded-md bg-bg p-1",
         options.length <= 2 && "grid-cols-2",
         options.length === 3 && "grid-cols-3",
-        options.length >= 4 && "grid-cols-4",
+        options.length >= 4 && "flex min-w-max",
         className,
       )}
     >
@@ -27,7 +27,7 @@ export function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(opt.id)}
           className={cn(
-            "h-9 rounded-sm px-2 text-sm transition-colors",
+            "h-9 shrink-0 whitespace-nowrap rounded-sm px-2 text-sm transition-colors",
             value === opt.id ? "bg-elevated text-fg" : "text-muted hover:text-fg",
           )}
         >
