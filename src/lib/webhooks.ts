@@ -2,8 +2,8 @@ import type { Connection, Provider } from "./types";
 
 export function webhookUrl(connection: Connection) {
   if (connection.provider === "evolution") {
-    const base = connection.baseUrl?.replace(/\/$/, "") || "https://evo.nexo.local";
-    return `${base}/webhook/${connection.instance || "instance"}`;
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:8081";
+    return `${origin}/api/webhooks/evolution/${encodeURIComponent(connection.instance || "instance")}`;
   }
   if (connection.provider === "zapi") {
     return `https://api.z-api.io/instances/${connection.instance || "sandbox"}/token/webhook`;

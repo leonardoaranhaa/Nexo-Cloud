@@ -1248,6 +1248,39 @@ export async function provisionEvolutionCredential(
       where id = $1 and workspace_id = $4 and deleted_at is null`,
     [input.connectionId, secretRef, JSON.stringify(config), input.workspaceId],
   );
+
+  // Keep the inbound path operational: Evolution must be told where to send
+  // messages and which secret to use for its short-lived webhook JWT.
+  const webhookSecret = validateEvolutionWebhookSecret(`${randomUUID()}-${randomUUID()}`);
+  const webhookSecretRef = `nexo/${input.workspaceId}/${input.connectionId}/webhook_jwt`;
+  await provisioner.put(webhookSecretRef, webhookSecret, {
+    workspaceId: input.workspaceId,
+    connectionId: input.connectionId,
+    actorId: userId,
+  });
+  await sql.query(
+    `update connections set webhook_secret_ref = $2, updated_at = current_timestamp
+      where id = $1 and workspace_id = $3 and deleted_at is null`,
+    [input.connectionId, webhookSecretRef, input.workspaceId],
+  );
+  const publicOrigin = (process.env.WEBHOOK_BASE_URL || process.env.BETTER_AUTH_URL || process.env.APP_BASE_URL || "").trim().replace(/\/$/, "");
+  if (publicOrigin) {
+    const webhookUrl = `${publicOrigin}/api/webhooks/evolution/${encodeURIComponent(validated.instance)}`;
+    const response = await fetch(`${validated.baseUrl}/webhook/set/${encodeURIComponent(validated.instance)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", apikey: validated.apiKey },
+      body: JSON.stringify({ webhook: {
+        enabled: true,
+        url: webhookUrl,
+        byEvents: false,
+        base64: false,
+        headers: { jwt_key: webhookSecret },
+        events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "SEND_MESSAGE_UPDATE", "CONNECTION_UPDATE"],
+      } }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`EVOLUTION_WEBHOOK_CONFIG_${response.status}`);
+  }
 }
 
 export async function provisionEvolutionWebhookCredential(
