@@ -47,10 +47,37 @@ function positiveLimit(value: unknown, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+async function ensureQuotaSchema(sql: Sql): Promise<void> {
+  await sql.query(`create table if not exists agent_runtime_quota_policies (
+    workspace_id text primary key references workspaces (id) on delete cascade,
+    workspace_daily_limit integer not null default 1000,
+    agent_daily_limit integer not null default 250,
+    enabled boolean not null default true,
+    created_at timestamptz not null default current_timestamp,
+    updated_at timestamptz not null default current_timestamp
+  )`);
+  await sql.query(`create table if not exists agent_runtime_quota_workspace_usage (
+    workspace_id text not null references workspaces (id) on delete cascade,
+    period_start date not null,
+    executions integer not null default 0,
+    updated_at timestamptz not null default current_timestamp,
+    primary key (workspace_id, period_start)
+  )`);
+  await sql.query(`create table if not exists agent_runtime_quota_agent_usage (
+    workspace_id text not null references workspaces (id) on delete cascade,
+    agent_id text not null references agents (id) on delete cascade,
+    period_start date not null,
+    executions integer not null default 0,
+    updated_at timestamptz not null default current_timestamp,
+    primary key (workspace_id, agent_id, period_start)
+  )`);
+}
+
 export async function reserveRuntimeQuota(
   sql: Sql,
   job: Pick<AgentRuntimeJob, "workspace_id" | "agent_id">,
 ): Promise<RuntimeQuotaReservation> {
+  await ensureQuotaSchema(sql);
   const policyRows = await sql.query<QuotaPolicy>(
     `select workspace_daily_limit, agent_daily_limit, enabled
        from agent_runtime_quota_policies

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Sql } from "../db";
 import { createSecretResolver, type SecretProvider } from "../connectors/secrets.ts";
 import { enqueueAgentRuntimeJob } from "../agent-runtime/queue.ts";
+import { runNextAgentRuntimeJob } from "../agent-runtime/runtime.ts";
 
 type JsonRecord = Record<string, unknown>;
 type DeliveryState = "sent" | "delivered" | "read" | "failed" | "unknown";
@@ -246,7 +247,13 @@ export async function handleEvolutionWebhook(
   const secret = await resolver(connection.webhook_secret_ref, { workspaceId: connection.workspace_id, connectionId: connection.id });
   await verifyWebhookAuth(request, secret);
   const dataItems = Array.isArray(payload.data) ? payload.data.map(record) : [record(payload.data)];
-  if (event === "messages.upsert") return persistInbound(sql, connection, dataItems[0] ?? {}, event);
+  if (event === "messages.upsert") {
+    const outcome = await persistInbound(sql, connection, dataItems[0] ?? {}, event);
+    if (outcome.kind === "inbound" && outcome.jobId) {
+      await runNextAgentRuntimeJob(sql, `webhook-worker:${randomUUID()}`, undefined, options.secretProvider);
+    }
+    return outcome;
+  }
   if (event === "messages.update" || event === "send.message.update") {
     let outcome: EvolutionWebhookOutcome = { accepted: true, kind: "ignored" };
     for (const data of dataItems) outcome = await persistDeliveryStatus(sql, connection, data);
