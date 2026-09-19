@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { randomUUID } from "node:crypto";
 import type { JsonObject } from "./server";
+import { workspaceNeedsOnboarding } from "./workspace-context";
 import {
   blueprintInput,
   evaluationHarnessApprovalInput,
@@ -55,7 +56,10 @@ export const getWorkspaceContext = createServerFn({ method: "GET" })
     const { ensureDefaultWorkspace, listWorkspaces } = await import("./server");
     const sql = await getSql();
     const workspaces = await listWorkspaces(sql, context.userId);
-    if (workspaces.length > 0) return { workspaces, activeWorkspace: workspaces[0], isFirstWorkspace: false };
+    if (workspaces.length > 0) {
+      const activeWorkspace = workspaces[0];
+      return { workspaces, activeWorkspace, isFirstWorkspace: workspaceNeedsOnboarding(activeWorkspace) };
+    }
     const activeWorkspace = await ensureDefaultWorkspace(sql, context.userId);
     return { workspaces: [activeWorkspace], activeWorkspace, isFirstWorkspace: true };
   });

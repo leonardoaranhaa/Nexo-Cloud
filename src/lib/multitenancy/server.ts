@@ -183,7 +183,10 @@ export async function ensureDefaultWorkspace(sql: Sql, userId: string): Promise<
       w.name,
       w.slug,
       w.environment,
-      wm.role
+      wm.role,
+      w.onboarding_completed as "onboardingCompleted",
+      w.onboarding_goal as "onboardingGoal",
+      w.onboarding_team_size as "onboardingTeamSize"
     from workspaces w
     join organizations o on o.id = w.organization_id
     join workspace_memberships wm
