@@ -30,6 +30,8 @@ type RuntimeToolCall = { id: string; name: string; arguments: JsonRecord };
 type RuntimeToolResult = { id: string; name: string; status: "succeeded" | "approval_required" | "failed" | "denied"; output: JsonRecord };
 
 type RuntimeModel = {
+  provider?: "anthropic" | "xai" | "custom";
+  modelName?: string;
   generate(input: {
     systemPrompt: string;
     history: { role: "user" | "assistant"; content: string }[];
@@ -240,6 +242,8 @@ async function loadContext(sql: Sql, job: AgentRuntimeJob): Promise<RuntimeConte
 
 function anthropicModel(): RuntimeModel {
   return {
+    provider: "anthropic",
+    modelName: process.env.NEXO_AGENT_MODEL || "claude-sonnet-4-5-20250929",
     async generate(input) {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (!apiKey) return { usedAi: false };
@@ -279,6 +283,8 @@ function anthropicModel(): RuntimeModel {
 
 function xaiModel(): RuntimeModel {
   return {
+    provider: "xai",
+    modelName: process.env.NEXO_AGENT_MODEL || "grok-4.5",
     async generate(input) {
       const apiKey = process.env.XAI_API_KEY;
       if (!apiKey) return { usedAi: false };
@@ -789,8 +795,8 @@ export async function runNextAgentRuntimeJob(
         await finishRuntimeExecution(sql, executionId, {
           status: "succeeded",
           reason: result.reason,
-          aiProvider: result.usedAi ? (process.env.ANTHROPIC_API_KEY ? "anthropic" : "xai") : "local",
-          modelName: result.usedAi ? process.env.NEXO_AGENT_MODEL || (process.env.ANTHROPIC_API_KEY ? "claude-sonnet-4-5-20250929" : "grok-4.5") : "fallback",
+          aiProvider: result.usedAi ? (runtimeModel.provider ?? "custom") : "local",
+          modelName: result.usedAi ? (runtimeModel.modelName ?? process.env.NEXO_AGENT_MODEL ?? "custom") : "fallback",
           durationMs: Date.now() - startedAt,
           historyCount: context.history.length,
           inputChars: context.inboundText.length,

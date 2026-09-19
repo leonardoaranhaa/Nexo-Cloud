@@ -87,6 +87,8 @@ test("Agent Runtime processes one inbound job and dispatches one outbound reply"
     const queued = await enqueueAgentRuntimeJob(sql, { workspaceId: "ws", agentId: "agent", conversationId: "conversation", inboundMessageId: "inbound", traceId: "trace-runtime" });
     assert.equal(queued.created, true);
     const result = await runNextAgentRuntimeJob(sql, "worker-test", {
+      provider: "xai",
+      modelName: "fixture-model",
       async generate() { return { text: "Atendemos das 9h às 18h.", usedAi: true }; },
     }, memorySecretProvider(new Map([["nexo/ws/conn/api_key", "fixture-api-key-1234567890"]])));
     assert.equal(result.status, "succeeded");

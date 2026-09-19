@@ -64,8 +64,8 @@ test("Evolution inbound webhook authenticates, persists once and deduplicates", 
     },
   };
   try {
-    const first = await handleEvolutionWebhook(sql, request(body, token), { secretProvider: memorySecretProvider(new Map([["nexo/ws/conn/webhook_jwt", "webhook-secret"]])) });
-    const second = await handleEvolutionWebhook(sql, request(body, token), { secretProvider: memorySecretProvider(new Map([["nexo/ws/conn/webhook_jwt", "webhook-secret"]])) });
+    const first = await handleEvolutionWebhook(sql, request(body, token), { secretProvider: memorySecretProvider(new Map([["nexo/ws/conn/webhook_jwt", "webhook-secret"]])), runAgentImmediately: false });
+    const second = await handleEvolutionWebhook(sql, request(body, token), { secretProvider: memorySecretProvider(new Map([["nexo/ws/conn/webhook_jwt", "webhook-secret"]])), runAgentImmediately: false });
     const rows = await pg.query<{ count: number }>("select count(*)::int as count from messages where direction = 'inbound'");
     assert.equal(first.kind, "inbound");
     assert.equal(second.duplicate, true);

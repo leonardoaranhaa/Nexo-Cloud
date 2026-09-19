@@ -95,16 +95,15 @@ test("Evolution inbound flows through queue, runtime, dispatch and operational h
     body: JSON.stringify(body),
   });
   try {
-    const first = await handleEvolutionWebhook(sql, await request(), { secretProvider: secrets });
+    const fixtureModel = { provider: "xai" as const, modelName: "fixture-model", async generate() { return { text: "Resposta operacional", usedAi: true }; } };
+    const first = await handleEvolutionWebhook(sql, await request(), { secretProvider: secrets, runtimeModel: fixtureModel });
     const second = await handleEvolutionWebhook(sql, await request(), { secretProvider: secrets });
     assert.equal(first.kind, "inbound");
     assert.equal(second.duplicate, true);
     assert.equal(first.jobId, second.jobId);
 
-    const result = await runNextAgentRuntimeJob(sql, "worker-e2e", {
-      async generate() { return { text: "Resposta operacional", usedAi: true }; },
-    }, secrets);
-    assert.equal(result.status, "succeeded");
+    const result = await runNextAgentRuntimeJob(sql, "worker-e2e", fixtureModel, secrets);
+    assert.equal(result.status, "idle");
     assert.equal(dispatched, 1);
     const limited = await dispatchTextMessageAsRuntime(sql, {
       workspaceId: "ws", agentId: "agent", connectionId: "conn",

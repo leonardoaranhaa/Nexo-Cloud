@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Sql } from "../db";
 import { createSecretResolver, type SecretProvider } from "../connectors/secrets.ts";
 import { enqueueAgentRuntimeJob } from "../agent-runtime/queue.ts";
-import { runNextAgentRuntimeJob } from "../agent-runtime/runtime.ts";
+import { runNextAgentRuntimeJob, type RuntimeModel } from "../agent-runtime/runtime.ts";
 
 type JsonRecord = Record<string, unknown>;
 type DeliveryState = "sent" | "delivered" | "read" | "failed" | "unknown";
@@ -226,7 +226,7 @@ async function persistDeliveryStatus(sql: Sql, connection: Awaited<ReturnType<ty
 export async function handleEvolutionWebhook(
   sql: Sql,
   request: Request,
-  options: { instance?: string; secretProvider: SecretProvider; maxBodyBytes?: number },
+  options: { instance?: string; secretProvider: SecretProvider; maxBodyBytes?: number; runtimeModel?: RuntimeModel; runAgentImmediately?: boolean },
 ): Promise<EvolutionWebhookOutcome> {
   const body = await request.text();
   if (new TextEncoder().encode(body).byteLength > (options.maxBodyBytes ?? 1024 * 1024)) throw new WebhookRequestError(413, "WEBHOOK_BODY_TOO_LARGE");
@@ -249,8 +249,8 @@ export async function handleEvolutionWebhook(
   const dataItems = Array.isArray(payload.data) ? payload.data.map(record) : [record(payload.data)];
   if (event === "messages.upsert") {
     const outcome = await persistInbound(sql, connection, dataItems[0] ?? {}, event);
-    if (outcome.kind === "inbound" && outcome.jobId) {
-      await runNextAgentRuntimeJob(sql, `webhook-worker:${randomUUID()}`, undefined, options.secretProvider);
+    if (outcome.kind === "inbound" && outcome.jobId && options.runAgentImmediately !== false) {
+      await runNextAgentRuntimeJob(sql, `webhook-worker:${randomUUID()}`, options.runtimeModel, options.secretProvider);
     }
     return outcome;
   }
