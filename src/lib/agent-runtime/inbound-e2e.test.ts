@@ -95,7 +95,7 @@ test("Evolution inbound flows through queue, runtime, dispatch and operational h
     body: JSON.stringify(body),
   });
   try {
-    const fixtureModel = { provider: "xai" as const, modelName: "fixture-model", async generate() { return { text: "Resposta operacional", usedAi: true }; } };
+    const fixtureModel = { provider: "anthropic" as const, modelName: "fixture-model", async generate() { return { text: "Resposta operacional", usedAi: true }; } };
     const first = await handleEvolutionWebhook(sql, await request(), { secretProvider: secrets, runtimeModel: fixtureModel });
     const second = await handleEvolutionWebhook(sql, await request(), { secretProvider: secrets });
     assert.equal(first.kind, "inbound");
